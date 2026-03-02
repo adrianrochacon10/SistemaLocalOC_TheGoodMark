@@ -1,0 +1,42 @@
+/* Estilos para el input de descuento tipo porcentaje */
+.input-descuento-container {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.input-descuento {
+  width: 100%;
+  padding-right: 2.5em; /* Espacio para el símbolo % */
+  border-radius: 8px;
+  border: 1.5px solid #b3b3b3;
+  background: #f7fafc;
+  font-size: 1.1em;
+  height: 2.5em;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.input-descuento:focus {
+  border-color: #4f8cff;
+  outline: none;
+  background: #fff;
+}
+
+.input-descuento-simbolo {
+  position: absolute;
+  right: 1em;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #888;
+  font-size: 1.1em;
+  pointer-events: none;
+}
+@import "../styles/forms.css";
+
+/* Estilos adicionales para ContratoForm */
+.contrato-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}

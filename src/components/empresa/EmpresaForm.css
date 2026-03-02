@@ -1,0 +1,12 @@
+@import "../styles/forms.css";
+
+.empresa-form-overlay {
+  z-index: 1100 !important;
+}
+
+/* Estilos adicionales para EmpresaForm */
+.empresa-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
