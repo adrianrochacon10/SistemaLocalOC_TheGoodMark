@@ -1,0 +1,448 @@
+import React, { useState } from "react";
+import { ColorPicker } from "../ui/ColorPicker";
+import { Pantalla, Cliente, AsignacionPantalla } from "../../types";
+import "./GestorPantallasClientes.css";
+
+interface GestorPantallasClientesProps {
+  pantallas: Pantalla[];
+  clientes: Cliente[];
+  asignaciones: AsignacionPantalla[];
+  onAgregarPantalla: (pantalla: Pantalla) => void;
+  onActualizarPantalla: (pantalla: Pantalla) => void;
+  onEliminarPantalla: (pantallaId: string) => void;
+  onAgregarCliente: (cliente: Cliente) => void;
+  onActualizarCliente: (cliente: Cliente) => void;
+  onAsignarPantalla: (asignacion: AsignacionPantalla) => void;
+  onDesasignarPantalla: (clienteId: string, pantallaId: string) => void;
+  onEliminarPantallasYAsignaciones: (colaboradorId: string) => void;
+}
+
+export const GestorPantallasClientes: React.FC<
+  GestorPantallasClientesProps
+> = ({
+  pantallas,
+  clientes,
+  asignaciones,
+  onAgregarPantalla,
+  onActualizarPantalla,
+  onEliminarPantalla,
+  onAgregarCliente,
+  onActualizarCliente, // ← NUEVO
+  onAsignarPantalla,
+  onDesasignarPantalla,
+}) => {
+  const [mostrarModal, setMostrarModal] = useState(false);
+  const [modoEdicion, setModoEdicion] = useState(false);
+  const [colaboradorEditando, setColaboradorEditando] = useState<string | null>(
+    null,
+  );
+  const [nuevoColaboradorNombre, setNuevoColaboradorNombre] = useState("");
+  const [nuevoColaboradorContacto, setNuevoColaboradorContacto] = useState("");
+  const [nuevoColaboradorTel, setNuevoColaboradorTel] = useState("");
+  const [nuevoColaboradorEmail, setNuevoColaboradorEmail] = useState("");
+  const [nuevoColaboradorColor, setNuevoColaboradorColor] = useState("");
+  const [nuevoColaboradorPorcentajeSocio, setNuevoColaboradorPorcentajeSocio] =
+    useState<number>(30);
+  const [errorColaborador, setErrorColaborador] = useState("");
+  /** IDs de pantallas seleccionadas para este colaborador (solo selección, no crear desde cero) */
+  const [pantallasSeleccionadasIds, setPantallasSeleccionadasIds] = useState<
+    string[]
+  >([]);
+  const [errorPantalla, setErrorPantalla] = useState("");
+
+  const handleAgregarColaborador = async () => {
+    setErrorColaborador("");
+    setErrorPantalla("");
+
+    if (!nuevoColaboradorNombre.trim()) {
+      setErrorColaborador("El nombre del colaborador es requerido");
+      return;
+    }
+
+    if (pantallasSeleccionadasIds.length === 0) {
+      setErrorPantalla("Selecciona al menos una pantalla para el colaborador");
+      return;
+    }
+
+    const nuevoColaborador: Cliente = {
+      id:
+        modoEdicion && colaboradorEditando
+          ? colaboradorEditando
+          : "c" + Date.now() + Math.floor(Math.random() * 10000),
+      nombre: nuevoColaboradorNombre,
+      contacto: nuevoColaboradorContacto || undefined,
+      telefono: nuevoColaboradorTel || undefined,
+      email: nuevoColaboradorEmail || undefined,
+      color: nuevoColaboradorColor || undefined,
+      porcentajeSocio: nuevoColaboradorPorcentajeSocio,
+      activo: true,
+      fechaCreacion: new Date(),
+    };
+
+    let idColaborador = nuevoColaborador.id;
+    if (modoEdicion && colaboradorEditando) {
+      onActualizarCliente(nuevoColaborador);
+    } else {
+      const creado = await onAgregarCliente(nuevoColaborador);
+      if (creado?.id) idColaborador = creado.id;
+    }
+
+    // Asignar solo pantallas existentes seleccionadas
+    const idsOriginales =
+      modoEdicion && colaboradorEditando
+        ? asignaciones
+            .filter(
+              (a) => a.clienteId === colaboradorEditando && a.activa,
+            )
+            .map((a) => a.pantallaId)
+        : [];
+
+    idsOriginales.forEach((pantallaId) => {
+      if (!pantallasSeleccionadasIds.includes(pantallaId)) {
+        onDesasignarPantalla(idColaborador, pantallaId);
+      }
+    });
+
+    pantallasSeleccionadasIds.forEach((pantallaId) => {
+      const pantalla = pantallas.find((p) => p.id === pantallaId);
+      if (!pantalla) return;
+      const yaAsignada = asignaciones.some(
+        (a) =>
+          a.clienteId === idColaborador &&
+          a.pantallaId === pantallaId &&
+          a.activa,
+      );
+      if (yaAsignada) return;
+      const uniqueId =
+        "a" + Date.now() + Math.floor(Math.random() * 10000);
+      onAsignarPantalla({
+        id: uniqueId,
+        pantallaId: pantalla.id,
+        clienteId: idColaborador,
+        precioUnitario: pantalla.precioUnitario ?? 0,
+        activa: true,
+        fechaAsignacion: new Date(),
+      });
+    });
+
+    setNuevoColaboradorNombre("");
+    setNuevoColaboradorContacto("");
+    setNuevoColaboradorTel("");
+    setNuevoColaboradorEmail("");
+    setNuevoColaboradorColor("");
+    setNuevoColaboradorPorcentajeSocio(30);
+    setPantallasSeleccionadasIds([]);
+    setMostrarModal(false);
+    setModoEdicion(false);
+    setColaboradorEditando(null);
+  };
+
+  const togglePantallaSeleccionada = (pantallaId: string) => {
+    setPantallasSeleccionadasIds((prev) =>
+      prev.includes(pantallaId)
+        ? prev.filter((id) => id !== pantallaId)
+        : [...prev, pantallaId],
+    );
+  };
+
+  const handleEditarColaborador = (colaborador: Cliente) => {
+    setNuevoColaboradorNombre(colaborador.nombre);
+    setNuevoColaboradorContacto(colaborador.contacto || "");
+    setNuevoColaboradorTel(colaborador.telefono || "");
+    setNuevoColaboradorEmail(colaborador.email || "");
+    setNuevoColaboradorColor(colaborador.color || "");
+    setNuevoColaboradorPorcentajeSocio(colaborador.porcentajeSocio || 30);
+    const idsAsociados = asignaciones
+      .filter((a) => a.clienteId === colaborador.id && a.activa)
+      .map((a) => a.pantallaId);
+    setPantallasSeleccionadasIds(idsAsociados);
+    setModoEdicion(true);
+    setColaboradorEditando(colaborador.id);
+    setMostrarModal(true);
+  };
+
+  const handleEliminarColaborador = (colaboradorId: string) => {
+    if (
+      confirm(
+        "¿Está seguro de que desea eliminar este colaborador y todas sus pantallas asociadas?",
+      )
+    ) {
+      const pantallasDelCol = asignaciones
+        .filter((a) => a.clienteId === colaboradorId)
+        .map((a) => a.pantallaId);
+      pantallasDelCol.forEach((id) => onEliminarPantalla(id));
+      // También deberías llamar onEliminarCliente si tienes esa prop
+    }
+  };
+
+  const colaboradoresActivos = clientes.filter((c) => c.activo);
+
+  const obtenerPantallasDelColaborador = (colaboradorId: string) => {
+    return asignaciones
+      .filter((a) => a.clienteId === colaboradorId && a.activa)
+      .map((a) => pantallas.find((p) => p.id === a.pantallaId))
+      .filter((p) => p !== undefined) as Pantalla[];
+  };
+
+  return (
+    <div className="gestor-pantallas-clientes">
+      <h2>📺 Gestión de Colaboradores y Pantallas</h2>
+
+      {colaboradoresActivos.length === 0 ? (
+        <div className="estado-vacio">
+          <div className="estado-vacio-contenido">
+            <div className="icono-grande">👥</div>
+            <h3>No hay colaboradores registrados</h3>
+            <p>
+              Comienza agregando tu primer colaborador y sus pantallas
+              asociadas.
+            </p>
+            <button
+              className="btn btn-primary btn-lg"
+              onClick={() => setMostrarModal(true)}
+            >
+              ➕ Agregar Colaborador
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="header-colaboradores">
+            <button
+              className="btn btn-flotante-mini"
+              onClick={() => setMostrarModal(true)}
+            >
+              <span style={{ fontSize: "1.1em", marginRight: 6 }}>＋</span>{" "}
+              Agregar Colaborador
+            </button>
+          </div>
+
+          <div className="colaboradores-grid">
+            {colaboradoresActivos.map((colaborador) => {
+              const pantallasDelCol = obtenerPantallasDelColaborador(
+                colaborador.id,
+              );
+              return (
+                <div key={colaborador.id} className="colaborador-card">
+                  <div className="colaborador-header">
+                    <h4>{colaborador.nombre}</h4>
+                    <span className="badge-pantallas">
+                      {pantallasDelCol.length} pantalla
+                      {pantallasDelCol.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  {colaborador.contacto && (
+                    <p>
+                      <strong>Contacto:</strong> {colaborador.contacto}
+                    </p>
+                  )}
+                  {colaborador.telefono && (
+                    <p>
+                      <strong>Teléfono:</strong> {colaborador.telefono}
+                    </p>
+                  )}
+                  {colaborador.email && (
+                    <p>
+                      <strong>Email:</strong> {colaborador.email}
+                    </p>
+                  )}
+                  {pantallasDelCol.length > 0 && (
+                    <div className="pantallas-asociadas">
+                      <h5>Pantallas Asociadas</h5>
+                      <ul className="pantallas-list">
+                        {pantallasDelCol.map((pantalla) => (
+                          <li key={pantalla.id}>
+                            <span className="pantalla-nombre">
+                              {pantalla.nombre}
+                            </span>
+                            {pantalla.ubicacion && (
+                              <span className="pantalla-ubicacion">
+                                {pantalla.ubicacion}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="colaborador-acciones">
+                    <button
+                      className="btn btn-accion btn-agregar-pantalla"
+                      onClick={() => handleEditarColaborador(colaborador)}
+                    >
+                      ➕ Pantalla
+                    </button>
+                    <button
+                      className="btn btn-accion btn-editar"
+                      onClick={() => handleEditarColaborador(colaborador)}
+                    >
+                      ✏️ Editar
+                    </button>
+                    <button
+                      className="btn btn-accion btn-eliminar"
+                      onClick={() => handleEliminarColaborador(colaborador.id)}
+                    >
+                      🗑️ Eliminar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {mostrarModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            setMostrarModal(false);
+            setModoEdicion(false);
+            setColaboradorEditando(null);
+          }}
+        >
+          <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>
+                {modoEdicion
+                  ? "Editar Colaborador"
+                  : "Agregar Nuevo Colaborador"}
+              </h3>
+              <button
+                className="modal-close"
+                onClick={() => setMostrarModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="seccion-formulario">
+                <h4>Datos del Colaborador</h4>
+                <div className="form-group">
+                  <label>Nombre del Colaborador *</label>
+                  <input
+                    type="text"
+                    value={nuevoColaboradorNombre}
+                    onChange={(e) => setNuevoColaboradorNombre(e.target.value)}
+                    placeholder="Ej: Juan Pérez"
+                  />
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Contacto</label>
+                    <input
+                      type="text"
+                      value={nuevoColaboradorContacto}
+                      onChange={(e) =>
+                        setNuevoColaboradorContacto(e.target.value)
+                      }
+                      placeholder="Nombre del contacto"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Teléfono</label>
+                    <input
+                      type="text"
+                      value={nuevoColaboradorTel}
+                      onChange={(e) => setNuevoColaboradorTel(e.target.value)}
+                      placeholder="555-1234-5678"
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    value={nuevoColaboradorEmail}
+                    onChange={(e) => setNuevoColaboradorEmail(e.target.value)}
+                    placeholder="correo@colaborador.com"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Color para identificar colaborador</label>
+                  <ColorPicker
+                    value={nuevoColaboradorColor}
+                    onChange={setNuevoColaboradorColor}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Porcentaje para socio/dueño (%) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={nuevoColaboradorPorcentajeSocio}
+                    onChange={(e) =>
+                      setNuevoColaboradorPorcentajeSocio(
+                        e.target.value === ""
+                          ? 0
+                          : parseInt(e.target.value) || 0,
+                      )
+                    }
+                    placeholder="Ej: 30"
+                  />
+                </div>
+                {errorColaborador && (
+                  <div className="error-message">{errorColaborador}</div>
+                )}
+              </div>
+
+              <div className="seccion-formulario">
+                <h4>Pantallas Asociadas *</h4>
+                {pantallas.length === 0 ? (
+                  <p className="aviso-sin-pantallas">
+                    No hay pantallas en el catálogo. Ve a la pestaña{" "}
+                    <strong>Catálogo de Pantallas</strong> para agregar pantallas
+                    y luego podrás asignarlas aquí.
+                  </p>
+                ) : (
+                  <div className="pantallas-checkbox-list">
+                    {pantallas.map((p) => (
+                      <label
+                        key={p.id}
+                        className="checkbox-pantalla-item"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={pantallasSeleccionadasIds.includes(p.id)}
+                          onChange={() => togglePantallaSeleccionada(p.id)}
+                        />
+                        <span className="checkbox-label">
+                          {p.nombre}
+                          {p.ubicacion ? ` — ${p.ubicacion}` : ""}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {errorPantalla && (
+                  <div className="error-message">{errorPantalla}</div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="btn btn-outline"
+                onClick={() => {
+                  setMostrarModal(false);
+                  setModoEdicion(false);
+                  setColaboradorEditando(null);
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleAgregarColaborador}
+              >
+                ✅ {modoEdicion ? "Guardar Cambios" : "Guardar Colaborador"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
