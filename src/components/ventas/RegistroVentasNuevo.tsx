@@ -7,15 +7,6 @@ import {
   Usuario,
 } from "../../types";
 import "./RegistroVentasNuevo.css";
-import { calcularFechaFin, stringAFecha } from "../../utils/formateoFecha";
-import { VentaCard } from "./components/VentaCard";
-import { FiltrosVentas } from "./components/filtrosVentas";
-import { InputField } from "../ui/InputField";
-import { SelectField } from "../ui/SelectField";
-import { BotonAccion } from "../ui/BotonAccion";
-import { ResumenVenta } from "./components/ResumenVenta";
-import { SelectorPantallas } from "./components/SelectorPantallas";
-import { EstadisticasVentas } from "./components/EstadisticasVenta";
 
 interface RegistroVentasNuevoProps {
   pantallas: Pantalla[];
@@ -24,7 +15,7 @@ interface RegistroVentasNuevoProps {
   ventasRegistradas: RegistroVenta[];
   usuarioActual: Usuario;
   onRegistrarVenta: (venta: RegistroVenta) => void;
-  onEliminarVenta: (ventaId: string) => void;
+  errorExterno?: string | null;
 }
 
 export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
@@ -33,22 +24,16 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   ventasRegistradas,
   usuarioActual,
   onRegistrarVenta,
-  onEliminarVenta,
   pantallas,
+  errorExterno = null,
 }) => {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("");
   const [pantallasSeleccionadas, setPantallasSeleccionadas] = useState<
     string[]
   >([]);
-
-  //Fechas
+  const [vendidoA, setVendidoA] = useState<string>("");
   const [fechaInicio, setFechaInicio] = useState<string>("");
   const [mesesRenta, setMesesRenta] = useState<number>(1);
-
-  //Para mostrar el modal de edicion de cards
-  const [mostrarModalEditar, setMostrarModalEditar] = useState(false);
-
-  const [vendidoA, setVendidoA] = useState<string>("");
   const [precioGeneral, setPrecioGeneral] = useState<number>(0);
   const [porcentajeSocio, setPorcentajeSocio] = useState<number>(30); // Por defecto 30%
   const [montoSocio, setMontoSocio] = useState<number>(0);
@@ -57,50 +42,17 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   const [mostrarModalVenta, setMostrarModalVenta] = useState(false);
   const [busquedaVenta, setBusquedaVenta] = useState("");
   const [paginaActual, setPaginaActual] = useState(1);
-  const [estadoVenta, setEstadoVenta] = useState<
-    "Aceptado" | "Rechazado" | "Prospecto"
-  >("Prospecto");
-  const [filtroEstado, setFiltroEstado] = useState<string>("Todos");
-  const [filtroCliente, setFiltroCliente] = useState<string>("Todos");
-  const [ventaEditando, setVentaEditando] = useState<RegistroVenta | null>(
-    null,
-  );
-
   const ventasPorPagina = 20;
-
-  const opcionesClientes = clientes
-    .filter(
-      (c) =>
-        c.activo && asignaciones.some((a) => a.clienteId === c.id && a.activa),
-    )
-    .map((c) => {
-      const num = asignaciones.filter(
-        (a) => a.clienteId === c.id && a.activa,
-      ).length;
-      return {
-        value: c.id,
-        label: `${c.nombre} (${num} pantalla${num !== 1 ? "s" : ""})`,
-      };
-    });
 
   const ventasFiltradas = ventasRegistradas.filter((venta) => {
     const cliente = clientes.find((c) => c.id === venta.clienteId);
-
-    const coincideBusqueda =
+    return (
       busquedaVenta === "" ||
       (cliente &&
         cliente.nombre.toLowerCase().includes(busquedaVenta.toLowerCase())) ||
-      venta.vendidoA.toLowerCase().includes(busquedaVenta.toLowerCase());
-
-    const coincideEstado =
-      filtroEstado === "Todos" || venta.estadoVenta === filtroEstado;
-
-    const coincideCliente =
-      filtroCliente === "Todos" || venta.clienteId === filtroCliente;
-
-    return coincideBusqueda && coincideEstado && coincideCliente;
+      venta.vendidoA.toLowerCase().includes(busquedaVenta.toLowerCase())
+    );
   });
-
   const totalPaginas = Math.ceil(ventasFiltradas.length / ventasPorPagina);
   const ventasPagina = ventasFiltradas.slice(
     (paginaActual - 1) * ventasPorPagina,
@@ -120,24 +72,40 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     .map((id) => pantallas.find((p) => p.id === id))
     .filter((p) => p !== undefined) as Pantalla[];
 
-  //Calcular fechas
-  const fechaFin = calcularFechaFin(fechaInicio, mesesRenta);
+  // Parsear fecha correctamente (evita problema de zona horaria)
+  const parsearFecha = (fechaString: string): Date => {
+    const [año, mes, día] = fechaString.split("-").map(Number);
+    return new Date(año, mes - 1, día);
+  };
 
+  // Calcular fecha fin basada en meses
+  const calcularFechaFin = () => {
+    if (!fechaInicio || !mesesRenta) return "";
+    const inicio = parsearFecha(fechaInicio);
+    const fin = new Date(inicio);
+    fin.setMonth(fin.getMonth() + mesesRenta);
+    return fin.toISOString().split("T")[0];
+  };
+
+  const fechaFin = calcularFechaFin();
   // Calcular monto del socio en tiempo real
   React.useEffect(() => {
-    const precioMes = precioGeneral;
+    const precioTotal = precioGeneral * mesesRenta; // ← precio × meses
     if (clienteActual && typeof clienteActual.porcentajeSocio === "number") {
       setPorcentajeSocio(clienteActual.porcentajeSocio);
       setMontoSocio(
-        Math.round(((precioMes * clienteActual.porcentajeSocio) / 100) * 100) /
-          100,
+        Math.round(
+          ((precioTotal * clienteActual.porcentajeSocio) / 100) * 100,
+        ) / 100,
       );
     } else {
       setMontoSocio(
-        Math.round(((precioMes * porcentajeSocio) / 100) * 100) / 100,
+        Math.round(((precioTotal * porcentajeSocio) / 100) * 100) / 100,
       );
     }
-  }, [precioGeneral, porcentajeSocio, clienteActual]);
+  }, [precioGeneral, mesesRenta, porcentajeSocio, clienteActual]);
+
+  const importeTotal = montoSocio;
 
   // Validar y registrar venta
   const handleRegistrarVenta = () => {
@@ -175,18 +143,17 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       clienteId: clienteSeleccionado,
       vendidoA: vendidoA.trim(),
       precioGeneral: precioGeneral * mesesRenta,
-      importeTotal: montoSocio,
       fechaRegistro: new Date(),
-      fechaInicio: stringAFecha(fechaInicio),
-      fechaFin: stringAFecha(fechaFin),
+      fechaInicio: parsearFecha(fechaInicio),
+      fechaFin: parsearFecha(fechaFin),
       mesesRenta,
+      importeTotal,
       activo: true,
       usuarioRegistroId: usuarioActual.id,
-      estadoVenta,
     };
 
     onRegistrarVenta(nuevaVenta);
-    setExito("Venta registrada correctamente");
+    setExito("✅ Venta registrada correctamente");
     setClienteSeleccionado("");
     setPantallasSeleccionadas([]);
     setVendidoA("");
@@ -206,55 +173,99 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     );
   };
 
+  // Formatear moneda con separadores de miles
+  const formatearMoneda = (valor: number): string => {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(valor);
+  };
+
   // Obtener ventas del mes actual
   const hoy = new Date();
   const mesActual = hoy.getMonth();
   const añoActual = hoy.getFullYear();
 
+  const ventasDelMes = ventasRegistradas.filter((v) => {
+    const fecha = new Date(v.fechaRegistro);
+    return (
+      fecha.getMonth() === mesActual &&
+      fecha.getFullYear() === añoActual &&
+      v.activo
+    );
+  });
+
+  const ventasDelClienteHoy = ventasDelMes.filter(
+    (v) => v.clienteId === clienteSeleccionado,
+  );
+
   return (
     <div className="registro-ventas-nuevo">
-      <FiltrosVentas
-        busquedaVenta={busquedaVenta}
-        filtroEstado={filtroEstado}
-        filtroCliente={filtroCliente}
-        clientes={clientes}
-        asignaciones={asignaciones}
-        onBusqueda={(v) => {
-          setBusquedaVenta(v);
-          setPaginaActual(1);
-        }}
-        onFiltroEstado={(v) => {
-          setFiltroEstado(v);
-          setPaginaActual(1);
-        }}
-        onFiltroCliente={(v) => {
-          setFiltroCliente(v);
-          setPaginaActual(1);
-        }}
-        onNuevaVenta={() => setMostrarModalVenta(true)}
-      />
+      <div className="ventas-header">
+        <button
+          className="btn btn-flotante"
+          onClick={() => setMostrarModalVenta(true)}
+        >
+          <span style={{ fontSize: "1.3em", marginRight: 6 }}>＋</span>{" "}
+          Registrar Venta
+        </button>
+        <input
+          type="text"
+          placeholder="Buscar cliente o receptor..."
+          value={busquedaVenta}
+          onChange={(e) => {
+            setBusquedaVenta(e.target.value);
+            setPaginaActual(1);
+          }}
+          className="buscador-ventas"
+        />
+      </div>
       <h2>
         📅 Registros de{" "}
-        {new Date(añoActual, mesActual).toLocaleString("es-ES", {
-          month: "long",
-        })}{" "}
+        {new Date(mesActual + 1, 0).toLocaleString("es-ES", { month: "long" })}{" "}
         de {añoActual}
       </h2>
-      <EstadisticasVentas ventasFiltradas={ventasFiltradas} />
+      <div className="estadisticas">
+        <div className="stat-card">
+          <span className="stat-number">{ventasFiltradas.length}</span>
+          <span className="stat-label">Ventas del mes</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-number">
+            {formatearMoneda(
+              ventasFiltradas.reduce((sum, v) => sum + v.importeTotal, 0),
+            )}
+          </span>
+          <span className="stat-label">Ingresos totales</span>
+        </div>
+      </div>
       <div className="ventas-list ventas-compacta">
-        {ventasPagina.map((venta) => (
-          <VentaCard
-            key={venta.id}
-            venta={venta}
-            clientes={clientes}
-            pantallas={pantallas}
-            onEditar={(v) => {
-              setVentaEditando(v);
-              setMostrarModalEditar(true);
-            }}
-            onEliminar={onEliminarVenta}
-          />
-        ))}
+        {ventasPagina.map((venta) => {
+          const cliente = clientes.find((c) => c.id === venta.clienteId);
+          const pantallasNombres = venta.pantallasIds
+            .map((id) => pantallas.find((p) => p.id === id)?.nombre)
+            .join(", ");
+          return (
+            <div key={venta.id} className="venta-item venta-reducida">
+              <div className="venta-header">
+                <span className="venta-titulo">
+                  {cliente?.nombre} - {pantallasNombres}
+                </span>
+                <span className="venta-importe">
+                  {formatearMoneda(venta.importeTotal)}
+                </span>
+              </div>
+              <span className="venta-detalle">
+                {venta.vendidoA} |{" "}
+                {new Date(venta.fechaInicio).toLocaleDateString()} a{" "}
+                {new Date(venta.fechaFin).toLocaleDateString()} (
+                {venta.mesesRenta} mes{venta.mesesRenta !== 1 ? "es" : ""})
+              </span>
+            </div>
+          );
+        })}
       </div>
       <div className="paginacion-ventas">
         <button
@@ -280,122 +291,244 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
           onClick={() => setMostrarModalVenta(false)}
         >
           <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
-            <h3
-              style={{
-                margin: "0 0 20px 0",
-                paddingBottom: "12px",
-                borderBottom: "2px solid #e2e8f0",
-              }}
-            >
-              Registrar Venta/Renta
-            </h3>
-
+            <h3>Registrar Venta/Renta</h3>
+            {/* Aquí puedes reutilizar el formulario de registro actual, o crear uno simplificado */}
             <div className="formulario-section">
-              <SelectField
-                label="Colaborador *"
-                value={clienteSeleccionado}
-                onChange={(v) => {
-                  setClienteSeleccionado(v);
-                  setPantallasSeleccionadas([]);
-                }}
-                placeholder="-- Seleccionar colaborador --"
-                className="select-lg"
-                options={opcionesClientes}
-              />
+              <div className="form-group">
+                <label>Cliente *</label>
+                <select
+                  value={clienteSeleccionado}
+                  onChange={(e) => {
+                    setClienteSeleccionado(e.target.value);
+                    setPantallaSeleccionada("");
+                  }}
+                  className="select-lg"
+                >
+                  <option value="">-- Seleccionar cliente --</option>
+                  {clientes
+                    .filter((c) => c.activo)
+                    .map((c) => {
+                      const numPantallas = asignaciones.filter(
+                        (a) => a.clienteId === c.id && a.activa,
+                      ).length;
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre} ({numPantallas} pantalla
+                          {numPantallas !== 1 ? "s" : ""})
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
 
               {pantallasDelCliente.length > 0 && (
                 <>
-                  <SelectorPantallas
-                    pantallasDelCliente={pantallasDelCliente}
-                    pantallasSeleccionadas={pantallasSeleccionadas}
-                    pantallas={pantallas}
-                    onToggle={togglePantalla}
-                  />
+                  {/* SELECTOR DE MÚLTIPLES PANTALLAS */}
+                  <div className="form-group">
+                    <label className="label-pantallas">
+                      📺 Pantallas seleccionadas:{" "}
+                      <span className="badge-cantidad">
+                        {pantallasSeleccionadas.length}
+                      </span>
+                    </label>
+                    <div className="pantallas-checkbox-group">
+                      {pantallasDelCliente.map((asignacion) => {
+                        const pantalla = pantallas.find(
+                          (p) => p.id === asignacion.pantallaId,
+                        );
+                        const isSelected = pantallasSeleccionadas.includes(
+                          asignacion.pantallaId,
+                        );
+                        return (
+                          <label
+                            key={asignacion.pantallaId}
+                            className={`checkbox-item ${isSelected ? "selected" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() =>
+                                togglePantalla(asignacion.pantallaId)
+                              }
+                            />
+                            <span className="checkbox-visual"></span>
+                            <span className="checkbox-label">
+                              <span className="pantalla-nombre">
+                                {pantalla?.nombre}
+                              </span>
+                              {pantalla?.ubicacion && (
+                                <span className="pantalla-mini-ubicacion">
+                                  {pantalla.ubicacion}
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {pantallasSeleccionadas.length === 0 && (
+                      <div className="hint-text">
+                        ⚠️ Selecciona al menos una pantalla
+                      </div>
+                    )}
+                  </div>
 
-                  <InputField
-                    label="Vendido a (Nombre del receptor) *"
-                    value={vendidoA}
-                    onChange={setVendidoA}
-                    placeholder="Ej: ABC Company, Juan Pérez, Empresa XYZ"
-                  />
-
-                  <SelectField
-                    label="Estado de la venta *"
-                    value={estadoVenta}
-                    onChange={(v) =>
-                      setEstadoVenta(
-                        v as "Aceptado" | "Rechazado" | "Prospecto",
-                      )
-                    }
-                    className="select-lg"
-                    options={[
-                      { value: "Prospecto", label: "Prospecto" },
-                      { value: "Aceptado", label: "Aceptado" },
-                      { value: "Rechazado", label: "Rechazado" },
-                    ]}
-                  />
-
-                  <div className="form-row">
-                    <InputField
-                      label="Fecha de Inicio *"
-                      value={fechaInicio}
-                      onChange={setFechaInicio}
-                      type="date"
-                    />
-                    <InputField
-                      label="Duración (meses) *"
-                      value={mesesRenta || ""}
-                      onChange={(v) =>
-                        setMesesRenta(v === "" ? 0 : parseInt(v) || 0)
-                      }
-                      type="number"
-                      min={1}
+                  <div className="form-group">
+                    <label>Vendido a (Nombre del receptor) *</label>
+                    <input
+                      type="text"
+                      value={vendidoA}
+                      onChange={(e) => setVendidoA(e.target.value)}
+                      placeholder="Ej: ABC Company, Juan Pérez, Empresa XYZ"
                     />
                   </div>
 
-                  <InputField
-                    label="Precio Por Mes *"
-                    value={precioGeneral || ""}
-                    onChange={(v) =>
-                      setPrecioGeneral(v === "" ? 0 : parseInt(v) || 0)
-                    }
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    placeholder="0.00"
-                  />
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Fecha de Inicio *</label>
+                      <input
+                        type="date"
+                        value={fechaInicio}
+                        onChange={(e) => setFechaInicio(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Duración (meses) *</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={mesesRenta || ""}
+                        onChange={(e) =>
+                          setMesesRenta(
+                            e.target.value === ""
+                              ? 0
+                              : parseInt(e.target.value) || 0,
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
 
-                  <InputField
-                    label="Porcentaje para socio/dueño (%)"
-                    value={porcentajeSocio}
-                    type="number"
-                    readOnly
-                  />
-
-                  <InputField
-                    label="Monto para socio/dueño"
-                    value={montoSocio}
-                    type="number"
-                    readOnly
-                  />
+                  <div className="form-group">
+                    <label>Precio General (precio total de la venta) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={precioGeneral || ""}
+                      onChange={(e) =>
+                        setPrecioGeneral(
+                          e.target.value === ""
+                            ? 0
+                            : parseFloat(e.target.value) || 0,
+                        )
+                      }
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Porcentaje para socio/dueño (%) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={porcentajeSocio}
+                      onChange={(e) =>
+                        setPorcentajeSocio(
+                          e.target.value === ""
+                            ? 0
+                            : parseInt(e.target.value) || 0,
+                        )
+                      }
+                      placeholder="Ej: 30"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Monto para socio/dueño</label>
+                    <input
+                      type="number"
+                      value={montoSocio}
+                      readOnly
+                      style={{ background: "#f5f5f5" }}
+                    />
+                  </div>
 
                   {/* RESUMEN DE LA VENTA */}
                   {fechaInicio &&
-                    mesesRenta > 0 &&
+                    mesesRenta &&
                     pantallasSeleccionadas.length > 0 && (
-                      <ResumenVenta
-                        pantallasActuales={pantallasActuales}
-                        estadoVenta={estadoVenta}
-                        pantallasSeleccionadas={pantallasSeleccionadas}
-                        vendidoA={vendidoA}
-                        fechaInicio={fechaInicio}
-                        fechaFin={fechaFin}
-                        mesesRenta={mesesRenta}
-                        precioGeneral={precioGeneral}
-                        porcentajeSocio={porcentajeSocio}
-                        montoSocio={montoSocio}
-                      />
+                      <div className="resumen-venta">
+                        <h4>📋 Resumen de la Venta</h4>
+                        <div className="resumen-grid">
+                          <div className="resumen-item">
+                            <span className="label">Pantallas:</span>
+                            <span className="valor">
+                              {pantallasActuales
+                                .map((p) => p.nombre)
+                                .join(", ")}
+                            </span>
+                          </div>
+                          <div className="resumen-item">
+                            <span className="label">Cantidad:</span>
+                            <span className="valor">
+                              {pantallasSeleccionadas.length} pantalla
+                              {pantallasSeleccionadas.length !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                          <div className="resumen-item">
+                            <span className="label">Vendido a:</span>
+                            <span className="valor">{vendidoA || "-"}</span>
+                          </div>
+                          <div className="resumen-item">
+                            <span className="label">Fecha inicio:</span>
+                            <span className="valor">
+                              {parsearFecha(fechaInicio).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="resumen-item">
+                            <span className="label">Fecha fin:</span>
+                            <span className="valor">
+                              {parsearFecha(fechaFin).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="resumen-item">
+                            <span className="label">Duración:</span>
+                            <span className="valor">
+                              {mesesRenta} mes{mesesRenta !== 1 ? "es" : ""}
+                            </span>
+                          </div>
+                          <div className="resumen-item total">
+                            <span className="label">PRECIO GENERAL:</span>
+                            <span className="valor">
+                              {formatearMoneda(precioGeneral * mesesRenta)}
+                            </span>
+                          </div>
+                          <div className="resumen-item total">
+                            <span className="label">Porcentaje socio:</span>
+                            <span className="valor">{porcentajeSocio}%</span>
+                          </div>
+                          <div className="resumen-item total">
+                            <span className="label">Monto socio:</span>
+                            <span className="valor">
+                              {formatearMoneda(montoSocio)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     )}
+
+                  {error && <div className="error-message">{error}</div>}
+                  {errorExterno && (
+                    <div className="error-message">{errorExterno}</div>
+                  )}
+                  {exito && <div className="success-message">{exito}</div>}
+
+                  <button
+                    className="btn btn-primary btn-lg"
+                    onClick={handleRegistrarVenta}
+                  >
+                    ✅ Registrar Venta
+                  </button>
                 </>
               )}
 
@@ -406,25 +539,12 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                 </div>
               )}
             </div>
-
-            {error && <div className="error-message">{error}</div>}
-            {exito && <div className="success-message">{exito}</div>}
-
-            <BotonAccion
-              onClick={handleRegistrarVenta}
-              variante="primario"
-              fullWidth
-            >
-              Registrar Venta
-            </BotonAccion>
-
-            <BotonAccion
+            <button
+              className="btn btn-outline"
               onClick={() => setMostrarModalVenta(false)}
-              variante="secundario"
-              fullWidth
             >
               Cancelar
-            </BotonAccion>
+            </button>
           </div>
         </div>
       )}

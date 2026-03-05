@@ -1,27 +1,29 @@
 import React, { useState } from "react";
-import { Usuario } from "../../types";
 import "./Login.css";
 
 interface LoginProps {
-  usuarios: Usuario[];
-  onLogin: (usuario: Usuario) => void;
+  onSignIn: (email: string, password: string) => Promise<{ error: unknown } | void>;
+  error: string | null;
+  loading?: boolean;
 }
 
-export const Login: React.FC<LoginProps> = ({ usuarios, onLogin }) => {
-  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState<string>("");
-  const [error, setError] = useState<string>("");
+export const Login: React.FC<LoginProps> = ({
+  onSignIn,
+  error: errorProp,
+  loading = false,
+}) => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleLogin = () => {
-    if (!usuarioSeleccionado) {
-      setError("Por favor selecciona un usuario");
-      return;
-    }
-
-    const usuario = usuarios.find((u) => u.id === usuarioSeleccionado);
-    if (usuario) {
-      onLogin(usuario);
-    } else {
-      setError("Usuario no encontrado");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    setSubmitting(true);
+    const result = await onSignIn(email.trim(), password);
+    setSubmitting(false);
+    if (result?.error) {
+      setPassword("");
     }
   };
 
@@ -29,37 +31,49 @@ export const Login: React.FC<LoginProps> = ({ usuarios, onLogin }) => {
     <div className="login-container">
       <div className="login-card">
         <h1>Sistema de Órdenes de Compra</h1>
-        <p className="login-subtitle">Inicia sesión para continuar</p>
+        <p className="login-subtitle">Inicia sesión con tu correo</p>
 
-        <div className="login-form">
+        <form className="login-form" onSubmit={handleSubmit}>
           <div className="form-group">
-            <label htmlFor="usuario">Selecciona tu usuario:</label>
-            <select
-              id="usuario"
-              value={usuarioSeleccionado}
-              onChange={(e) => {
-                setUsuarioSeleccionado(e.target.value);
-                setError("");
-              }}
+            <label htmlFor="email">Correo</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="admin@empresa.com"
               className="form-select"
-            >
-              <option value="">-- Seleccionar usuario --</option>
-              {usuarios
-                .filter((u) => u.activo)
-                .map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.nombre}
-                  </option>
-                ))}
-            </select>
+              autoComplete="email"
+              disabled={loading || submitting}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="password">Contraseña</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="form-select"
+              autoComplete="current-password"
+              disabled={loading || submitting}
+            />
           </div>
 
-          {error && <div className="error-message">{error}</div>}
+          {(errorProp || (submitting && !errorProp)) && (
+            <div className="error-message">
+              {errorProp || "Verificando..."}
+            </div>
+          )}
 
-          <button className="btn btn-primary btn-lg" onClick={handleLogin}>
-            Ingresar
+          <button
+            type="submit"
+            className="btn btn-primary btn-lg"
+            disabled={loading || submitting || !email.trim() || !password}
+          >
+            {submitting ? "Entrando..." : "Ingresar"}
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );

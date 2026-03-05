@@ -49,51 +49,6 @@
   border-left: 4px solid #1461a1;
 }
 
-.ventas-filtros {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 12px;
-  padding: 10px 14px;
-  background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-}
-
-.filtro-grupo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.filtro-grupo label {
-  font-weight: 600;
-  font-size: 0.88em;
-  color: #444;
-  white-space: nowrap;
-}
-
-.filtro-botones {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.select-filtro {
-  padding: 5px 10px;
-  border-radius: 8px;
-  border: 2px solid #ddd;
-  font-size: 0.9em;
-  cursor: pointer;
-  transition: border-color 0.2s;
-}
-
-.select-filtro:focus {
-  outline: none;
-  border-color: #1461a1;
-}
-
 .form-group {
   margin-bottom: 15px;
 }
@@ -367,24 +322,23 @@
 .venta-item.venta-reducida {
   background: linear-gradient(135deg, #f8fafc 80%, #e3eaff 100%);
   border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(20, 97, 161, 0.1);
+  box-shadow: 0 4px 16px rgba(20,97,161,0.10);
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
   min-width: 0;
   border-left: 6px solid #1461a1;
-  transition:
-    box-shadow 0.2s,
-    transform 0.2s;
+  transition: box-shadow 0.2s, transform 0.2s;
   position: relative;
   overflow: hidden;
   animation: fadeinCard 0.4s;
 }
 .venta-item.venta-reducida:hover {
-  box-shadow: 0 8px 32px rgba(20, 97, 161, 0.18);
+  box-shadow: 0 8px 32px rgba(20,97,161,0.18);
   transform: translateY(-2px) scale(1.02);
 }
 .venta-item.venta-reducida::before {
+  content: "💸";
   position: absolute;
   top: 12px;
   left: 12px;
@@ -413,7 +367,7 @@
   padding: 6px 16px;
   font-weight: bold;
   font-size: 1.08rem;
-  box-shadow: 0 2px 8px rgba(20, 97, 161, 0.08);
+  box-shadow: 0 2px 8px rgba(20,97,161,0.08);
 }
 .venta-detalle {
   font-size: 0.98rem;
@@ -424,14 +378,8 @@
   text-overflow: ellipsis;
 }
 @keyframes fadeinCard {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @media (max-width: 1024px) {
@@ -587,11 +535,9 @@
   border: none;
   border-radius: 24px;
   padding: 12px 28px;
-  box-shadow: 0 4px 16px rgba(20, 97, 161, 0.13);
+  box-shadow: 0 4px 16px rgba(20,97,161,0.13);
   cursor: pointer;
-  transition:
-    background 0.2s,
-    transform 0.2s;
+  transition: background 0.2s, transform 0.2s;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -611,7 +557,7 @@
   color: #222;
   outline: none;
   width: 260px;
-  box-shadow: 0 2px 8px rgba(20, 97, 161, 0.06);
+  box-shadow: 0 2px 8px rgba(20,97,161,0.06);
   margin-right: 12px;
   background-image: url('data:image/svg+xml;utf8,<svg fill="%231461a1" height="20" viewBox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>');
   background-repeat: no-repeat;
@@ -647,9 +593,7 @@
   height: 36px;
   font-size: 1.1rem;
   cursor: pointer;
-  transition:
-    background 0.2s,
-    color 0.2s;
+  transition: background 0.2s, color 0.2s;
 }
 .paginacion-ventas button:disabled {
   opacity: 0.5;

@@ -1,0 +1,43 @@
+.admin-usuarios {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.admin-usuarios-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr);
+  gap: 2rem;
+}
+
+.admin-usuarios-form,
+.admin-usuarios-lista {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.tabla-usuarios {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+}
+
+.tabla-usuarios th,
+.tabla-usuarios td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.tabla-usuarios th {
+  font-weight: 600;
+  background: #f9fafb;
+}
+
+.tabla-usuarios tr:nth-child(even) td {
+  background: #f9fafb;
+}
+
