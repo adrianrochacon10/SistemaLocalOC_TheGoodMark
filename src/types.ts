@@ -68,6 +68,7 @@ export interface RegistroVenta {
   importeTotal: number;
   activo: boolean;
   usuarioRegistroId: string;
+  estadoVenta: "Aceptado" | "Rechazado" | "Prospecto";
 }
 
 // ✅ NUEVO: Concepto para OrdenCompleja

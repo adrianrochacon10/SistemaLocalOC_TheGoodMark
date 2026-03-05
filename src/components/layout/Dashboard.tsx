@@ -158,6 +158,11 @@ export const Dashboard: React.FC = () => {
     setVentasRegistradas((prev) => [...prev, venta]);
   };
 
+  // Agregar handler en Dashboard.tsx
+  const handleEliminarVenta = (ventaId: string) => {
+    setVentasRegistradas((prev) => prev.filter((v) => v.id !== ventaId));
+  };
+
   const handleGenerarOrden = (orden: OrdenDeCompra) => {
     setOrdenes((prev) => [...prev, orden]);
   };
@@ -189,7 +194,7 @@ export const Dashboard: React.FC = () => {
       {/* HEADER */}
       <header className="dashboard-header-nuevo">
         <div className="header-left">
-          <h1>📊 Sistema de Órdenes de Compra</h1>
+          <h1>The Good Mark</h1>
         </div>
         <div className="header-right">
           <div className="usuario-info">
@@ -208,25 +213,25 @@ export const Dashboard: React.FC = () => {
           className={`nav-btn-nuevo ${vistaActual === "gestor" ? "active" : ""}`}
           onClick={() => setVistaActual("gestor")}
         >
-          📺 Gestión de Pantallas
+          Gestion de Colaboradores
         </button>
         <button
           className={`nav-btn-nuevo ${vistaActual === "ventas" ? "active" : ""}`}
           onClick={() => setVistaActual("ventas")}
         >
-          💰 Registrar Ventas
+          Registrar Ventas
         </button>
         <button
           className={`nav-btn-nuevo ${vistaActual === "ordenes" ? "active" : ""}`}
           onClick={() => setVistaActual("ordenes")}
         >
-          📋 Órdenes Mensuales
+          Órdenes Mensuales
         </button>
         <button
           className={`nav-btn-nuevo ${vistaActual === "config" ? "active" : ""}`}
           onClick={() => setVistaActual("config")}
         >
-          ⚙️ Configuración
+          Configuración
         </button>
       </nav>
 
@@ -238,7 +243,7 @@ export const Dashboard: React.FC = () => {
             clientes={clientes}
             asignaciones={asignaciones}
             onAgregarPantalla={handleAgregarPantalla}
-            onActualizarPantalla={handleAgregarPantalla} 
+            onActualizarPantalla={handleAgregarPantalla}
             onEliminarPantalla={handleEliminarPantalla}
             onAgregarCliente={handleAgregarCliente}
             onActualizarCliente={handleAgregarCliente}
@@ -257,6 +262,7 @@ export const Dashboard: React.FC = () => {
             ventasRegistradas={ventasRegistradas}
             usuarioActual={usuarioActual}
             onRegistrarVenta={handleRegistrarVenta}
+            onEliminarVenta={handleEliminarVenta}
           />
         )}
 
