@@ -7,17 +7,15 @@ import {
   Usuario,
 } from "../../types";
 import "./RegistroVentasNuevo.css";
-import {
-  formatearFecha,
-  calcularFechaFin,
-  stringAFecha,
-} from "../../utils/formateoFecha";
-import { formatearMoneda } from "../../utils/formateoMoneda";
+import { calcularFechaFin, stringAFecha } from "../../utils/formateoFecha";
 import { VentaCard } from "./components/VentaCard";
 import { FiltrosVentas } from "./components/filtrosVentas";
 import { InputField } from "../ui/InputField";
 import { SelectField } from "../ui/SelectField";
 import { BotonAccion } from "../ui/BotonAccion";
+import { ResumenVenta } from "./components/ResumenVenta";
+import { SelectorPantallas } from "./components/SelectorPantallas";
+import { EstadisticasVentas } from "./components/EstadisticasVenta";
 
 interface RegistroVentasNuevoProps {
   pantallas: Pantalla[];
@@ -213,19 +211,6 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   const mesActual = hoy.getMonth();
   const añoActual = hoy.getFullYear();
 
-  const ventasDelMes = ventasRegistradas.filter((v) => {
-    const fecha = new Date(v.fechaRegistro);
-    return (
-      fecha.getMonth() === mesActual &&
-      fecha.getFullYear() === añoActual &&
-      v.activo
-    );
-  });
-
-  const ventasDelClienteHoy = ventasDelMes.filter(
-    (v) => v.clienteId === clienteSeleccionado,
-  );
-
   return (
     <div className="registro-ventas-nuevo">
       <FiltrosVentas
@@ -255,20 +240,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
         })}{" "}
         de {añoActual}
       </h2>
-      <div className="estadisticas">
-        <div className="stat-card">
-          <span className="stat-number">{ventasFiltradas.length}</span>
-          <span className="stat-label">Ventas del mes</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-number">
-            {formatearMoneda(
-              ventasFiltradas.reduce((sum, v) => sum + v.importeTotal, 0),
-            )}
-          </span>
-          <span className="stat-label">Ingresos totales</span>
-        </div>
-      </div>
+      <EstadisticasVentas ventasFiltradas={ventasFiltradas} />
       <div className="ventas-list ventas-compacta">
         {ventasPagina.map((venta) => (
           <VentaCard
@@ -333,54 +305,12 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
               {pantallasDelCliente.length > 0 && (
                 <>
-                  <div className="form-group">
-                    <label className="label-pantallas">
-                      Pantallas seleccionadas:{" "}
-                      <span className="badge-cantidad">
-                        {pantallasSeleccionadas.length}
-                      </span>
-                    </label>
-                    <div className="pantallas-checkbox-group">
-                      {pantallasDelCliente.map((asignacion) => {
-                        const pantalla = pantallas.find(
-                          (p) => p.id === asignacion.pantallaId,
-                        );
-                        const isSelected = pantallasSeleccionadas.includes(
-                          asignacion.pantallaId,
-                        );
-                        return (
-                          <label
-                            key={asignacion.pantallaId}
-                            className={`checkbox-item ${isSelected ? "selected" : ""}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() =>
-                                togglePantalla(asignacion.pantallaId)
-                              }
-                            />
-                            <span className="checkbox-visual"></span>
-                            <span className="checkbox-label">
-                              <span className="pantalla-nombre">
-                                {pantalla?.nombre}
-                              </span>
-                              {pantalla?.ubicacion && (
-                                <span className="pantalla-mini-ubicacion">
-                                  {pantalla.ubicacion}
-                                </span>
-                              )}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    {pantallasSeleccionadas.length === 0 && (
-                      <div className="hint-text">
-                        ⚠️ Selecciona al menos una pantalla
-                      </div>
-                    )}
-                  </div>
+                  <SelectorPantallas
+                    pantallasDelCliente={pantallasDelCliente}
+                    pantallasSeleccionadas={pantallasSeleccionadas}
+                    pantallas={pantallas}
+                    onToggle={togglePantalla}
+                  />
 
                   <InputField
                     label="Vendido a (Nombre del receptor) *"
@@ -451,80 +381,20 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
                   {/* RESUMEN DE LA VENTA */}
                   {fechaInicio &&
-                    mesesRenta &&
+                    mesesRenta > 0 &&
                     pantallasSeleccionadas.length > 0 && (
-                      <div className="resumen-venta">
-                        <h4>📋 Resumen de la Venta</h4>
-                        <div className="resumen-grid">
-                          <div className="resumen-item">
-                            <span className="label">Pantallas:</span>
-                            <span className="valor">
-                              {pantallasActuales
-                                .map((p) => p.nombre)
-                                .join(", ")}
-                            </span>
-                          </div>
-                          <div className="resumen-item">
-                            <span className="label">Estado:</span>
-                            <span className="valor">{estadoVenta}</span>
-                          </div>
-                          <div className="resumen-item">
-                            <span className="label">Cantidad:</span>
-                            <span className="valor">
-                              {pantallasSeleccionadas.length} pantalla
-                              {pantallasSeleccionadas.length !== 1 ? "s" : ""}
-                            </span>
-                          </div>
-                          <div className="resumen-item">
-                            <span className="label">Vendido a:</span>
-                            <span className="valor">{vendidoA || "-"}</span>
-                          </div>
-                          <div className="resumen-item">
-                            <span className="label">Fecha inicio:</span>
-                            <span className="valor">
-                              {formatearFecha(fechaInicio)}
-                            </span>
-                          </div>
-                          <div className="resumen-item">
-                            <span className="label">Fecha fin:</span>
-                            <span className="valor">
-                              {formatearFecha(fechaFin)}
-                            </span>
-                          </div>
-                          <div className="resumen-item">
-                            <span className="label">Duración:</span>
-                            <span className="valor">
-                              {mesesRenta} mes{mesesRenta !== 1 ? "es" : ""}
-                            </span>
-                          </div>
-                          <div className="resumen-item total">
-                            <span className="label">
-                              PRECIO GENERAL ({mesesRenta}{" "}
-                              {mesesRenta === 1 ? "mes" : "meses"}):
-                            </span>
-                            <span className="valor">
-                              {formatearMoneda(precioGeneral * mesesRenta)}
-                            </span>
-                          </div>
-                          <div className="resumen-item total">
-                            <span className="label">Porcentaje socio:</span>
-                            <span className="valor">{porcentajeSocio}%</span>
-                          </div>
-                          <div className="resumen-item total">
-                            <span className="label">
-                              Monto socio total ({mesesRenta}{" "}
-                              {mesesRenta === 1 ? "mes" : "meses"}):
-                            </span>
-                            <span
-                              className="valor"
-                              style={{ color: "#22c55e", fontWeight: 800 }}
-                            >
-                              {formatearMoneda(montoSocio * mesesRenta)}
-                              {/* ↑ $900 × meses — solo visible en el resumen */}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                      <ResumenVenta
+                        pantallasActuales={pantallasActuales}
+                        estadoVenta={estadoVenta}
+                        pantallasSeleccionadas={pantallasSeleccionadas}
+                        vendidoA={vendidoA}
+                        fechaInicio={fechaInicio}
+                        fechaFin={fechaFin}
+                        mesesRenta={mesesRenta}
+                        precioGeneral={precioGeneral}
+                        porcentajeSocio={porcentajeSocio}
+                        montoSocio={montoSocio}
+                      />
                     )}
                 </>
               )}
