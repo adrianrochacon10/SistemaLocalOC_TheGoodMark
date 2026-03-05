@@ -1,5 +1,11 @@
 import React, { useState } from "react";
-import { RegistroVenta, Pantalla, AsignacionPantalla, Cliente, Usuario } from "../../types";
+import {
+  RegistroVenta,
+  Pantalla,
+  AsignacionPantalla,
+  Cliente,
+  Usuario,
+} from "../../types";
 import "./RegistroVentas.css";
 
 interface RegistroVentasProps {
@@ -27,12 +33,12 @@ export const RegistroVentas: React.FC<RegistroVentasProps> = ({
 
   // Filtrar pantallas asignadas al cliente seleccionado
   const pantallasDelCliente = asignaciones.filter(
-    (a) => a.clienteId === clienteSeleccionado && a.activa
+    (a) => a.clienteId === clienteSeleccionado && a.activa,
   );
 
   // Obtener precio unitario
   const asignacionActual = pantallasDelCliente.find(
-    (a) => a.pantallaId === pantallaSeleccionada
+    (a) => a.pantallaId === pantallaSeleccionada,
   );
   const precioUnitario = asignacionActual?.precioUnitario || 0;
 
@@ -48,7 +54,8 @@ export const RegistroVentas: React.FC<RegistroVentasProps> = ({
   const fechaFin = calcularFechaFin();
   const importeTotal = precioUnitario * diasRenta;
 
-  const obtenerNombreCliente = (id: string) => clientes.find((c) => c.id === id)?.nombre || "";
+  const obtenerNombreCliente = (id: string) =>
+    clientes.find((c) => c.id === id)?.nombre || "";
   const obtenerNombrePantalla = (id: string) => {
     const asignacion = asignaciones.find((a) => a.pantallaId === id);
     // Buscar la pantalla en una tabla (no la tenemos aquí, pero podemos usar el id)
@@ -84,7 +91,7 @@ export const RegistroVentas: React.FC<RegistroVentasProps> = ({
 
     const venta: RegistroVenta = {
       id: Math.random().toString(36).substr(2, 9),
-      pantallaId: pantallaSeleccionada,
+      pantallasIds: pantallaSeleccionada,
       clienteId: clienteSeleccionado,
       vendidoA: vendidoA.trim(),
       precioUnitario,
@@ -109,16 +116,17 @@ export const RegistroVentas: React.FC<RegistroVentasProps> = ({
   };
 
   const clientesConAsignaciones = clientes.filter((c) =>
-    asignaciones.some((a) => a.clienteId === c.id && a.activa)
+    asignaciones.some((a) => a.clienteId === c.id && a.activa),
   );
 
   const ventasHoy = ventasRegistradas.filter(
     (v) =>
-      new Date(v.fechaRegistro).toDateString() === new Date().toDateString() && v.activo
+      new Date(v.fechaRegistro).toDateString() === new Date().toDateString() &&
+      v.activo,
   );
 
   const ventasDelCliente = ventasRegistradas.filter(
-    (v) => v.clienteId === clienteSeleccionado && v.activo
+    (v) => v.clienteId === clienteSeleccionado && v.activo,
   );
 
   return (
@@ -243,7 +251,10 @@ export const RegistroVentas: React.FC<RegistroVentasProps> = ({
 
           {error && <div className="error-message">{error}</div>}
 
-          <button className="btn btn-primary btn-lg" onClick={handleRegistrarVenta}>
+          <button
+            className="btn btn-primary btn-lg"
+            onClick={handleRegistrarVenta}
+          >
             ✔️ Registrar Venta
           </button>
         </div>
@@ -254,7 +265,8 @@ export const RegistroVentas: React.FC<RegistroVentasProps> = ({
             <h3>📊 Ventas Hoy</h3>
             <p className="stat-number">{ventasHoy.length}</p>
             <p className="stat-total">
-              Total: ${ventasHoy.reduce((t, v) => t + v.importeTotal, 0).toFixed(2)}
+              Total: $
+              {ventasHoy.reduce((t, v) => t + v.importeTotal, 0).toFixed(2)}
             </p>
           </div>
 
@@ -264,7 +276,10 @@ export const RegistroVentas: React.FC<RegistroVentasProps> = ({
               <h3>🏢 Ventas - {obtenerNombreCliente(clienteSeleccionado)}</h3>
               <p className="stat-number">{ventasDelCliente.length}</p>
               <p className="stat-total">
-                Total: ${ventasDelCliente.reduce((t, v) => t + v.importeTotal, 0).toFixed(2)}
+                Total: $
+                {ventasDelCliente
+                  .reduce((t, v) => t + v.importeTotal, 0)
+                  .toFixed(2)}
               </p>
             </div>
           )}
@@ -283,30 +298,45 @@ export const RegistroVentas: React.FC<RegistroVentasProps> = ({
           <div className="ventas-list">
             {ventasRegistradas
               .filter((v) => v.activo)
-              .sort((a, b) => new Date(b.fechaRegistro).getTime() - new Date(a.fechaRegistro).getTime())
+              .sort(
+                (a, b) =>
+                  new Date(b.fechaRegistro).getTime() -
+                  new Date(a.fechaRegistro).getTime(),
+              )
               .slice(0, 10)
               .map((venta) => (
                 <div key={venta.id} className="venta-item">
                   <div className="venta-header">
                     <h4>{obtenerNombreCliente(venta.clienteId)}</h4>
-                    <span className="venta-importe">${venta.importeTotal.toFixed(2)}</span>
+                    <span className="venta-importe">
+                      ${venta.importeTotal.toFixed(2)}
+                    </span>
                   </div>
                   <div className="venta-details">
                     <p>
                       <strong>Vendido a:</strong> {venta.vendidoA}
                     </p>
-                    <p>
+                    {/* <p>
                       <strong>Renta:</strong>{" "}
-                      {new Date(venta.fechaInicio).toLocaleDateString("es-MX")} -{" "}
-                      {new Date(venta.fechaFin).toLocaleDateString("es-MX")} ({venta.diasRenta} días)
-                    </p>
-                    <p>
-                      <strong>Precio:</strong> ${venta.precioUnitario.toFixed(2)}/día
-                    </p>
+                      {new Date(venta.fechaInicio).toLocaleDateString("es-MX")}{" "}
+                      - {new Date(venta.fechaFin).toLocaleDateString("es-MX")} (
+                      {venta.diasRenta} días)
+                    </p> */}
+                    {/* <p>
+                      <strong>Precio:</strong> $
+                      {venta.precioUnitario.toFixed(2)}/día
+                    </p> */}
                     <p className="fecha-registro">
                       Registrado:{" "}
-                      {new Date(venta.fechaRegistro).toLocaleDateString("es-MX",
-                        { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }
+                      {new Date(venta.fechaRegistro).toLocaleDateString(
+                        "es-MX",
+                        {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        },
                       )}
                     </p>
                   </div>
