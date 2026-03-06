@@ -4,13 +4,14 @@ import { Pantalla, Cliente, AsignacionPantalla } from "../../types";
 import "./GestorPantallasClientes.css";
 
 interface GestorPantallasClientesProps {
+  tiposPago: { id: string; nombre: string }[];
   pantallas: Pantalla[];
   clientes: Cliente[];
   asignaciones: AsignacionPantalla[];
   onAgregarPantalla: (pantalla: Pantalla) => void;
   onActualizarPantalla: (pantalla: Pantalla) => void;
   onEliminarPantalla: (pantallaId: string) => void;
-  onAgregarCliente: (cliente: Cliente) => void;
+  onAgregarCliente: (cliente: Cliente, extras?: { tipo_pago_id: string; pantalla_id: string }) => void | Promise<Cliente | void>;
   onActualizarCliente: (cliente: Cliente) => void;
   onAsignarPantalla: (asignacion: AsignacionPantalla) => void;
   onDesasignarPantalla: (clienteId: string, pantallaId: string) => void;
@@ -20,6 +21,7 @@ interface GestorPantallasClientesProps {
 export const GestorPantallasClientes: React.FC<
   GestorPantallasClientesProps
 > = ({
+  tiposPago,
   pantallas,
   clientes,
   asignaciones,
@@ -27,7 +29,7 @@ export const GestorPantallasClientes: React.FC<
   onActualizarPantalla,
   onEliminarPantalla,
   onAgregarCliente,
-  onActualizarCliente, // ← NUEVO
+  onActualizarCliente,
   onAsignarPantalla,
   onDesasignarPantalla,
 }) => {
@@ -43,12 +45,15 @@ export const GestorPantallasClientes: React.FC<
   const [nuevoColaboradorColor, setNuevoColaboradorColor] = useState("");
   const [nuevoColaboradorPorcentajeSocio, setNuevoColaboradorPorcentajeSocio] =
     useState<number>(30);
+  const [tipoPagoId, setTipoPagoId] = useState<string>("");
   const [errorColaborador, setErrorColaborador] = useState("");
   /** IDs de pantallas seleccionadas para este colaborador (solo selección, no crear desde cero) */
   const [pantallasSeleccionadasIds, setPantallasSeleccionadasIds] = useState<
     string[]
   >([]);
   const [errorPantalla, setErrorPantalla] = useState("");
+
+  const tipoPagoEfectivo = tipoPagoId || (tiposPago[0]?.id ?? "");
 
   const handleAgregarColaborador = async () => {
     setErrorColaborador("");

@@ -15,6 +15,7 @@ cp .env.example .env
 - `SUPABASE_URL`: URL de tu proyecto Supabase (Settings → API → Project URL)
 - `SUPABASE_SERVICE_ROLE_KEY`: clave `service_role` de Supabase (NO la compartas)
 - `PORT`: puerto del backend (por defecto 4000)
+- **Opcional (correo de códigos de edición):** `ADMIN_EMAIL` (correo fijo donde recibir los códigos; si no está, se usa el del primer admin en BD). `SMTP_HOST`, `SMTP_PORT` (ej. 587), `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`. Sin SMTP, los códigos se guardan pero no se envían por email.
 
 ### 2. Instalar dependencias y ejecutar
 
