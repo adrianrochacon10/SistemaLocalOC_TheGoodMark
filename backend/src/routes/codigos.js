@@ -36,9 +36,11 @@ router.post("/solicitar", requireAuth, async (req, res) => {
   if (!entidad || !entidad_id) return res.status(400).json({ error: "entidad (cliente|orden) y entidad_id son obligatorios" });
   if (entidad !== "cliente" && entidad !== "orden") return res.status(400).json({ error: "entidad debe ser cliente u orden" });
 
-  // Destino del correo: fijo por .env o primer admin en BD
-  const adminEmail = process.env.ADMIN_EMAIL?.trim() || (await supabase.from("perfiles").select("email").eq("rol", "admin").limit(1)).data?.[0]?.email;
-  if (!adminEmail) return res.status(500).json({ error: "No hay administrador registrado. Configura ADMIN_EMAIL en .env o crea un perfil admin." });
+  // Destino: todos los admins en BD (sin depender de .env)
+  const { data: admins } = await supabase.from("perfiles").select("email").eq("rol", "admin");
+  const adminEmails = admins?.map((a) => a.email).filter(Boolean) ?? [];
+  const adminEmailsUnicos = [...new Set(adminEmails)];
+  if (adminEmailsUnicos.length === 0) return res.status(500).json({ error: "No hay administradores registrados en perfiles." });
 
   const codigo = generarCodigo();
   const expiraAt = new Date();
@@ -50,7 +52,7 @@ router.post("/solicitar", requireAuth, async (req, res) => {
       vendedor_id: req.user.id,
       entidad,
       entidad_id,
-      admin_email: adminEmail,
+      admin_email: adminEmailsUnicos[0],
       expira_at: expiraAt.toISOString(),
     }).select().single();
     if (error) return res.status(500).json({ error: error.message });
@@ -59,9 +61,11 @@ router.post("/solicitar", requireAuth, async (req, res) => {
     const nombreVendedor = req.user.nombre || req.user.email || "Un vendedor";
     const texto = `El vendedor ${nombreVendedor} (${req.user.email}) ha solicitado un código para editar ${tipoEntidad}.\n\nCódigo: ${codigo}\nVálido por 15 minutos.\n\nPásale este código solo a ${nombreVendedor} para que pueda realizar los cambios.`;
     const html = `<p>El vendedor <strong>${nombreVendedor}</strong> (${req.user.email}) ha solicitado un código para editar ${tipoEntidad}.</p><p><strong>Código: ${codigo}</strong></p><p>Válido por 15 minutos.</p><p>Pásale este código solo a <strong>${nombreVendedor}</strong> para que pueda realizar los cambios.</p>`;
-    await sendEmail(adminEmail, "Código de edición TGM - Pásalo al vendedor", texto, html);
+    for (const to of adminEmailsUnicos) {
+      await sendEmail(to, "Código de edición TGM - Pásalo al vendedor", texto, html);
+    }
 
-    res.status(201).json({ id: data.id, mensaje: "Codigo generado y enviado al correo del administrador", expira_at: data.expira_at });
+    res.status(201).json({ id: data.id, mensaje: "Codigo generado y enviado a los administradores", expira_at: data.expira_at });
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error al generar codigo" });
   }
