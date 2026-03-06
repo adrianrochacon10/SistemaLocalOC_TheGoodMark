@@ -21,7 +21,8 @@ import "./Dashboard.css";
 
 export const Dashboard: React.FC = () => {
   const { profile, loading, error: authError, signIn, signOut } = useAuth();
-  const usuarioActual: Usuario | null = profile
+  
+  const usuarioActual: Usuario = profile
     ? {
         id: profile.id,
         nombre: profile.nombre,
@@ -29,7 +30,7 @@ export const Dashboard: React.FC = () => {
         rol: profile.rol,
         activo: true,
       }
-    : null;
+    : null
 
   const [errorVenta, setErrorVenta] = useState<string | null>(null);
   const [estadoBD, setEstadoBD] = useState<"checking" | "ok" | "error">(
@@ -458,7 +459,7 @@ export const Dashboard: React.FC = () => {
       {/* HEADER */}
       <header className="dashboard-header-nuevo">
         <div className="header-left">
-          <h1>📊 Sistema de Órdenes de Compra</h1>
+          <h1>The Good Mark</h1>
         </div>
         <div className="header-right">
           <div className="bd-status">
@@ -483,12 +484,6 @@ export const Dashboard: React.FC = () => {
           onClick={() => setVistaActual("gestor")}
         >
           👥 Colaboradores
-        </button>
-        <button
-          className={`nav-btn-nuevo ${vistaActual === "catalogo" ? "active" : ""}`}
-          onClick={() => setVistaActual("catalogo")}
-        >
-          📺 Catálogo de Pantallas
         </button>
         <button
           className={`nav-btn-nuevo ${vistaActual === "ventas" ? "active" : ""}`}
