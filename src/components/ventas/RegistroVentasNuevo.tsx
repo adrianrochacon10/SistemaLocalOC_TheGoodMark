@@ -21,17 +21,21 @@ import { EstadisticasVentas } from "./components/EstadisticasVenta";
 interface RegistroVentasNuevoProps {
   pantallas: Pantalla[];
   asignaciones: AsignacionPantalla[];
-  clientes: Colaborador[];
+  clientes: Cliente[];
+  productos: { id: string; nombre: string; precio: number }[];
+  tiposPago: { id: string; nombre: string }[];
   ventasRegistradas: RegistroVenta[];
   usuarioActual: Usuario;
   onRegistrarVenta: (venta: RegistroVenta) => void;
   onEliminarVenta: (ventaId: string) => void;
-  errorExterno: string | null;
+  errorExterno?: string | null;
 }
 
 export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   asignaciones,
   clientes,
+  productos,
+  tiposPago,
   ventasRegistradas,
   usuarioActual,
   onRegistrarVenta,
@@ -48,10 +52,10 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   const [mesesRenta, setMesesRenta] = useState<number>(1);
   const [mostrarModalEditar, setMostrarModalEditar] = useState(false);
   const [vendidoA, setVendidoA] = useState<string>("");
-  const [precioGeneral, setPrecioGeneral] = useState<number>(0);
-  const [porcentajeSocio, setPorcentajeSocio] = useState<number>(30);
-  const [montoSocio, setMontoSocio] = useState<number>(0);
-  const [aplicarDescuento, setAplicarDescuento] = useState<boolean>(false);
+  const [productoId, setProductoId] = useState<string>("");
+  const [cantidad, setCantidad] = useState<number>(1);
+  const [precioUnitarioManual, setPrecioUnitarioManual] = useState<number>(0);
+  const [tipoPagoId, setTipoPagoId] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [exito, setExito] = useState<string>("");
   const [mostrarModalVenta, setMostrarModalVenta] = useState(false);
@@ -119,25 +123,21 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
   const fechaFin = calcularFechaFin(fechaInicio, mesesRenta);
 
-  const hoy = new Date();
-  const mesActual = hoy.getMonth();
-  const añoActual = hoy.getFullYear();
-
-  // ─── 3. EFECTOS ──────────────────────────────────────────
+  // Tipo de pago por defecto al seleccionar cliente
   React.useEffect(() => {
-    if (clienteActual && typeof clienteActual.porcentajeSocio === "number") {
-      setPorcentajeSocio(clienteActual.porcentajeSocio);
-      setMontoSocio(
-        Math.round(
-          ((precioGeneral * clienteActual.porcentajeSocio) / 100) * 100,
-        ) / 100,
-      );
-    } else {
-      setMontoSocio(
-        Math.round(((precioGeneral * porcentajeSocio) / 100) * 100) / 100,
-      );
-    }
-  }, [precioGeneral, porcentajeSocio, clienteActual]);
+    if (!clienteSeleccionado || tiposPago.length === 0) return;
+    const id = clienteActual?.tipoPagoId && tiposPago.some((t) => t.id === clienteActual.tipoPagoId)
+      ? clienteActual.tipoPagoId
+      : tiposPago[0].id;
+    setTipoPagoId(id);
+  }, [clienteSeleccionado, clienteActual?.tipoPagoId, tiposPago]);
+
+  // Precio unitario: producto o precio (ingresado en la venta)
+  const productoSeleccionado = productos.find((p) => p.id === productoId);
+  const precioUnitario = productoId && productoSeleccionado
+    ? productoSeleccionado.precio
+    : precioUnitarioManual;
+  const precioBase = cantidad * precioUnitario;
 
   // ─── 4. HANDLERS ─────────────────────────────────────────
   const togglePantalla = (pantallaId: string) => {
@@ -174,10 +174,6 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       setError("Selecciona al menos una pantalla");
       return;
     }
-    if (!vendidoA.trim()) {
-      setError("Especifica a quién se vendió/rentó");
-      return;
-    }
     if (!fechaInicio) {
       setError("Selecciona una fecha de inicio");
       return;
@@ -186,8 +182,8 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       setError("La duración debe ser al menos 1 mes");
       return;
     }
-    if (precioGeneral <= 0) {
-      setError("El precio debe ser mayor a 0");
+    if (!productoId && precioUnitarioManual <= 0) {
+      setError("Selecciona un producto o ingresa el precio");
       return;
     }
 
@@ -196,13 +192,12 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       pantallasIds: itemsVenta.map((i) => i.pantallaId),
       itemsVenta,
       clienteId: clienteSeleccionado,
-      vendidoA: vendidoA.trim(),
-      precioGeneral: precioGeneral * mesesRenta,
-      // ✅ solo aplica monto socio si el colaborador es de tipo porcentaje y tiene activo el toggle
-      importeTotal:
-        tieneComisionPorcentaje && aplicarDescuento
-          ? montoSocio
-          : precioGeneral * mesesRenta,
+      productoId: productoId || undefined,
+      vendidoA: vendidoA.trim() || clienteActual?.nombre ?? "-",
+      precioGeneral: precioUnitarioManual || (productoSeleccionado?.precio ?? 0),
+      cantidad,
+      precioTotal: precioBase,
+      importeTotal: precioBase,
       fechaRegistro: new Date(),
       fechaInicio: stringAFecha(fechaInicio),
       fechaFin: stringAFecha(fechaFin),
@@ -210,11 +205,20 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       activo: true,
       usuarioRegistroId: usuarioActual.id,
       estadoVenta,
+      tipoPagoId: tipoPagoId || undefined,
     };
 
     onRegistrarVenta(nuevaVenta);
     setExito("Venta registrada correctamente");
-    resetFormularioVenta();
+    setClienteSeleccionado("");
+    setPantallasSeleccionadas([]);
+    setVendidoA("");
+    setProductoId("");
+    setCantidad(1);
+    setPrecioUnitarioManual(0);
+    setFechaInicio("");
+    setMesesRenta(1);
+
     setTimeout(() => setExito(""), 3000);
   };
 
@@ -336,10 +340,64 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                   />
 
                   <InputField
-                    label="Vendido a (Nombre del receptor) *"
+                    label="Vendido a (Nombre del receptor)"
                     value={vendidoA}
                     onChange={setVendidoA}
-                    placeholder="Ej: ABC Company, Juan Pérez, Empresa XYZ"
+                    placeholder="Ej: ABC Company, Juan Pérez (opcional)"
+                  />
+
+                  <SelectField
+                    label="Producto"
+                    value={productoId}
+                    onChange={(v) => {
+                      setProductoId(v);
+                      if (v) setPrecioUnitarioManual(0);
+                    }}
+                    placeholder="-- Sin producto (ingresar precio) --"
+                    className="select-lg"
+                    options={[
+                      { value: "", label: "-- Sin producto (ingresar precio) --" },
+                      ...productos.map((p) => ({
+                        value: p.id,
+                        label: `${p.nombre} - $${p.precio.toFixed(2)}`,
+                      })),
+                    ]}
+                  />
+
+                  {!productoId && (
+                    <InputField
+                      label="Precio *"
+                      value={precioUnitarioManual || ""}
+                      onChange={(v) =>
+                        setPrecioUnitarioManual(v === "" ? 0 : parseFloat(v) || 0)
+                      }
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="0.00"
+                    />
+                  )}
+
+                  <InputField
+                    label="Cantidad *"
+                    value={cantidad || ""}
+                    onChange={(v) =>
+                      setCantidad(v === "" ? 1 : Math.max(1, parseInt(v) || 1))
+                    }
+                    type="number"
+                    min={1}
+                  />
+
+                  <SelectField
+                    label="Tipo de pago"
+                    value={tipoPagoId}
+                    onChange={setTipoPagoId}
+                    placeholder="-- Seleccionar --"
+                    className="select-lg"
+                    options={tiposPago.map((t) => ({
+                      value: t.id,
+                      label: t.nombre,
+                    }))}
                   />
 
                   <SelectField
@@ -376,124 +434,11 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                     />
                   </div>
 
-                  <InputField
-                    label="Precio Por Mes *"
-                    value={precioGeneral || ""}
-                    onChange={(v) =>
-                      setPrecioGeneral(v === "" ? 0 : parseInt(v) || 0)
-                    }
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    placeholder="0.00"
-                  />
-
-                  {/* ✅ Bloque de comisión — SOLO aparece si tipoComision es "porcentaje" */}
-                  {tieneComisionPorcentaje && (
-                    <>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-end",
-                          gap: 10,
-                        }}
-                      >
-                        {aplicarDescuento && (
-                          <div style={{ flex: 1 }}>
-                            <InputField
-                              label="Porcentaje para socio/dueño (%)"
-                              value={porcentajeSocio}
-                              type="number"
-                              readOnly
-                            />
-                          </div>
-                        )}
-
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 4,
-                            paddingBottom: 8,
-                            minWidth: 84,
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: "0.78em",
-                              fontWeight: 600,
-                              color: "#475569",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            Comisión
-                          </span>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: "0.75em",
-                                fontWeight: 600,
-                                color: aplicarDescuento ? "#16a34a" : "#b45309",
-                              }}
-                            >
-                              {aplicarDescuento ? "Activa" : "Inactiva"}
-                            </span>
-                            <div
-                              onClick={() =>
-                                setAplicarDescuento((prev) => !prev)
-                              }
-                              style={{
-                                width: 40,
-                                height: 22,
-                                borderRadius: 11,
-                                background: aplicarDescuento
-                                  ? "#22c55e"
-                                  : "#d1d5db",
-                                position: "relative",
-                                cursor: "pointer",
-                                transition: "background 0.2s",
-                                flexShrink: 0,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  position: "absolute",
-                                  top: 2,
-                                  left: aplicarDescuento ? 20 : 2,
-                                  width: 18,
-                                  height: 18,
-                                  borderRadius: "50%",
-                                  background: "#fff",
-                                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                                  transition: "left 0.2s",
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {aplicarDescuento && (
-                        <InputField
-                          label="Monto para socio/dueño"
-                          value={montoSocio}
-                          type="number"
-                          readOnly
-                        />
-                      )}
-                    </>
-                  )}
-
+                  {/* RESUMEN DE LA VENTA */}
                   {fechaInicio &&
                     mesesRenta > 0 &&
-                    pantallasSeleccionadas.length > 0 && (
+                    pantallasSeleccionadas.length > 0 &&
+                    (productoId || precioUnitarioManual > 0) && (
                       <ResumenVenta
                         pantallasActuales={pantallasActuales}
                         estadoVenta={estadoVenta}
@@ -502,12 +447,10 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                         fechaInicio={fechaInicio}
                         fechaFin={fechaFin}
                         mesesRenta={mesesRenta}
-                        precioGeneral={precioGeneral}
-                        porcentajeSocio={porcentajeSocio}
-                        montoSocio={montoSocio}
-                        aplicarDescuento={
-                          tieneComisionPorcentaje && aplicarDescuento
-                        }
+                        cantidad={cantidad}
+                        precioUnitario={precioUnitario}
+                        precioTotal={precioBase}
+                        tipoPagoNombre={tiposPago.find((t) => t.id === tipoPagoId)?.nombre ?? ""}
                       />
                     )}
                 </>
@@ -522,6 +465,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
             </div>
 
             {error && <div className="error-message">{error}</div>}
+            {errorExterno && <div className="error-message">{errorExterno}</div>}
             {exito && <div className="success-message">{exito}</div>}
 
             <BotonAccion

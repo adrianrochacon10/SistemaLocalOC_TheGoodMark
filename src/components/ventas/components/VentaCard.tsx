@@ -140,7 +140,7 @@ export const VentaCard: React.FC<VentaCardProps> = ({
             fontSize: "1em",
           }}
         >
-          {formatearMoneda(venta.importeTotal)}
+          {formatearMoneda(venta.precioTotal ?? venta.importeTotal ?? 0)}
         </span>
         <span
           style={{

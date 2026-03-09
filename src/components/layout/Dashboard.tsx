@@ -30,6 +30,7 @@ export const Dashboard: React.FC = () => {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   // Estado del negocio
   const [tiposPago, setTiposPago] = useState<{ id: string; nombre: string }[]>([]);
+  const [productos, setProductos] = useState<{ id: string; nombre: string; precio: number }[]>([]);
   const [pantallas, setPantallas] = useState<Pantalla[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [asignaciones, setAsignaciones] = useState<AsignacionPantalla[]>([]);
@@ -91,12 +92,18 @@ export const Dashboard: React.FC = () => {
           email: row.email ?? undefined,
           color: row.color ?? undefined,
           porcentajeSocio: row.porcentaje_socio ?? undefined,
+          tipoPdf: row.tipo_pdf === 2 ? 2 : 1,
+          tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id ?? undefined,
           activo: row.activo ?? true,
           fechaCreacion: row.fecha_creacion
             ? new Date(row.fecha_creacion)
             : new Date(),
         }));
         setClientes(clientesNormalizados);
+
+        // Productos
+        const productosData = (await backendApi.get("/api/productos")) as any[];
+        setProductos(Array.isArray(productosData) ? productosData.map((p: any) => ({ id: p.id, nombre: p.nombre, precio: Number(p.precio) || 0 })) : []);
 
         // Tipos de pago
         const tiposData = (await backendApi.get("/api/tipo-pago")) as any[];
@@ -108,9 +115,9 @@ export const Dashboard: React.FC = () => {
           (row: any) => ({
             id: row.id,
             nombre: row.nombre ?? row.nombre_pantalla,
-            ubicacion: row.ubicacion ?? undefined,
+            ubicacion: row.ubicacion ?? row.direccion ?? undefined,
             plaza: row.plaza ?? undefined,
-            precioUnitario: row.precio_unitario ?? 0,
+            precioUnitario: 0,
             activa: true,
             fechaCreacion: row.fecha_creacion
               ? new Date(row.fecha_creacion)
@@ -124,19 +131,26 @@ export const Dashboard: React.FC = () => {
         const ventasNormalizadas: RegistroVenta[] = ventasData.map(
           (row: any) => ({
             id: row.id,
-            pantallasIds: row.pantallas_ids ?? [],
-            clienteId: row.cliente_id,
-            vendidoA: row.vendido_a,
-            precioGeneral: row.precio_general,
-            fechaRegistro: row.fecha_registro
-              ? new Date(row.fecha_registro)
-              : new Date(),
+            pantallasIds: row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []),
+            clienteId: row.colaborador_id ?? row.cliente_id,
+            productoId: row.producto_id ?? undefined,
+            vendidoA: row.vendido_a ?? row.cliente?.nombre ?? "-",
+            precioGeneral: row.precio_general ?? 0,
+            cantidad: row.cantidad ?? 1,
+            precioTotal: row.precio_total ?? row.importe_total ?? 0,
+            fechaRegistro: row.created_at
+              ? new Date(row.created_at)
+              : row.fecha_registro
+                ? new Date(row.fecha_registro)
+                : new Date(),
             fechaInicio: new Date(row.fecha_inicio),
             fechaFin: new Date(row.fecha_fin),
-            mesesRenta: row.meses_renta,
-            importeTotal: row.importe_total,
+            mesesRenta: row.duracion_meses ?? row.meses_renta ?? 1,
+            importeTotal: row.precio_total ?? row.importe_total ?? 0,
             activo: row.activo ?? true,
-            usuarioRegistroId: row.usuario_registro_id ?? "",
+            usuarioRegistroId: row.vendedor_id ?? row.usuario_registro_id ?? "",
+            estadoVenta: row.estado ? (row.estado.charAt(0).toUpperCase() + row.estado.slice(1)) as "Aceptado" | "Rechazado" | "Prospecto" : undefined,
+            tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
           }),
         );
         setVentasRegistradas(ventasNormalizadas);
@@ -245,49 +259,82 @@ export const Dashboard: React.FC = () => {
     signOut();
   };
 
-  const handleEliminarVenta = async (ventaId: string) => {
-    try {
-      await backendApi.del(`/api/ventas/${ventaId}`);
-    } catch (e) {
-      console.error("Error eliminando venta en backend:", e);
-    }
-    setVentasRegistradas((prev) => prev.filter((v) => v.id !== ventaId));
-  };
+  const mapVentaFromApi = (row: any): RegistroVenta => ({
+    id: row.id,
+    pantallasIds: row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []),
+    clienteId: row.colaborador_id ?? row.cliente_id,
+    productoId: row.producto_id ?? undefined,
+    vendidoA: row.vendido_a ?? row.cliente?.nombre ?? "-",
+    precioGeneral: row.precio_general ?? 0,
+    cantidad: row.cantidad ?? 1,
+    precioTotal: row.precio_total ?? row.importe_total ?? 0,
+    fechaRegistro: row.created_at ? new Date(row.created_at) : new Date(),
+    fechaInicio: new Date(row.fecha_inicio),
+    fechaFin: new Date(row.fecha_fin),
+    mesesRenta: row.duracion_meses ?? 1,
+    importeTotal: row.precio_total ?? row.importe_total ?? 0,
+    activo: true,
+    usuarioRegistroId: row.vendedor_id ?? "",
+    estadoVenta: row.estado ? (row.estado.charAt(0).toUpperCase() + row.estado.slice(1)) as "Aceptado" | "Rechazado" | "Prospecto" : undefined,
+    tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
+  });
 
   const handleRegistrarVentaConSupabase = async (venta: RegistroVenta) => {
     setErrorVenta(null);
 
-    try {
-      const { error } = await registrarVenta({
-        pantallas_ids: venta.pantallasIds,
-        cliente_id: venta.clienteId,
-        vendido_a: venta.vendidoA,
-        precio_general: venta.precioGeneral,
-        fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
-        fecha_fin: venta.fechaFin.toISOString().slice(0, 10),
-        meses_renta: venta.mesesRenta,
-        importe_total: venta.importeTotal,
-        usuario_registro_id: usuarioActual.id,
-      });
+    const pantallasParaVenta = venta.pantallasIds.length > 0 ? venta.pantallasIds : [];
+    if (pantallasParaVenta.length === 0) {
+      setErrorVenta("Selecciona al menos una pantalla");
+      return;
+    }
 
-      if (error) {
-        console.error("Error al guardar venta en Supabase:", error);
-        setErrorVenta(
-          error instanceof Error
-            ? `La venta se guardó solo en este dispositivo.\nDetalle BD: ${error.message}`
-            : "La venta se guardó solo en este dispositivo. Error al guardar en la base de datos.",
-        );
+    const estadoApi = venta.estadoVenta?.toLowerCase() ?? "prospecto";
+    const payloadBase = {
+      cliente_id: venta.clienteId,
+      producto_id: venta.productoId ?? null,
+      cantidad: venta.cantidad ?? 1,
+      precio_unitario_manual: venta.precioGeneral > 0 && !venta.productoId ? venta.precioGeneral : null,
+      tipo_pago_id: venta.tipoPagoId ?? null,
+      estado: estadoApi,
+      fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
+      fecha_fin: venta.fechaFin.toISOString().slice(0, 10),
+      duracion_meses: venta.mesesRenta,
+    };
+
+    const ventasCreadas: RegistroVenta[] = [];
+
+    try {
+      for (const pantallaId of pantallasParaVenta) {
+        const { data, error } = await registrarVenta({
+          ...payloadBase,
+          pantalla_id: pantallaId,
+        });
+
+        if (error) {
+          console.error("Error al guardar venta en Supabase:", error);
+          setErrorVenta(
+            error instanceof Error
+              ? `Error al guardar: ${error.message}`
+              : "Error al guardar en la base de datos."
+          );
+          setVentasRegistradas((prev) => [...prev, venta]);
+          return;
+        }
+        if (data) ventasCreadas.push(mapVentaFromApi(data));
+      }
+
+      if (ventasCreadas.length > 0) {
+        setVentasRegistradas((prev) => [...prev, ...ventasCreadas]);
       }
     } catch (e) {
       console.error("Excepción al guardar venta en Supabase:", e);
       setErrorVenta(
         e instanceof Error
-          ? `La venta se guardó solo en este dispositivo.\nDetalle BD: ${e.message}`
-          : "La venta se guardó solo en este dispositivo. Error desconocido al guardar en la base de datos.",
+          ? `Error: ${e.message}`
+          : "Error desconocido al guardar en la base de datos."
       );
+      setVentasRegistradas((prev) => [...prev, venta]);
     }
-
-    setVentasRegistradas((prev) => [...prev, venta]);
   };
 
   const handleAgregarPantalla = async (pantalla: Pantalla) => {
@@ -296,22 +343,18 @@ export const Dashboard: React.FC = () => {
     try {
       const data = await backendApi.post("/api/pantallas", {
         nombre: pantalla.nombre,
-        ubicacion: pantalla.ubicacion ?? null,
-        // ya no enviamos plaza ni precio al backend
-        creadoPor: usuarioActual.id,
-        actualizadoPor: usuarioActual.id,
+        direccion: pantalla.ubicacion ?? null,
       });
 
       if (data) {
         pantallaParaEstado = {
           id: data.id,
           nombre: data.nombre ?? data.nombre_pantalla,
-          ubicacion: data.ubicacion ?? undefined,
-          // mantenemos compatibilidad local con precioUnitario en 0
-          precioUnitario: data.precio_unitario ?? 0,
+          ubicacion: data.ubicacion ?? data.direccion ?? undefined,
+          precioUnitario: Number(data.precio ?? data.precio_unitario ?? 0) || 0,
           activa: true,
-          fechaCreacion: data.fecha_creacion
-            ? new Date(data.fecha_creacion)
+          fechaCreacion: data.fecha_creacion ?? data.created_at
+            ? new Date(data.fecha_creacion ?? data.created_at)
             : pantalla.fechaCreacion,
         };
       }
@@ -345,6 +388,7 @@ export const Dashboard: React.FC = () => {
           email: cliente.email ?? null,
           tipo_pago_id: extras.tipo_pago_id,
           pantalla_id: extras.pantalla_id,
+          tipo_pdf: cliente.tipoPdf ?? 1,
         });
 
         if (data) {
@@ -356,6 +400,7 @@ export const Dashboard: React.FC = () => {
             email: data.email ?? undefined,
             color: (data as any).color ?? undefined,
             porcentajeSocio: (data as any).porcentaje_socio ?? undefined,
+            tipoPdf: (data as any).tipo_pdf === 2 ? 2 : 1,
             activo: (data as any).activo ?? true,
             fechaCreacion: data.created_at
               ? new Date(data.created_at)
@@ -564,6 +609,8 @@ export const Dashboard: React.FC = () => {
             pantallas={pantallas}
             asignaciones={asignaciones}
             clientes={clientes}
+            productos={productos}
+            tiposPago={tiposPago}
             ventasRegistradas={ventasRegistradas}
             usuarioActual={usuarioActual}
             onRegistrarVenta={handleRegistrarVentaConSupabase}
