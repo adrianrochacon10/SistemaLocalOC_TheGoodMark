@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   Usuario,
   Pantalla,
-  Cliente,
+  Colaborador,
   AsignacionPantalla,
   RegistroVenta,
   OrdenDeCompra,
@@ -28,18 +28,20 @@ export const Dashboard: React.FC = () => {
   const [mensajeBD, setMensajeBD] = useState<string | null>(null);
 
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  // Estado del negocio
-  const [tiposPago, setTiposPago] = useState<{ id: string; nombre: string }[]>([]);
-  const [productos, setProductos] = useState<{ id: string; nombre: string; precio: number }[]>([]);
+  const [tiposPago, setTiposPago] = useState<{ id: string; nombre: string }[]>(
+    [],
+  );
+  const [productos, setProductos] = useState<
+    { id: string; nombre: string; precio: number }[]
+  >([]);
   const [pantallas, setPantallas] = useState<Pantalla[]>([]);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clientes, setClientes] = useState<Colaborador[]>([]);
   const [asignaciones, setAsignaciones] = useState<AsignacionPantalla[]>([]);
   const [ventasRegistradas, setVentasRegistradas] = useState<RegistroVenta[]>(
     [],
   );
   const [ordenes, setOrdenes] = useState<OrdenDeCompra[]>([]);
 
-  // Configuración
   const [config, setConfig] = useState<ConfiguracionEmpresa>({
     id: "cfg1",
     nombreEmpresa: "Mi Empresa de Pantallas",
@@ -51,12 +53,52 @@ export const Dashboard: React.FC = () => {
     activo: true,
   });
 
-  // Vista actual
   const [vistaActual, setVistaActual] = useState<
     "gestor" | "catalogo" | "ventas" | "ordenes" | "config" | "admin"
   >("ordenes");
 
-  // Cargar datos desde localStorage (fallback) al iniciar
+  // ─── HELPER: normaliza una fila de venta desde la API ────
+  // ✅ itemsVenta se construye desde pantallas_ids
+  const mapVentaFromApi = (row: any): RegistroVenta => {
+    const pantallasIds: string[] =
+      row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []);
+
+    return {
+      id: row.id,
+      pantallasIds,
+      // ✅ construye itemsVenta desde los ids disponibles
+      itemsVenta: pantallasIds.map((pantallaId) => ({
+        pantallaId,
+        sinDescuento: false,
+      })),
+      clienteId: row.colaborador_id ?? row.cliente_id,
+      productoId: row.producto_id ?? undefined,
+      vendidoA: row.vendido_a ?? row.cliente?.nombre ?? "-",
+      precioGeneral: row.precio_general ?? 0,
+      cantidad: row.cantidad ?? 1,
+      precioTotal: row.precio_total ?? row.importe_total ?? 0,
+      fechaRegistro: row.created_at
+        ? new Date(row.created_at)
+        : row.fecha_registro
+          ? new Date(row.fecha_registro)
+          : new Date(),
+      fechaInicio: new Date(row.fecha_inicio),
+      fechaFin: new Date(row.fecha_fin),
+      mesesRenta: row.duracion_meses ?? row.meses_renta ?? 1,
+      importeTotal: row.precio_total ?? row.importe_total ?? 0,
+      activo: row.activo ?? true,
+      usuarioRegistroId: row.vendedor_id ?? row.usuario_registro_id ?? "",
+      estadoVenta: row.estado
+        ? ((row.estado.charAt(0).toUpperCase() + row.estado.slice(1)) as
+            | "Aceptado"
+            | "Rechazado"
+            | "Prospecto")
+        : undefined,
+      tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
+    };
+  };
+
+  // ─── CARGAR DESDE LOCALSTORAGE ───────────────────────────
   useEffect(() => {
     const datosGuardados = localStorage.getItem("datosApp");
     if (datosGuardados) {
@@ -74,17 +116,15 @@ export const Dashboard: React.FC = () => {
     }
   }, []);
 
-  // Cargar datos iniciales desde el backend cuando el usuario está autenticado
+  // ─── CARGAR DESDE BACKEND ────────────────────────────────
   useEffect(() => {
     if (!profile) return;
 
     const cargarDatos = async () => {
       try {
-        // Clientes (misma API que /api/colaboradores)
-        const colabsData = (await backendApi.get(
-          "/api/clientes",
-        )) as any[];
-        const clientesNormalizados: Cliente[] = colabsData.map((row: any) => ({
+        // Clientes
+        const colabsData = (await backendApi.get("/api/clientes")) as any[];
+        const clientesNormalizados: Colaborador[] = colabsData.map((row: any) => ({
           id: row.id,
           nombre: row.nombre,
           contacto: row.contacto ?? undefined,
@@ -103,11 +143,23 @@ export const Dashboard: React.FC = () => {
 
         // Productos
         const productosData = (await backendApi.get("/api/productos")) as any[];
-        setProductos(Array.isArray(productosData) ? productosData.map((p: any) => ({ id: p.id, nombre: p.nombre, precio: Number(p.precio) || 0 })) : []);
+        setProductos(
+          Array.isArray(productosData)
+            ? productosData.map((p: any) => ({
+                id: p.id,
+                nombre: p.nombre,
+                precio: Number(p.precio) || 0,
+              }))
+            : [],
+        );
 
         // Tipos de pago
         const tiposData = (await backendApi.get("/api/tipo-pago")) as any[];
-        setTiposPago(Array.isArray(tiposData) ? tiposData.map((t: any) => ({ id: t.id, nombre: t.nombre })) : []);
+        setTiposPago(
+          Array.isArray(tiposData)
+            ? tiposData.map((t: any) => ({ id: t.id, nombre: t.nombre }))
+            : [],
+        );
 
         // Pantallas
         const pantallasData = (await backendApi.get("/api/pantallas")) as any[];
@@ -126,36 +178,11 @@ export const Dashboard: React.FC = () => {
         );
         setPantallas(pantallasNormalizadas);
 
-        // Ventas
+        // ✅ Ventas — usa mapVentaFromApi para incluir itemsVenta
         const ventasData = (await backendApi.get("/api/ventas")) as any[];
-        const ventasNormalizadas: RegistroVenta[] = ventasData.map(
-          (row: any) => ({
-            id: row.id,
-            pantallasIds: row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []),
-            clienteId: row.colaborador_id ?? row.cliente_id,
-            productoId: row.producto_id ?? undefined,
-            vendidoA: row.vendido_a ?? row.cliente?.nombre ?? "-",
-            precioGeneral: row.precio_general ?? 0,
-            cantidad: row.cantidad ?? 1,
-            precioTotal: row.precio_total ?? row.importe_total ?? 0,
-            fechaRegistro: row.created_at
-              ? new Date(row.created_at)
-              : row.fecha_registro
-                ? new Date(row.fecha_registro)
-                : new Date(),
-            fechaInicio: new Date(row.fecha_inicio),
-            fechaFin: new Date(row.fecha_fin),
-            mesesRenta: row.duracion_meses ?? row.meses_renta ?? 1,
-            importeTotal: row.precio_total ?? row.importe_total ?? 0,
-            activo: row.activo ?? true,
-            usuarioRegistroId: row.vendedor_id ?? row.usuario_registro_id ?? "",
-            estadoVenta: row.estado ? (row.estado.charAt(0).toUpperCase() + row.estado.slice(1)) as "Aceptado" | "Rechazado" | "Prospecto" : undefined,
-            tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
-          }),
-        );
-        setVentasRegistradas(ventasNormalizadas);
+        setVentasRegistradas(ventasData.map(mapVentaFromApi));
 
-        // Configuración de empresa
+        // Configuración
         const configData = await backendApi.get("/api/configuracion");
         if (configData) {
           setConfig({
@@ -178,6 +205,7 @@ export const Dashboard: React.FC = () => {
     cargarDatos();
   }, [profile]);
 
+  // ─── PERSISTIR EN LOCALSTORAGE ───────────────────────────
   useEffect(() => {
     if (!profile) return;
     try {
@@ -205,10 +233,9 @@ export const Dashboard: React.FC = () => {
     profile,
   ]);
 
-  // Verificar conexión con Supabase (BD) después de autenticación
+  // ─── VERIFICAR CONEXIÓN BD ───────────────────────────────
   useEffect(() => {
     if (!profile) return;
-
     let cancelado = false;
 
     const probarConexion = async () => {
@@ -216,32 +243,28 @@ export const Dashboard: React.FC = () => {
       setMensajeBD(null);
       try {
         await backendApi.get("/api/health");
-        if (cancelado) return;
-        setEstadoBD("ok");
-        setMensajeBD(null);
+        if (!cancelado) {
+          setEstadoBD("ok");
+          setMensajeBD(null);
+        }
       } catch (e) {
-        if (cancelado) return;
-        setEstadoBD("error");
-        setMensajeBD(
-          e instanceof Error ? e.message : "Error desconocido de conexión",
-        );
+        if (!cancelado) {
+          setEstadoBD("error");
+          setMensajeBD(
+            e instanceof Error ? e.message : "Error desconocido de conexión",
+          );
+        }
       }
     };
 
     probarConexion();
-
     return () => {
       cancelado = true;
     };
   }, [profile]);
 
-  if (loading) {
-    return <div>Cargando perfil...</div>;
-  }
-
-  if (!profile) {
-    return <div>No hay perfil disponible</div>;
-  }
+  if (loading) return <div>Cargando perfil...</div>;
+  if (!profile) return <div>No hay perfil disponible</div>;
 
   const usuarioActual: Usuario = {
     id: profile.id,
@@ -255,34 +278,14 @@ export const Dashboard: React.FC = () => {
     setUsuarios((prev) => [...prev, nuevoUsuario]);
   };
 
-  const handleLogout = () => {
-    signOut();
-  };
+  const handleLogout = () => signOut();
 
-  const mapVentaFromApi = (row: any): RegistroVenta => ({
-    id: row.id,
-    pantallasIds: row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []),
-    clienteId: row.colaborador_id ?? row.cliente_id,
-    productoId: row.producto_id ?? undefined,
-    vendidoA: row.vendido_a ?? row.cliente?.nombre ?? "-",
-    precioGeneral: row.precio_general ?? 0,
-    cantidad: row.cantidad ?? 1,
-    precioTotal: row.precio_total ?? row.importe_total ?? 0,
-    fechaRegistro: row.created_at ? new Date(row.created_at) : new Date(),
-    fechaInicio: new Date(row.fecha_inicio),
-    fechaFin: new Date(row.fecha_fin),
-    mesesRenta: row.duracion_meses ?? 1,
-    importeTotal: row.precio_total ?? row.importe_total ?? 0,
-    activo: true,
-    usuarioRegistroId: row.vendedor_id ?? "",
-    estadoVenta: row.estado ? (row.estado.charAt(0).toUpperCase() + row.estado.slice(1)) as "Aceptado" | "Rechazado" | "Prospecto" : undefined,
-    tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
-  });
-
+  // ─── HANDLERS DE VENTA ───────────────────────────────────
   const handleRegistrarVentaConSupabase = async (venta: RegistroVenta) => {
     setErrorVenta(null);
 
-    const pantallasParaVenta = venta.pantallasIds.length > 0 ? venta.pantallasIds : [];
+    const pantallasParaVenta =
+      venta.pantallasIds.length > 0 ? venta.pantallasIds : [];
     if (pantallasParaVenta.length === 0) {
       setErrorVenta("Selecciona al menos una pantalla");
       return;
@@ -293,7 +296,10 @@ export const Dashboard: React.FC = () => {
       cliente_id: venta.clienteId,
       producto_id: venta.productoId ?? null,
       cantidad: venta.cantidad ?? 1,
-      precio_unitario_manual: venta.precioGeneral > 0 && !venta.productoId ? venta.precioGeneral : null,
+      precio_unitario_manual:
+        venta.precioGeneral > 0 && !venta.productoId
+          ? venta.precioGeneral
+          : null,
       tipo_pago_id: venta.tipoPagoId ?? null,
       estado: estadoApi,
       fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
@@ -315,7 +321,7 @@ export const Dashboard: React.FC = () => {
           setErrorVenta(
             error instanceof Error
               ? `Error al guardar: ${error.message}`
-              : "Error al guardar en la base de datos."
+              : "Error al guardar en la base de datos.",
           );
           setVentasRegistradas((prev) => [...prev, venta]);
           return;
@@ -331,12 +337,17 @@ export const Dashboard: React.FC = () => {
       setErrorVenta(
         e instanceof Error
           ? `Error: ${e.message}`
-          : "Error desconocido al guardar en la base de datos."
+          : "Error desconocido al guardar en la base de datos.",
       );
       setVentasRegistradas((prev) => [...prev, venta]);
     }
   };
 
+  const handleEliminarVenta = (ventaId: string) => {
+    setVentasRegistradas((prev) => prev.filter((v) => v.id !== ventaId));
+  };
+
+  // ─── HANDLERS DE PANTALLA ────────────────────────────────
   const handleAgregarPantalla = async (pantalla: Pantalla) => {
     let pantallaParaEstado: Pantalla = pantalla;
 
@@ -353,16 +364,16 @@ export const Dashboard: React.FC = () => {
           ubicacion: data.ubicacion ?? data.direccion ?? undefined,
           precioUnitario: Number(data.precio ?? data.precio_unitario ?? 0) || 0,
           activa: true,
-          fechaCreacion: data.fecha_creacion ?? data.created_at
-            ? new Date(data.fecha_creacion ?? data.created_at)
-            : pantalla.fechaCreacion,
+          fechaCreacion:
+            (data.fecha_creacion ?? data.created_at)
+              ? new Date(data.fecha_creacion ?? data.created_at)
+              : pantalla.fechaCreacion,
         };
       }
     } catch (e) {
       console.error("Error guardando pantalla en backend:", e);
     }
 
-    // Siempre actualizamos el estado, aunque falle backend
     setPantallas((prev) => {
       const existe = prev.find((p) => p.id === pantallaParaEstado.id);
       return existe
@@ -373,17 +384,18 @@ export const Dashboard: React.FC = () => {
     });
   };
 
+  // ─── HANDLERS DE CLIENTE ─────────────────────────────────
   const handleAgregarCliente = async (
-    cliente: Cliente,
+    cliente: Colaborador,
     extras?: { tipo_pago_id: string; pantalla_id: string },
   ) => {
-    let clienteParaEstado: Cliente = cliente;
+    let clienteParaEstado: Colaborador = cliente;
 
     if (extras?.tipo_pago_id && extras?.pantalla_id) {
       try {
         const data = await backendApi.post("/api/clientes", {
           nombre: cliente.nombre,
-          contacto: cliente.contacto ?? null,
+          contacto: cliente.alias ?? null,
           telefono: cliente.telefono ?? null,
           email: cliente.email ?? null,
           tipo_pago_id: extras.tipo_pago_id,
@@ -395,7 +407,7 @@ export const Dashboard: React.FC = () => {
           clienteParaEstado = {
             id: data.id,
             nombre: data.nombre,
-            contacto: data.contacto ?? undefined,
+            alias: data.contacto ?? undefined,
             telefono: data.telefono ?? undefined,
             email: data.email ?? undefined,
             color: (data as any).color ?? undefined,
@@ -424,26 +436,23 @@ export const Dashboard: React.FC = () => {
     return clienteParaEstado;
   };
 
+  // ─── HANDLERS VARIOS ─────────────────────────────────────
   const handleEliminarPantalla = async (pantallaId: string) => {
     try {
       await backendApi.del(`/api/pantallas/${pantallaId}`);
     } catch (e) {
       console.error("Error eliminando pantalla en backend:", e);
     }
-
     setPantallas((prev) => prev.filter((p) => p.id !== pantallaId));
     setAsignaciones((prev) => prev.filter((a) => a.pantallaId !== pantallaId));
   };
 
   const handleAsignarPantalla = (asignacion: AsignacionPantalla) => {
     setAsignaciones((prev) => {
-      // Si la asignación ya existe (por id), actualizarla, si no, agregarla
       const existe = prev.find((a) => a.id === asignacion.id);
-      if (existe) {
-        return prev.map((a) => (a.id === asignacion.id ? asignacion : a));
-      } else {
-        return [...prev, asignacion];
-      }
+      return existe
+        ? prev.map((a) => (a.id === asignacion.id ? asignacion : a))
+        : [...prev, asignacion];
     });
   };
 
@@ -462,10 +471,7 @@ export const Dashboard: React.FC = () => {
         ivaPercentaje: config.ivaPercentaje,
         activo: config.activo,
       });
-
-      if (data?.id) {
-        setConfig((prev) => ({ ...prev, id: data.id }));
-      }
+      if (data?.id) setConfig((prev) => ({ ...prev, id: data.id }));
     } catch (e) {
       console.error("Error guardando configuración en backend:", e);
       alert(
@@ -497,8 +503,7 @@ export const Dashboard: React.FC = () => {
       .filter((a) => a.clienteId === colaboradorId)
       .map((a) => a.pantallaId);
 
-    // 3. Limpiar estado local
-    setClientes((prev) => prev.filter((c) => c.id !== colaboradorId)); // ✅ elimina el colaborador
+    setClientes((prev) => prev.filter((c) => c.id !== colaboradorId));
     setAsignaciones((prev) =>
       prev.filter((a) => a.clienteId !== colaboradorId),
     );
@@ -507,26 +512,15 @@ export const Dashboard: React.FC = () => {
     );
   };
 
-  if (loading) {
-    return (
-      <div
-        className="dashboard-nuevo"
-        style={{ padding: "2rem", textAlign: "center" }}
-      >
-        Cargando...
-      </div>
-    );
-  }
-
   if (!profile || !usuarioActual) {
     return <Login onSignIn={signIn} error={authError} loading={loading} />;
   }
 
   const esAdmin = usuarioActual.rol === "admin";
 
+  // ─── JSX ─────────────────────────────────────────────────
   return (
     <div className="dashboard-nuevo">
-      {/* HEADER */}
       <header className="dashboard-header-nuevo">
         <div className="header-left">
           <h1>The Good Mark</h1>
@@ -547,7 +541,6 @@ export const Dashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* NAVEGACIÓN */}
       <nav className="dashboard-nav-nuevo">
         <button
           className={`nav-btn-nuevo ${vistaActual === "gestor" ? "active" : ""}`}
@@ -583,7 +576,6 @@ export const Dashboard: React.FC = () => {
         )}
       </nav>
 
-      {/* CONTENIDO */}
       <main className="dashboard-content-nuevo">
         {vistaActual === "gestor" && (
           <GestorPantallasClientes
@@ -646,7 +638,6 @@ export const Dashboard: React.FC = () => {
                   className="config-input"
                 />
               </div>
-
               <div className="form-group-config">
                 <label>RFC</label>
                 <input
@@ -658,7 +649,6 @@ export const Dashboard: React.FC = () => {
                   className="config-input"
                 />
               </div>
-
               <div className="form-group-config">
                 <label>Dirección</label>
                 <input
@@ -670,7 +660,6 @@ export const Dashboard: React.FC = () => {
                   className="config-input"
                 />
               </div>
-
               <div className="form-group-config">
                 <label>Teléfono</label>
                 <input
@@ -682,7 +671,6 @@ export const Dashboard: React.FC = () => {
                   className="config-input"
                 />
               </div>
-
               <div className="form-group-config">
                 <label>Email</label>
                 <input
@@ -694,7 +682,6 @@ export const Dashboard: React.FC = () => {
                   className="config-input"
                 />
               </div>
-
               <div className="form-group-config">
                 <label>IVA (%)</label>
                 <input
@@ -709,7 +696,6 @@ export const Dashboard: React.FC = () => {
                   className="config-input"
                 />
               </div>
-
               <button
                 className="btn btn-primary"
                 style={{ marginTop: "1rem" }}

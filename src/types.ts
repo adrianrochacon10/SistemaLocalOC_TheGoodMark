@@ -21,14 +21,13 @@ export interface Pantalla {
 }
 
 // Colaboradores (antes clientes; tienen tipo_pdf para el PDF)
-export interface Cliente {
+export interface Colaborador {
   id: string;
   nombre: string;
   alias?: string;
   telefono?: string;
   email?: string;
   color?: string;
-  porcentajeSocio?: number;
   tipoPdf?: 1 | 2;
   tipoPagoId?: string;
   activo: boolean;
