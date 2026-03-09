@@ -25,6 +25,7 @@ interface RegistroVentasNuevoProps {
   usuarioActual: Usuario;
   onRegistrarVenta: (venta: RegistroVenta) => void;
   onEliminarVenta: (ventaId: string) => void;
+  errorExterno: string | null;
 }
 
 export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
@@ -35,6 +36,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   onRegistrarVenta,
   onEliminarVenta,
   pantallas,
+  errorExterno,
 }) => {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("");
   const [pantallasSeleccionadas, setPantallasSeleccionadas] = useState<
@@ -213,6 +215,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
   return (
     <div className="registro-ventas-nuevo">
+      <div>{errorExterno && <p>{errorExterno}</p>}</div>
       <FiltrosVentas
         busquedaVenta={busquedaVenta}
         filtroEstado={filtroEstado}

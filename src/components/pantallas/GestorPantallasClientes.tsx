@@ -14,8 +14,8 @@ interface GestorPantallasClientesProps {
   onAgregarCliente: (cliente: Cliente, extras?: { tipo_pago_id: string; pantalla_id: string }) => void | Promise<Cliente | void>;
   onActualizarCliente: (cliente: Cliente) => void;
   onAsignarPantalla: (asignacion: AsignacionPantalla) => void;
-  onDesasignarPantalla: (clienteId: string, pantallaId: string) => void;
   onEliminarPantallasYAsignaciones: (colaboradorId: string) => void;
+  onDesasignarPantalla: (clienteId: string, pantallaId: string) => void;
 }
 
 export const GestorPantallasClientes: React.FC<
@@ -31,7 +31,8 @@ export const GestorPantallasClientes: React.FC<
   onAgregarCliente,
   onActualizarCliente,
   onAsignarPantalla,
-  onDesasignarPantalla,
+  onDesasignarPantalla, // ✅
+  onEliminarPantallasYAsignaciones, // ✅
 }) => {
   const [mostrarModal, setMostrarModal] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
@@ -47,15 +48,19 @@ export const GestorPantallasClientes: React.FC<
     useState<number>(30);
   const [tipoPagoId, setTipoPagoId] = useState<string>("");
   const [errorColaborador, setErrorColaborador] = useState("");
-  /** IDs de pantallas seleccionadas para este colaborador (solo selección, no crear desde cero) */
-  const [pantallasSeleccionadasIds, setPantallasSeleccionadasIds] = useState<
-    string[]
-  >([]);
+  // ✅ FIX 2: eliminadas las líneas incorrectas de useState para pantallas/asignaciones
+  const [pantallasAgregar, setPantallasAgregar] = useState<
+    Array<{ nombre: string; ubicacion: string; tempId: string }>
+  >([
+    {
+      nombre: "",
+      ubicacion: "",
+      tempId: Math.random().toString(36).substring(2, 15),
+    },
+  ]);
   const [errorPantalla, setErrorPantalla] = useState("");
 
-  const tipoPagoEfectivo = tipoPagoId || (tiposPago[0]?.id ?? "");
-
-  const handleAgregarColaborador = async () => {
+  const handleAgregarColaborador = () => {
     setErrorColaborador("");
     setErrorPantalla("");
 
@@ -64,8 +69,9 @@ export const GestorPantallasClientes: React.FC<
       return;
     }
 
-    if (pantallasSeleccionadasIds.length === 0) {
-      setErrorPantalla("Selecciona al menos una pantalla para el colaborador");
+    const pantallasValidas = pantallasAgregar.filter((p) => p.nombre.trim());
+    if (pantallasValidas.length === 0) {
+      setErrorPantalla("Debe agregar al menos una pantalla");
       return;
     }
 
@@ -84,51 +90,84 @@ export const GestorPantallasClientes: React.FC<
       fechaCreacion: new Date(),
     };
 
-    let idColaborador = nuevoColaborador.id;
     if (modoEdicion && colaboradorEditando) {
       onActualizarCliente(nuevoColaborador);
     } else {
-      const creado = await onAgregarCliente(nuevoColaborador);
-      if (creado?.id) idColaborador = creado.id;
+      onAgregarCliente(nuevoColaborador);
     }
 
-    // Asignar solo pantallas existentes seleccionadas
-    const idsOriginales =
-      modoEdicion && colaboradorEditando
-        ? asignaciones
-            .filter(
-              (a) => a.clienteId === colaboradorEditando && a.activa,
-            )
-            .map((a) => a.pantallaId)
-        : [];
+    if (modoEdicion && colaboradorEditando) {
+      const idsOriginales = asignaciones
+        .filter((a) => a.clienteId === colaboradorEditando && a.activa)
+        .map((a) => a.pantallaId);
 
-    idsOriginales.forEach((pantallaId) => {
-      if (!pantallasSeleccionadasIds.includes(pantallaId)) {
-        onDesasignarPantalla(idColaborador, pantallaId);
-      }
-    });
+      const idsEnForm = pantallasValidas
+        .filter((p) => pantallas.some((existing) => existing.id === p.tempId))
+        .map((p) => p.tempId);
 
-    pantallasSeleccionadasIds.forEach((pantallaId) => {
-      const pantalla = pantallas.find((p) => p.id === pantallaId);
-      if (!pantalla) return;
-      const yaAsignada = asignaciones.some(
-        (a) =>
-          a.clienteId === idColaborador &&
-          a.pantallaId === pantallaId &&
-          a.activa,
-      );
-      if (yaAsignada) return;
-      const uniqueId =
-        "a" + Date.now() + Math.floor(Math.random() * 10000);
-      onAsignarPantalla({
-        id: uniqueId,
-        pantallaId: pantalla.id,
-        clienteId: idColaborador,
-        precioUnitario: pantalla.precioUnitario ?? 0,
-        activa: true,
-        fechaAsignacion: new Date(),
+      idsOriginales.forEach((pantallaId) => {
+        if (!idsEnForm.includes(pantallaId)) {
+          onEliminarPantalla(pantallaId); // ✅ FIX 3: llamar prop directamente
+        }
       });
-    });
+
+      pantallasValidas.forEach((pantallaData, idx) => {
+        const pantallaExistente = pantallas.find(
+          (p) => p.id === pantallaData.tempId,
+        );
+
+        if (pantallaExistente) {
+          onActualizarPantalla({
+            // ✅ FIX 3: llamar prop directamente
+            ...pantallaExistente,
+            nombre: pantallaData.nombre,
+            ubicacion: pantallaData.ubicacion || undefined,
+          });
+        } else {
+          const uniqueId = Date.now() + idx + Math.floor(Math.random() * 10000);
+          const nuevaPantalla: Pantalla = {
+            id: "p" + uniqueId,
+            nombre: pantallaData.nombre,
+            ubicacion: pantallaData.ubicacion || undefined,
+            plaza: undefined,
+            precioUnitario: 0,
+            activa: true,
+            fechaCreacion: new Date(),
+          };
+          onAgregarPantalla(nuevaPantalla);
+          onAsignarPantalla({
+            id: "a" + uniqueId,
+            pantallaId: nuevaPantalla.id,
+            clienteId: nuevoColaborador.id,
+            precioUnitario: 0,
+            activa: true,
+            fechaAsignacion: new Date(),
+          });
+        }
+      });
+    } else {
+      pantallasValidas.forEach((pantallaData, idx) => {
+        const uniqueId = Date.now() + idx + Math.floor(Math.random() * 10000);
+        const nuevaPantalla: Pantalla = {
+          id: "p" + uniqueId,
+          nombre: pantallaData.nombre,
+          ubicacion: pantallaData.ubicacion || undefined,
+          plaza: undefined,
+          precioUnitario: 0,
+          activa: true,
+          fechaCreacion: new Date(),
+        };
+        onAgregarPantalla(nuevaPantalla);
+        onAsignarPantalla({
+          id: "a" + uniqueId,
+          pantallaId: nuevaPantalla.id,
+          clienteId: nuevoColaborador.id,
+          precioUnitario: 0,
+          activa: true,
+          fechaAsignacion: new Date(),
+        });
+      });
+    }
 
     setNuevoColaboradorNombre("");
     setNuevoColaboradorContacto("");
@@ -136,18 +175,44 @@ export const GestorPantallasClientes: React.FC<
     setNuevoColaboradorEmail("");
     setNuevoColaboradorColor("");
     setNuevoColaboradorPorcentajeSocio(30);
-    setPantallasSeleccionadasIds([]);
+    setPantallasAgregar([
+      {
+        nombre: "",
+        ubicacion: "",
+        tempId: Math.random().toString(36).substring(2, 15),
+      },
+    ]);
     setMostrarModal(false);
     setModoEdicion(false);
     setColaboradorEditando(null);
   };
 
-  const togglePantallaSeleccionada = (pantallaId: string) => {
-    setPantallasSeleccionadasIds((prev) =>
-      prev.includes(pantallaId)
-        ? prev.filter((id) => id !== pantallaId)
-        : [...prev, pantallaId],
-    );
+  // ✅ FIX 4: renombrada para actualizar campos del formulario (sin conflicto)
+  const handleActualizarCampoPantalla = (
+    idx: number,
+    campo: string,
+    valor: string,
+  ) => {
+    const nuevas = [...pantallasAgregar];
+    nuevas[idx] = { ...nuevas[idx], [campo]: valor };
+    setPantallasAgregar(nuevas);
+  };
+
+  const handleEliminarFilaPantalla = (idx: number) => {
+    if (pantallasAgregar.length > 1) {
+      setPantallasAgregar(pantallasAgregar.filter((_, i) => i !== idx));
+    }
+  };
+
+  const handleAgregarFilaPantalla = () => {
+    setPantallasAgregar([
+      ...pantallasAgregar,
+      {
+        nombre: "",
+        ubicacion: "",
+        tempId: Math.random().toString(36).substring(2, 15),
+      },
+    ]);
   };
 
   const handleEditarColaborador = (colaborador: Cliente) => {
@@ -157,10 +222,34 @@ export const GestorPantallasClientes: React.FC<
     setNuevoColaboradorEmail(colaborador.email || "");
     setNuevoColaboradorColor(colaborador.color || "");
     setNuevoColaboradorPorcentajeSocio(colaborador.porcentajeSocio || 30);
-    const idsAsociados = asignaciones
+    const pantallasAsociadas = asignaciones
       .filter((a) => a.clienteId === colaborador.id && a.activa)
-      .map((a) => a.pantallaId);
-    setPantallasSeleccionadasIds(idsAsociados);
+      .map((a) => {
+        const pantalla = pantallas.find((p) => p.id === a.pantallaId);
+        return pantalla
+          ? {
+              nombre: pantalla.nombre,
+              ubicacion: pantalla.ubicacion || "",
+              tempId: pantalla.id,
+            }
+          : null;
+      })
+      .filter((p) => p !== null) as Array<{
+      nombre: string;
+      ubicacion: string;
+      tempId: string;
+    }>;
+    setPantallasAgregar(
+      pantallasAsociadas.length > 0
+        ? pantallasAsociadas
+        : [
+            {
+              nombre: "",
+              ubicacion: "",
+              tempId: Math.random().toString(36).substring(2, 15),
+            },
+          ],
+    );
     setModoEdicion(true);
     setColaboradorEditando(colaborador.id);
     setMostrarModal(true);
@@ -172,11 +261,7 @@ export const GestorPantallasClientes: React.FC<
         "¿Está seguro de que desea eliminar este colaborador y todas sus pantallas asociadas?",
       )
     ) {
-      const pantallasDelCol = asignaciones
-        .filter((a) => a.clienteId === colaboradorId)
-        .map((a) => a.pantallaId);
-      pantallasDelCol.forEach((id) => onEliminarPantalla(id));
-      // También deberías llamar onEliminarCliente si tienes esa prop
+      onEliminarPantallasYAsignaciones(colaboradorId);
     }
   };
 
@@ -271,12 +356,6 @@ export const GestorPantallasClientes: React.FC<
                     </div>
                   )}
                   <div className="colaborador-acciones">
-                    <button
-                      className="btn btn-accion btn-agregar-pantalla"
-                      onClick={() => handleEditarColaborador(colaborador)}
-                    >
-                      ➕ Pantalla
-                    </button>
                     <button
                       className="btn btn-accion btn-editar"
                       onClick={() => handleEditarColaborador(colaborador)}
@@ -395,32 +474,57 @@ export const GestorPantallasClientes: React.FC<
 
               <div className="seccion-formulario">
                 <h4>Pantallas Asociadas *</h4>
-                {pantallas.length === 0 ? (
-                  <p className="aviso-sin-pantallas">
-                    No hay pantallas en el catálogo. Ve a la pestaña{" "}
-                    <strong>Catálogo de Pantallas</strong> para agregar pantallas
-                    y luego podrás asignarlas aquí.
-                  </p>
-                ) : (
-                  <div className="pantallas-checkbox-list">
-                    {pantallas.map((p) => (
-                      <label
-                        key={p.id}
-                        className="checkbox-pantalla-item"
-                      >
+                <div className="pantallas-formulario">
+                  {pantallasAgregar.map((pantalla, idx) => (
+                    <div key={pantalla.tempId} className="pantalla-fila">
+                      <div className="form-group">
+                        <label>Nombre de Pantalla</label>
+                        {/* ✅ FIX 4: usando el nombre correcto handleActualizarCampoPantalla */}
                         <input
-                          type="checkbox"
-                          checked={pantallasSeleccionadasIds.includes(p.id)}
-                          onChange={() => togglePantallaSeleccionada(p.id)}
+                          type="text"
+                          value={pantalla.nombre}
+                          onChange={(e) =>
+                            handleActualizarCampoPantalla(
+                              idx,
+                              "nombre",
+                              e.target.value,
+                            )
+                          }
+                          placeholder="Ej: Pantalla Principal"
                         />
-                        <span className="checkbox-label">
-                          {p.nombre}
-                          {p.ubicacion ? ` — ${p.ubicacion}` : ""}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
+                      </div>
+                      <div className="form-group">
+                        <label>Ubicación</label>
+                        <input
+                          type="text"
+                          value={pantalla.ubicacion}
+                          onChange={(e) =>
+                            handleActualizarCampoPantalla(
+                              idx,
+                              "ubicacion",
+                              e.target.value,
+                            )
+                          }
+                          placeholder="Ej: Centro Comercial"
+                        />
+                      </div>
+                      {pantallasAgregar.length > 1 && (
+                        <button
+                          className="btn-eliminar-fila"
+                          onClick={() => handleEliminarFilaPantalla(idx)}
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleAgregarFilaPantalla}
+                >
+                  ➕ Agregar otra Pantalla
+                </button>
                 {errorPantalla && (
                   <div className="error-message">{errorPantalla}</div>
                 )}
