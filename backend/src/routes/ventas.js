@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { supabase } from "../config/supabase.js";
 import { requireAuth } from "../middleware/auth.js";
+import { validarYConsumirCodigo } from "./codigos.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -59,6 +60,11 @@ router.post("/", async (req, res) => {
 router.patch("/:id", async (req, res) => {
   const { id } = req.params;
   const body = req.body;
+  if (req.user.rol === "vendedor") {
+    const codigo = body.codigo_edicion;
+    const resultado = await validarYConsumirCodigo(codigo, req.user.id, "orden", id);
+    if (!resultado.ok) return res.status(400).json({ error: resultado.error });
+  }
   const payload = { updated_at: new Date().toISOString() };
   if (body.estado !== undefined) payload.estado = body.estado;
   if (body.fecha_inicio !== undefined) payload.fecha_inicio = body.fecha_inicio;

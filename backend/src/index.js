@@ -24,6 +24,7 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/tipo-pago", tipoPagoRoutes);
 app.use("/api/clientes", clientesRoutes);
+app.use("/api/colaboradores", clientesRoutes); 
 app.use("/api/ventas", ventasRoutes);
 app.use("/api/pantallas", pantallasRoutes);
 app.use("/api/ordenes", ordenesRoutes);
@@ -31,5 +32,5 @@ app.use("/api/vendedores", vendedoresRoutes);
 app.use("/api/codigos", codigosRoutes);
 
 app.listen(PORT, () => {
-  console.log("[BACKEND] TGM en http://localhost:" + PORT);
+  console.log("The Good Mark (BACKEND) en http://localhost:" + PORT);
 });

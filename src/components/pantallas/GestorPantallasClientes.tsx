@@ -4,13 +4,14 @@ import { Pantalla, Cliente, AsignacionPantalla } from "../../types";
 import "./GestorPantallasClientes.css";
 
 interface GestorPantallasClientesProps {
+  tiposPago: { id: string; nombre: string }[];
   pantallas: Pantalla[];
   clientes: Cliente[];
   asignaciones: AsignacionPantalla[];
   onAgregarPantalla: (pantalla: Pantalla) => void;
   onActualizarPantalla: (pantalla: Pantalla) => void;
   onEliminarPantalla: (pantallaId: string) => void;
-  onAgregarCliente: (cliente: Cliente) => void;
+  onAgregarCliente: (cliente: Cliente, extras?: { tipo_pago_id: string; pantalla_id: string }) => void | Promise<Cliente | void>;
   onActualizarCliente: (cliente: Cliente) => void;
   onAsignarPantalla: (asignacion: AsignacionPantalla) => void;
   onEliminarPantallasYAsignaciones: (colaboradorId: string) => void;
@@ -20,6 +21,7 @@ interface GestorPantallasClientesProps {
 export const GestorPantallasClientes: React.FC<
   GestorPantallasClientesProps
 > = ({
+  tiposPago,
   pantallas,
   clientes,
   asignaciones,
@@ -44,6 +46,7 @@ export const GestorPantallasClientes: React.FC<
   const [nuevoColaboradorColor, setNuevoColaboradorColor] = useState("");
   const [nuevoColaboradorPorcentajeSocio, setNuevoColaboradorPorcentajeSocio] =
     useState<number>(30);
+  const [tipoPagoId, setTipoPagoId] = useState<string>("");
   const [errorColaborador, setErrorColaborador] = useState("");
   // ✅ FIX 2: eliminadas las líneas incorrectas de useState para pantallas/asignaciones
   const [pantallasAgregar, setPantallasAgregar] = useState<

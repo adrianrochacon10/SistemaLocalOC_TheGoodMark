@@ -1,11 +1,33 @@
 import { Router } from "express";
 import { supabase } from "../config/supabase.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { sendEmail } from "../lib/email.js";
 
 const router = Router();
 
 function generarCodigo() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+export async function validarYConsumirCodigo(codigo, vendedorId, entidad, entidadId) {
+  if (!codigo || typeof codigo !== "string" || !String(codigo).trim()) return { ok: false, error: "Código de edición obligatorio para vendedores" };
+  const codigoClean = String(codigo).trim().toUpperCase();
+  const now = new Date().toISOString();
+  const { data: row, error: errSelect } = await supabase
+    .from("codigos_edicion")
+    .select("id")
+    .eq("codigo", codigoClean)
+    .eq("vendedor_id", vendedorId)
+    .eq("entidad", entidad)
+    .eq("entidad_id", entidadId)
+    .eq("usado", false)
+    .gt("expira_at", now)
+    .limit(1)
+    .maybeSingle();
+  if (errSelect || !row) return { ok: false, error: "Código inválido, expirado o ya usado" };
+  const { error: errUpdate } = await supabase.from("codigos_edicion").update({ usado: true }).eq("id", row.id);
+  if (errUpdate) return { ok: false, error: "Error al usar el código" };
+  return { ok: true };
 }
 
 router.post("/solicitar", requireAuth, async (req, res) => {
@@ -14,9 +36,9 @@ router.post("/solicitar", requireAuth, async (req, res) => {
   if (!entidad || !entidad_id) return res.status(400).json({ error: "entidad (cliente|orden) y entidad_id son obligatorios" });
   if (entidad !== "cliente" && entidad !== "orden") return res.status(400).json({ error: "entidad debe ser cliente u orden" });
 
-  const { data: admins } = await supabase.from("perfiles").select("email").eq("rol", "admin").limit(1);
-  const adminEmail = admins?.[0]?.email;
-  if (!adminEmail) return res.status(500).json({ error: "No hay administrador registrado" });
+  // Destino del correo: fijo por .env o primer admin en BD
+  const adminEmail = process.env.ADMIN_EMAIL?.trim() || (await supabase.from("perfiles").select("email").eq("rol", "admin").limit(1)).data?.[0]?.email;
+  if (!adminEmail) return res.status(500).json({ error: "No hay administrador registrado. Configura ADMIN_EMAIL en .env o crea un perfil admin." });
 
   const codigo = generarCodigo();
   const expiraAt = new Date();
@@ -32,7 +54,14 @@ router.post("/solicitar", requireAuth, async (req, res) => {
       expira_at: expiraAt.toISOString(),
     }).select().single();
     if (error) return res.status(500).json({ error: error.message });
-    res.status(201).json({ id: data.id, mensaje: "Codigo generado y enviado al admin", expira_at: data.expira_at });
+
+    const tipoEntidad = entidad === "cliente" ? "un cliente" : "una venta/orden";
+    const nombreVendedor = req.user.nombre || req.user.email || "Un vendedor";
+    const texto = `El vendedor ${nombreVendedor} (${req.user.email}) ha solicitado un código para editar ${tipoEntidad}.\n\nCódigo: ${codigo}\nVálido por 15 minutos.\n\nPásale este código solo a ${nombreVendedor} para que pueda realizar los cambios.`;
+    const html = `<p>El vendedor <strong>${nombreVendedor}</strong> (${req.user.email}) ha solicitado un código para editar ${tipoEntidad}.</p><p><strong>Código: ${codigo}</strong></p><p>Válido por 15 minutos.</p><p>Pásale este código solo a <strong>${nombreVendedor}</strong> para que pueda realizar los cambios.</p>`;
+    await sendEmail(adminEmail, "Código de edición TGM - Pásalo al vendedor", texto, html);
+
+    res.status(201).json({ id: data.id, mensaje: "Codigo generado y enviado al correo del administrador", expira_at: data.expira_at });
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error al generar codigo" });
   }

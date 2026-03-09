@@ -29,6 +29,7 @@ export const Dashboard: React.FC = () => {
 
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   // Estado del negocio
+  const [tiposPago, setTiposPago] = useState<{ id: string; nombre: string }[]>([]);
   const [pantallas, setPantallas] = useState<Pantalla[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [asignaciones, setAsignaciones] = useState<AsignacionPantalla[]>([]);
@@ -78,9 +79,9 @@ export const Dashboard: React.FC = () => {
 
     const cargarDatos = async () => {
       try {
-        // Colaboradores → clientes
+        // Clientes (misma API que /api/colaboradores)
         const colabsData = (await backendApi.get(
-          "/api/colaboradores",
+          "/api/clientes",
         )) as any[];
         const clientesNormalizados: Cliente[] = colabsData.map((row: any) => ({
           id: row.id,
@@ -96,6 +97,10 @@ export const Dashboard: React.FC = () => {
             : new Date(),
         }));
         setClientes(clientesNormalizados);
+
+        // Tipos de pago
+        const tiposData = (await backendApi.get("/api/tipo-pago")) as any[];
+        setTiposPago(Array.isArray(tiposData) ? tiposData.map((t: any) => ({ id: t.id, nombre: t.nombre })) : []);
 
         // Pantallas
         const pantallasData = (await backendApi.get("/api/pantallas")) as any[];
@@ -326,43 +331,44 @@ export const Dashboard: React.FC = () => {
     });
   };
 
-  const handleAgregarCliente = async (cliente: Cliente) => {
+  const handleAgregarCliente = async (
+    cliente: Cliente,
+    extras?: { tipo_pago_id: string; pantalla_id: string },
+  ) => {
     let clienteParaEstado: Cliente = cliente;
 
-    try {
-      const data = await backendApi.post("/api/colaboradores", {
-        nombre: cliente.nombre,
-        contacto: cliente.contacto ?? null,
-        telefono: cliente.telefono ?? null,
-        email: cliente.email ?? null,
-        color: cliente.color ?? null,
-        porcentajeSocio: cliente.porcentajeSocio ?? null,
-        activo: cliente.activo,
-        fechaCreacion: cliente.fechaCreacion.toISOString(),
-        creadoPor: usuarioActual.id,
-        actualizadoPor: usuarioActual.id,
-      });
+    if (extras?.tipo_pago_id && extras?.pantalla_id) {
+      try {
+        const data = await backendApi.post("/api/clientes", {
+          nombre: cliente.nombre,
+          contacto: cliente.contacto ?? null,
+          telefono: cliente.telefono ?? null,
+          email: cliente.email ?? null,
+          tipo_pago_id: extras.tipo_pago_id,
+          pantalla_id: extras.pantalla_id,
+        });
 
-      if (data) {
-        clienteParaEstado = {
-          id: data.id,
-          nombre: data.nombre,
-          contacto: data.contacto ?? undefined,
-          telefono: data.telefono ?? undefined,
-          email: data.email ?? undefined,
-          color: data.color ?? undefined,
-          porcentajeSocio: data.porcentaje_socio ?? undefined,
-          activo: data.activo ?? true,
-          fechaCreacion: data.fecha_creacion
-            ? new Date(data.fecha_creacion)
-            : new Date(),
-        };
+        if (data) {
+          clienteParaEstado = {
+            id: data.id,
+            nombre: data.nombre,
+            contacto: data.contacto ?? undefined,
+            telefono: data.telefono ?? undefined,
+            email: data.email ?? undefined,
+            color: (data as any).color ?? undefined,
+            porcentajeSocio: (data as any).porcentaje_socio ?? undefined,
+            activo: (data as any).activo ?? true,
+            fechaCreacion: data.created_at
+              ? new Date(data.created_at)
+              : new Date(),
+          };
+        }
+      } catch (e) {
+        console.error("Error guardando cliente en backend:", e);
+        throw e;
       }
-    } catch (e) {
-      console.error("Error guardando colaborador en backend:", e);
     }
 
-    // Siempre actualizamos el estado, aunque falle backend
     setClientes((prev) => {
       const existe = prev.find((c) => c.id === clienteParaEstado.id);
       return existe
@@ -542,6 +548,7 @@ export const Dashboard: React.FC = () => {
       <main className="dashboard-content-nuevo">
         {vistaActual === "gestor" && (
           <GestorPantallasClientes
+            tiposPago={tiposPago}
             pantallas={pantallas}
             clientes={clientes}
             asignaciones={asignaciones}

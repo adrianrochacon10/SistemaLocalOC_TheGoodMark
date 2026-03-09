@@ -1,4 +1,3 @@
--- TGM - Esquema Supabase. Ejecutar en SQL Editor.
 DROP TABLE IF EXISTS codigos_edicion;
 DROP TABLE IF EXISTS ordenes_mes;
 DROP TABLE IF EXISTS ventas;
@@ -17,25 +16,10 @@ CREATE TABLE perfiles (
 
 CREATE TABLE tipo_pago (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  nombre text NOT NULL UNIQUE CHECK (nombre IN ('porcentaje', 'precio', 'consideracion')),
+  nombre text NOT NULL UNIQUE CHECK (nombre IN ('porcentaje', 'precio fijo', 'consideracion', 'ninguno')),
   created_at timestamptz DEFAULT now()
 );
-INSERT INTO tipo_pago (nombre) VALUES ('porcentaje'), ('precio'), ('consideracion');
-
-CREATE TABLE clientes (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  nombre text NOT NULL,
-  telefono text,
-  email text,
-  contacto text,
-  tipo_pago_id uuid NOT NULL REFERENCES tipo_pago(id),
-  creado_por uuid REFERENCES perfiles(id),
-  actualizado_por uuid REFERENCES perfiles(id),
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-CREATE INDEX idx_clientes_creado_por ON clientes(creado_por);
-CREATE INDEX idx_clientes_tipo_pago ON clientes(tipo_pago_id);
+INSERT INTO tipo_pago (nombre) VALUES ('porcentaje'), ('precio fijo'), ('consideracion'), ('ninguno');
 
 CREATE TABLE pantallas (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -46,6 +30,23 @@ CREATE TABLE pantallas (
   created_at timestamptz DEFAULT now()
 );
 CREATE INDEX idx_pantallas_tipo_pdf ON pantallas(tipo_pdf);
+
+CREATE TABLE clientes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre text NOT NULL,
+  telefono text,
+  email text,
+  contacto text,
+  tipo_pago_id uuid NOT NULL REFERENCES tipo_pago(id),
+  pantalla_id uuid NOT NULL REFERENCES pantallas(id) ON DELETE RESTRICT,
+  creado_por uuid REFERENCES perfiles(id),
+  actualizado_por uuid REFERENCES perfiles(id),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+CREATE INDEX idx_clientes_creado_por ON clientes(creado_por);
+CREATE INDEX idx_clientes_tipo_pago ON clientes(tipo_pago_id);
+CREATE INDEX idx_clientes_pantalla ON clientes(pantalla_id);
 
 CREATE TABLE ventas (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
