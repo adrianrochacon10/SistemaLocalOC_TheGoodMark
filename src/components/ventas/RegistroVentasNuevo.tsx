@@ -46,15 +46,15 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   // ─── 1. ESTADOS ──────────────────────────────────────────
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("");
   const [itemsVenta, setItemsVenta] = useState<ItemVenta[]>([]);
-  const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId);
+  const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId); // ✅ derivado
 
   const [fechaInicio, setFechaInicio] = useState<string>("");
   const [mesesRenta, setMesesRenta] = useState<number>(1);
-  const [, setMostrarModalEditar] = useState(false);
+  const [mostrarModalEditar, setMostrarModalEditar] = useState(false);
   const [vendidoA, setVendidoA] = useState<string>("");
   const [productoId, setProductoId] = useState<string>("");
   const [cantidad, setCantidad] = useState<number>(1);
-  const [precioUnitarioManual, setPrecioUnitarioManual] = useState<number>(0);
+  const [precioUnitarioManual, setPrecioUnitarioManual] = useState<number>(0); // ✅ renombrado
   const [tipoPagoId, setTipoPagoId] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [exito, setExito] = useState<string>("");
@@ -66,11 +66,18 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   >("Prospecto");
   const [filtroEstado, setFiltroEstado] = useState<string>("Todos");
   const [filtroCliente, setFiltroCliente] = useState<string>("Todos");
-  const [, setVentaEditando] = useState<RegistroVenta | null>(null);
+  const [ventaEditando, setVentaEditando] = useState<RegistroVenta | null>(
+    null,
+  );
 
   const ventasPorPagina = 20;
 
   // ─── 2. VARIABLES DERIVADAS ──────────────────────────────
+  // ✅ añoActual y mesActual definidos aquí
+  const hoy = new Date();
+  const mesActual = hoy.getMonth();
+  const añoActual = hoy.getFullYear();
+
   const opcionesClientes = clientes
     .filter(
       (c) =>
@@ -106,10 +113,6 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     paginaActual * ventasPorPagina,
   );
 
-  const hoy = new Date();
-  const mesActual = hoy.getMonth();
-  const añoActual = hoy.getFullYear();
-
   const pantallasDelCliente = asignaciones.filter(
     (a) => a.clienteId === clienteSeleccionado && a.activa,
   );
@@ -122,21 +125,24 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
   const fechaFin = calcularFechaFin(fechaInicio, mesesRenta);
 
-  // Tipo de pago por defecto al seleccionar cliente
+  const productoSeleccionado = productos.find((p) => p.id === productoId);
+  const precioUnitario =
+    productoId && productoSeleccionado
+      ? productoSeleccionado.precio
+      : precioUnitarioManual;
+  const precioBase = cantidad * precioUnitario;
+
+  // ─── 3. EFECTOS ──────────────────────────────────────────
   React.useEffect(() => {
     if (!clienteSeleccionado || tiposPago.length === 0) return;
-    const id = clienteActual?.tipoPagoId && tiposPago.some((t) => t.id === clienteActual.tipoPagoId)
-      ? clienteActual.tipoPagoId
-      : tiposPago[0].id;
+    // ✅ paréntesis para evitar mezcla de || y ??
+    const id =
+      clienteActual?.tipoPagoId &&
+      tiposPago.some((t) => t.id === clienteActual.tipoPagoId)
+        ? (clienteActual.tipoPagoId ?? tiposPago[0].id)
+        : tiposPago[0].id;
     setTipoPagoId(id);
   }, [clienteSeleccionado, clienteActual?.tipoPagoId, tiposPago]);
-
-  // Precio unitario: producto o precio (ingresado en la venta)
-  const productoSeleccionado = productos.find((p) => p.id === productoId);
-  const precioUnitario = productoId && productoSeleccionado
-    ? productoSeleccionado.precio
-    : precioUnitarioManual;
-  const precioBase = cantidad * precioUnitario;
 
   // ─── 4. HANDLERS ─────────────────────────────────────────
   const togglePantalla = (pantallaId: string) => {
@@ -150,13 +156,14 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
   const resetFormularioVenta = () => {
     setClienteSeleccionado("");
-    setItemsVenta([]);
+    setItemsVenta([]); // ✅ limpia pantallasSeleccionadas también (es derivado)
     setVendidoA("");
     setFechaInicio("");
     setMesesRenta(1);
-    setPrecioUnitarioManual(0);
+    setPrecioUnitarioManual(0); // ✅ correcto
     setProductoId("");
     setCantidad(1);
+    setTipoPagoId("");
     setEstadoVenta("Prospecto");
     setError("");
     setExito("");
@@ -167,7 +174,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     setExito("");
 
     if (!clienteSeleccionado) {
-      setError("Selecciona un colaborador");
+      setError("Selecciona un cliente");
       return;
     }
     if (itemsVenta.length === 0) {
@@ -193,8 +200,9 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       itemsVenta,
       clienteId: clienteSeleccionado,
       productoId: productoId || undefined,
-      vendidoA: (vendidoA.trim() || clienteActual?.nombre) ?? "-",
-      precioGeneral: precioUnitarioManual || (productoSeleccionado?.precio ?? 0),
+      vendidoA: vendidoA.trim() || (clienteActual?.nombre ?? "-"), // ✅ paréntesis
+      precioGeneral:
+        precioUnitarioManual || (productoSeleccionado?.precio ?? 0),
       cantidad,
       precioTotal: precioBase,
       importeTotal: precioBase,
@@ -209,15 +217,15 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     };
 
     onRegistrarVenta(nuevaVenta);
-    resetFormularioVenta();
     setExito("Venta registrada correctamente");
+    resetFormularioVenta(); // ✅ un solo reset limpia todo
     setTimeout(() => setExito(""), 3000);
   };
 
   // ─── 5. JSX ──────────────────────────────────────────────
   return (
     <div className="registro-ventas-nuevo">
-      <div>{errorExterno && <p>{errorExterno}</p>}</div>
+      <div>{errorExterno && <span>{errorExterno}</span>}</div>
 
       <FiltrosVentas
         busquedaVenta={busquedaVenta}
@@ -343,7 +351,10 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                     placeholder="-- Sin producto (ingresar precio) --"
                     className="select-lg"
                     options={[
-                      { value: "", label: "-- Sin producto (ingresar precio) --" },
+                      {
+                        value: "",
+                        label: "-- Sin producto (ingresar precio) --",
+                      },
                       ...productos.map((p) => ({
                         value: p.id,
                         label: `${p.nombre} - $${p.precio.toFixed(2)}`,
@@ -356,7 +367,9 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                       label="Precio *"
                       value={precioUnitarioManual || ""}
                       onChange={(v) =>
-                        setPrecioUnitarioManual(v === "" ? 0 : parseFloat(v) || 0)
+                        setPrecioUnitarioManual(
+                          v === "" ? 0 : parseFloat(v) || 0,
+                        )
                       }
                       type="number"
                       min={0}
@@ -421,7 +434,6 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                     />
                   </div>
 
-                  {/* RESUMEN DE LA VENTA */}
                   {fechaInicio &&
                     mesesRenta > 0 &&
                     pantallasSeleccionadas.length > 0 &&
@@ -437,7 +449,10 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                         cantidad={cantidad}
                         precioUnitario={precioUnitario}
                         precioTotal={precioBase}
-                        tipoPagoNombre={tiposPago.find((t) => t.id === tipoPagoId)?.nombre ?? ""}
+                        tipoPagoNombre={
+                          tiposPago.find((t) => t.id === tipoPagoId)?.nombre ??
+                          ""
+                        }
                       />
                     )}
                 </>
@@ -445,14 +460,16 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
               {clienteSeleccionado && pantallasDelCliente.length === 0 && (
                 <div className="error-message">
-                  Este colaborador no tiene pantallas asignadas. Asigna pantallas
+                  Este cliente no tiene pantallas asignadas. Asigna pantallas
                   desde la sección de Gestión.
                 </div>
               )}
             </div>
 
             {error && <div className="error-message">{error}</div>}
-            {errorExterno && <div className="error-message">{errorExterno}</div>}
+            {errorExterno && (
+              <div className="error-message">{errorExterno}</div>
+            )}
             {exito && <div className="success-message">{exito}</div>}
 
             <BotonAccion
