@@ -36,6 +36,9 @@ export interface Colaborador {
   porcentajeSocio?: number;
 }
 
+/** Alias para uso en frontend: BD/backend usa "clientes", UI muestra "Colaborador" */
+export type Colaborador = Cliente;
+
 // ✅ Empresa (usada en EmpresaForm, OrdenCompleja, OrdenSimple)
 export interface Empresa {
   id: string;

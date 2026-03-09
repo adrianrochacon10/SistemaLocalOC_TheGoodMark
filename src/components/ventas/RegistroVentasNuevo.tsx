@@ -21,7 +21,7 @@ import { EstadisticasVentas } from "./components/EstadisticasVenta";
 interface RegistroVentasNuevoProps {
   pantallas: Pantalla[];
   asignaciones: AsignacionPantalla[];
-  clientes: Cliente[];
+  clientes: Colaborador[];
   productos: { id: string; nombre: string; precio: number }[];
   tiposPago: { id: string; nombre: string }[];
   ventasRegistradas: RegistroVenta[];
@@ -50,7 +50,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
   const [fechaInicio, setFechaInicio] = useState<string>("");
   const [mesesRenta, setMesesRenta] = useState<number>(1);
-  const [mostrarModalEditar, setMostrarModalEditar] = useState(false);
+  const [, setMostrarModalEditar] = useState(false);
   const [vendidoA, setVendidoA] = useState<string>("");
   const [productoId, setProductoId] = useState<string>("");
   const [cantidad, setCantidad] = useState<number>(1);
@@ -66,9 +66,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   >("Prospecto");
   const [filtroEstado, setFiltroEstado] = useState<string>("Todos");
   const [filtroCliente, setFiltroCliente] = useState<string>("Todos");
-  const [ventaEditando, setVentaEditando] = useState<RegistroVenta | null>(
-    null,
-  );
+  const [, setVentaEditando] = useState<RegistroVenta | null>(null);
 
   const ventasPorPagina = 20;
 
@@ -108,14 +106,15 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     paginaActual * ventasPorPagina,
   );
 
+  const hoy = new Date();
+  const mesActual = hoy.getMonth();
+  const añoActual = hoy.getFullYear();
+
   const pantallasDelCliente = asignaciones.filter(
     (a) => a.clienteId === clienteSeleccionado && a.activa,
   );
 
   const clienteActual = clientes.find((c) => c.id === clienteSeleccionado);
-
-  // ✅ true solo cuando el colaborador tiene tipo "porcentaje"
-  const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
 
   const pantallasActuales = pantallasSeleccionadas
     .map((id) => pantallas.find((p) => p.id === id))
@@ -155,9 +154,10 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     setVendidoA("");
     setFechaInicio("");
     setMesesRenta(1);
-    setPrecioGeneral(0);
+    setPrecioUnitarioManual(0);
+    setProductoId("");
+    setCantidad(1);
     setEstadoVenta("Prospecto");
-    setAplicarDescuento(false);
     setError("");
     setExito("");
   };
@@ -167,7 +167,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     setExito("");
 
     if (!clienteSeleccionado) {
-      setError("Selecciona un cliente");
+      setError("Selecciona un colaborador");
       return;
     }
     if (itemsVenta.length === 0) {
@@ -193,7 +193,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       itemsVenta,
       clienteId: clienteSeleccionado,
       productoId: productoId || undefined,
-      vendidoA: vendidoA.trim() || clienteActual?.nombre ?? "-",
+      vendidoA: (vendidoA.trim() || clienteActual?.nombre) ?? "-",
       precioGeneral: precioUnitarioManual || (productoSeleccionado?.precio ?? 0),
       cantidad,
       precioTotal: precioBase,
@@ -209,16 +209,8 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     };
 
     onRegistrarVenta(nuevaVenta);
+    resetFormularioVenta();
     setExito("Venta registrada correctamente");
-    setClienteSeleccionado("");
-    setPantallasSeleccionadas([]);
-    setVendidoA("");
-    setProductoId("");
-    setCantidad(1);
-    setPrecioUnitarioManual(0);
-    setFechaInicio("");
-    setMesesRenta(1);
-
     setTimeout(() => setExito(""), 3000);
   };
 
@@ -319,11 +311,6 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                 onChange={(v) => {
                   setClienteSeleccionado(v);
                   setItemsVenta([]);
-                  // ✅ auto-configura el toggle según tipo del colaborador
-                  const colaborador = clientes.find((c) => c.id === v);
-                  setAplicarDescuento(
-                    colaborador?.tipoComision === "porcentaje",
-                  );
                 }}
                 placeholder="-- Seleccionar colaborador --"
                 className="select-lg"
@@ -458,7 +445,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
               {clienteSeleccionado && pantallasDelCliente.length === 0 && (
                 <div className="error-message">
-                  Este cliente no tiene pantallas asignadas. Asigna pantallas
+                  Este colaborador no tiene pantallas asignadas. Asigna pantallas
                   desde la sección de Gestión.
                 </div>
               )}
