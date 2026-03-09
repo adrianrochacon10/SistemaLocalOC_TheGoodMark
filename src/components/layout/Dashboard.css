@@ -1,5 +1,14 @@
 @import "../../styles/forms.css";
 
+.cargando-perfil {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-size: 1.1rem;
+  color: #333;
+}
+
 /* NUEVO DASHBOARD */
 
 .dashboard-nuevo {

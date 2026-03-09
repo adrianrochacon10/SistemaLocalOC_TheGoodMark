@@ -263,8 +263,8 @@ export const Dashboard: React.FC = () => {
     };
   }, [profile]);
 
-  if (loading) return <div>Cargando perfil...</div>;
-  if (!profile) return <div>No hay perfil disponible</div>;
+  if (loading) return <div className="cargando-perfil">Cargando perfil...</div>;
+  if (!profile) return <Login onSignIn={signIn} error={authError} loading={loading} />;
 
   const usuarioActual: Usuario = {
     id: profile.id,
