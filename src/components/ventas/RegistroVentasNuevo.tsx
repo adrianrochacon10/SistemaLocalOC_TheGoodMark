@@ -3,8 +3,9 @@ import {
   RegistroVenta,
   Pantalla,
   AsignacionPantalla,
-  Cliente,
+  Colaborador,
   Usuario,
+  ItemVenta,
 } from "../../types";
 import "./RegistroVentasNuevo.css";
 import { calcularFechaFin, stringAFecha } from "../../utils/formateoFecha";
@@ -42,18 +43,14 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   pantallas,
   errorExterno,
 }) => {
+  // ─── 1. ESTADOS ──────────────────────────────────────────
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("");
-  const [pantallasSeleccionadas, setPantallasSeleccionadas] = useState<
-    string[]
-  >([]);
+  const [itemsVenta, setItemsVenta] = useState<ItemVenta[]>([]);
+  const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId);
 
-  //Fechas
   const [fechaInicio, setFechaInicio] = useState<string>("");
   const [mesesRenta, setMesesRenta] = useState<number>(1);
-
-  //Para mostrar el modal de edicion de cards
   const [mostrarModalEditar, setMostrarModalEditar] = useState(false);
-
   const [vendidoA, setVendidoA] = useState<string>("");
   const [productoId, setProductoId] = useState<string>("");
   const [cantidad, setCantidad] = useState<number>(1);
@@ -75,6 +72,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
   const ventasPorPagina = 20;
 
+  // ─── 2. VARIABLES DERIVADAS ──────────────────────────────
   const opcionesClientes = clientes
     .filter(
       (c) =>
@@ -92,19 +90,15 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
   const ventasFiltradas = ventasRegistradas.filter((venta) => {
     const cliente = clientes.find((c) => c.id === venta.clienteId);
-
     const coincideBusqueda =
       busquedaVenta === "" ||
       (cliente &&
         cliente.nombre.toLowerCase().includes(busquedaVenta.toLowerCase())) ||
       venta.vendidoA.toLowerCase().includes(busquedaVenta.toLowerCase());
-
     const coincideEstado =
       filtroEstado === "Todos" || venta.estadoVenta === filtroEstado;
-
     const coincideCliente =
       filtroCliente === "Todos" || venta.clienteId === filtroCliente;
-
     return coincideBusqueda && coincideEstado && coincideCliente;
   });
 
@@ -114,20 +108,19 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     paginaActual * ventasPorPagina,
   );
 
-  // Obtener pantallas asignadas al cliente seleccionado
   const pantallasDelCliente = asignaciones.filter(
     (a) => a.clienteId === clienteSeleccionado && a.activa,
   );
 
-  // Obtener el cliente
   const clienteActual = clientes.find((c) => c.id === clienteSeleccionado);
 
-  // Obtener información de las pantallas seleccionadas
+  // ✅ true solo cuando el colaborador tiene tipo "porcentaje"
+  const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
+
   const pantallasActuales = pantallasSeleccionadas
     .map((id) => pantallas.find((p) => p.id === id))
     .filter((p) => p !== undefined) as Pantalla[];
 
-  //Calcular fechas
   const fechaFin = calcularFechaFin(fechaInicio, mesesRenta);
 
   // Tipo de pago por defecto al seleccionar cliente
@@ -146,7 +139,29 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     : precioUnitarioManual;
   const precioBase = cantidad * precioUnitario;
 
-  // Validar y registrar venta
+  // ─── 4. HANDLERS ─────────────────────────────────────────
+  const togglePantalla = (pantallaId: string) => {
+    const yaSeleccionada = itemsVenta.some((i) => i.pantallaId === pantallaId);
+    if (yaSeleccionada) {
+      setItemsVenta((prev) => prev.filter((i) => i.pantallaId !== pantallaId));
+    } else {
+      setItemsVenta((prev) => [...prev, { pantallaId, sinDescuento: false }]);
+    }
+  };
+
+  const resetFormularioVenta = () => {
+    setClienteSeleccionado("");
+    setItemsVenta([]);
+    setVendidoA("");
+    setFechaInicio("");
+    setMesesRenta(1);
+    setPrecioGeneral(0);
+    setEstadoVenta("Prospecto");
+    setAplicarDescuento(false);
+    setError("");
+    setExito("");
+  };
+
   const handleRegistrarVenta = () => {
     setError("");
     setExito("");
@@ -155,7 +170,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       setError("Selecciona un cliente");
       return;
     }
-    if (pantallasSeleccionadas.length === 0) {
+    if (itemsVenta.length === 0) {
       setError("Selecciona al menos una pantalla");
       return;
     }
@@ -174,7 +189,8 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
     const nuevaVenta: RegistroVenta = {
       id: "v" + Date.now(),
-      pantallasIds: pantallasSeleccionadas,
+      pantallasIds: itemsVenta.map((i) => i.pantallaId),
+      itemsVenta,
       clienteId: clienteSeleccionado,
       productoId: productoId || undefined,
       vendidoA: vendidoA.trim() || clienteActual?.nombre ?? "-",
@@ -206,22 +222,11 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     setTimeout(() => setExito(""), 3000);
   };
 
-  // Manejar selección múltiple de pantallas
-  const togglePantalla = (pantallaId: string) => {
-    setPantallasSeleccionadas((prev) =>
-      prev.includes(pantallaId)
-        ? prev.filter((id) => id !== pantallaId)
-        : [...prev, pantallaId],
-    );
-  };
-
-  // Obtener ventas del mes actual
-  const hoy = new Date();
-  const mesActual = hoy.getMonth();
-  const añoActual = hoy.getFullYear();
-
+  // ─── 5. JSX ──────────────────────────────────────────────
   return (
     <div className="registro-ventas-nuevo">
+      <div>{errorExterno && <p>{errorExterno}</p>}</div>
+
       <FiltrosVentas
         busquedaVenta={busquedaVenta}
         filtroEstado={filtroEstado}
@@ -242,6 +247,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
         }}
         onNuevaVenta={() => setMostrarModalVenta(true)}
       />
+
       <h2>
         📅 Registros de{" "}
         {new Date(añoActual, mesActual).toLocaleString("es-ES", {
@@ -249,7 +255,9 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
         })}{" "}
         de {añoActual}
       </h2>
+
       <EstadisticasVentas ventasFiltradas={ventasFiltradas} />
+
       <div className="ventas-list ventas-compacta">
         {ventasPagina.map((venta) => (
           <VentaCard
@@ -265,6 +273,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
           />
         ))}
       </div>
+
       <div className="paginacion-ventas">
         <button
           disabled={paginaActual === 1}
@@ -282,11 +291,15 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
           ▶
         </button>
       </div>
-      {/* MODAL REGISTRO VENTA */}
+
+      {/* ─── MODAL REGISTRO VENTA ──────────────────────────── */}
       {mostrarModalVenta && (
         <div
           className="modal-overlay"
-          onClick={() => setMostrarModalVenta(false)}
+          onClick={() => {
+            setMostrarModalVenta(false);
+            resetFormularioVenta();
+          }}
         >
           <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
             <h3
@@ -305,7 +318,12 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                 value={clienteSeleccionado}
                 onChange={(v) => {
                   setClienteSeleccionado(v);
-                  setPantallasSeleccionadas([]);
+                  setItemsVenta([]);
+                  // ✅ auto-configura el toggle según tipo del colaborador
+                  const colaborador = clientes.find((c) => c.id === v);
+                  setAplicarDescuento(
+                    colaborador?.tipoComision === "porcentaje",
+                  );
                 }}
                 placeholder="-- Seleccionar colaborador --"
                 className="select-lg"
@@ -459,7 +477,10 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
             </BotonAccion>
 
             <BotonAccion
-              onClick={() => setMostrarModalVenta(false)}
+              onClick={() => {
+                setMostrarModalVenta(false);
+                resetFormularioVenta();
+              }}
               variante="secundario"
               fullWidth
             >

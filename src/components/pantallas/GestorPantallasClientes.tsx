@@ -1,61 +1,103 @@
 import React, { useState } from "react";
 import { ColorPicker } from "../ui/ColorPicker";
-import { Pantalla, Cliente, AsignacionPantalla } from "../../types";
+import {
+  Pantalla,
+  AsignacionPantalla,
+  Colaborador,
+  Producto,
+  AsignacionProducto,
+} from "../../types";
 import "./GestorPantallasClientes.css";
+import { FilasFormulario } from "./components/FilasFormulario";
+import { useFilasFormulario } from "../../hooks/useFormulario";
+
+type TipoComision = "porcentaje" | "ninguno" | "consideracion" | "precio_fijo";
 
 interface GestorPantallasClientesProps {
   tiposPago: { id: string; nombre: string }[];
   pantallas: Pantalla[];
-  clientes: Cliente[];
+  clientes: Colaborador[];
   asignaciones: AsignacionPantalla[];
+  productos?: Producto[]; // ✅ opcional
+  asignacionesProductos?: AsignacionProducto[]; // ✅ opcional
   onAgregarPantalla: (pantalla: Pantalla) => void;
   onActualizarPantalla: (pantalla: Pantalla) => void;
   onEliminarPantalla: (pantallaId: string) => void;
-  onAgregarCliente: (cliente: Cliente, extras?: { tipo_pago_id: string; pantalla_id: string }) => void | Promise<Cliente | void>;
-  onActualizarCliente: (cliente: Cliente) => void;
+  onAgregarCliente: (
+    colaborador: Colaborador,
+    extras?: { tipo_pago_id: string; pantalla_id: string },
+  ) => void | Promise<Colaborador | void>;
+  onActualizarCliente: (cliente: Colaborador) => void;
   onAsignarPantalla: (asignacion: AsignacionPantalla) => void;
-  onDesasignarPantalla: (clienteId: string, pantallaId: string) => void;
   onEliminarPantallasYAsignaciones: (colaboradorId: string) => void;
+  onDesasignarPantalla: (clienteId: string, pantallaId: string) => void;
+  onAgregarProducto?: (producto: Producto) => void; // ✅ opcional
+  onActualizarProducto?: (producto: Producto) => void; // ✅ opcional
+  onEliminarProducto?: (productoId: string) => void; // ✅ opcional
+  onAsignarProducto?: (asignacion: AsignacionProducto) => void; // ✅ opcional
 }
 
 export const GestorPantallasClientes: React.FC<
   GestorPantallasClientesProps
 > = ({
-  tiposPago,
   pantallas,
   clientes,
   asignaciones,
+  productos = [], // ✅ fallback — evita el crash
+  asignacionesProductos = [], // ✅ fallback — evita el crash
   onAgregarPantalla,
   onActualizarPantalla,
   onEliminarPantalla,
   onAgregarCliente,
   onActualizarCliente,
   onAsignarPantalla,
-  onDesasignarPantalla,
+  onEliminarPantallasYAsignaciones,
+  onAgregarProducto,
+  onActualizarProducto,
+  onEliminarProducto,
+  onAsignarProducto,
 }) => {
+  // ─── 1. ESTADOS ──────────────────────────────────────────
   const [mostrarModal, setMostrarModal] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
   const [colaboradorEditando, setColaboradorEditando] = useState<string | null>(
     null,
   );
   const [nuevoColaboradorNombre, setNuevoColaboradorNombre] = useState("");
-  const [nuevoColaboradorContacto, setNuevoColaboradorContacto] = useState("");
+  const [nuevoColaboradorAlias, setNuevoColaboradorAlias] = useState("");
   const [nuevoColaboradorTel, setNuevoColaboradorTel] = useState("");
   const [nuevoColaboradorEmail, setNuevoColaboradorEmail] = useState("");
   const [nuevoColaboradorColor, setNuevoColaboradorColor] = useState("");
+  const [tipoComision, setTipoComision] = useState<TipoComision>("ninguno");
   const [nuevoColaboradorPorcentajeSocio, setNuevoColaboradorPorcentajeSocio] =
     useState<number>(30);
-  const [tipoPagoId, setTipoPagoId] = useState<string>("");
   const [errorColaborador, setErrorColaborador] = useState("");
-  /** IDs de pantallas seleccionadas para este colaborador (solo selección, no crear desde cero) */
-  const [pantallasSeleccionadasIds, setPantallasSeleccionadasIds] = useState<
-    string[]
-  >([]);
   const [errorPantalla, setErrorPantalla] = useState("");
 
-  const tipoPagoEfectivo = tipoPagoId || (tiposPago[0]?.id ?? "");
+  // ─── 2. HOOKS DE FILAS ───────────────────────────────────
+  const pantallasForm = useFilasFormulario({ nombre: "", ubicacion: "" });
+  const productosForm = useFilasFormulario({ nombre: "", precio: 0 });
 
-  const handleAgregarColaborador = async () => {
+  // ─── 3. RESET ────────────────────────────────────────────
+  const resetFormulario = () => {
+    setNuevoColaboradorNombre("");
+    setNuevoColaboradorAlias("");
+    setNuevoColaboradorTel("");
+    setNuevoColaboradorEmail("");
+    setNuevoColaboradorColor("");
+    setTipoComision("ninguno");
+    setNuevoColaboradorPorcentajeSocio(30);
+    setErrorColaborador("");
+    setErrorPantalla("");
+    pantallasForm.resetFilas();
+    productosForm.resetFilas();
+    setMostrarModal(false);
+    setModoEdicion(false);
+    setColaboradorEditando(null);
+  };
+
+  // ─── 4. HANDLERS ─────────────────────────────────────────
+  const handleAgregarColaborador = () => {
     setErrorColaborador("");
     setErrorPantalla("");
 
@@ -64,103 +106,270 @@ export const GestorPantallasClientes: React.FC<
       return;
     }
 
-    if (pantallasSeleccionadasIds.length === 0) {
-      setErrorPantalla("Selecciona al menos una pantalla para el colaborador");
+    const pantallasValidas = pantallasForm.filasValidas() as Array<{
+      tempId: string;
+      nombre: string;
+      ubicacion: string;
+    }>;
+
+    if (pantallasValidas.length === 0) {
+      setErrorPantalla("Debe agregar al menos una pantalla");
       return;
     }
 
-    const nuevoColaborador: Cliente = {
+    const productosValidos = productosForm.filasValidas() as Array<{
+      tempId: string;
+      nombre: string;
+      precio: number;
+    }>;
+
+    const nuevoColaborador: Colaborador = {
       id:
         modoEdicion && colaboradorEditando
           ? colaboradorEditando
           : "c" + Date.now() + Math.floor(Math.random() * 10000),
       nombre: nuevoColaboradorNombre,
-      contacto: nuevoColaboradorContacto || undefined,
+      alias: nuevoColaboradorAlias || undefined,
       telefono: nuevoColaboradorTel || undefined,
       email: nuevoColaboradorEmail || undefined,
       color: nuevoColaboradorColor || undefined,
-      porcentajeSocio: nuevoColaboradorPorcentajeSocio,
+      tipoComision,
+      porcentajeSocio:
+        tipoComision === "porcentaje"
+          ? nuevoColaboradorPorcentajeSocio
+          : undefined,
       activo: true,
       fechaCreacion: new Date(),
     };
 
-    let idColaborador = nuevoColaborador.id;
+    // ─── MODO EDICIÓN ────────────────────────────────────
     if (modoEdicion && colaboradorEditando) {
       onActualizarCliente(nuevoColaborador);
+
+      // Pantallas — eliminar las que ya no están
+      const idsOriginales = asignaciones
+        .filter((a) => a.clienteId === colaboradorEditando && a.activa)
+        .map((a) => a.pantallaId);
+
+      const idsEnForm = pantallasValidas
+        .filter((p) => pantallas.some((existing) => existing.id === p.tempId))
+        .map((p) => p.tempId);
+
+      idsOriginales.forEach((pantallaId) => {
+        if (!idsEnForm.includes(pantallaId)) onEliminarPantalla(pantallaId);
+      });
+
+      // Pantallas — actualizar o crear
+      pantallasValidas.forEach((pantallaData, idx) => {
+        const pantallaExistente = pantallas.find(
+          (p) => p.id === pantallaData.tempId,
+        );
+        if (pantallaExistente) {
+          onActualizarPantalla({
+            ...pantallaExistente,
+            nombre: String(pantallaData.nombre),
+            ubicacion: String(pantallaData.ubicacion) || undefined,
+          });
+        } else {
+          const uniqueId = Date.now() + idx + Math.floor(Math.random() * 10000);
+          const nuevaPantalla: Pantalla = {
+            id: "p" + uniqueId,
+            nombre: String(pantallaData.nombre),
+            ubicacion: String(pantallaData.ubicacion) || undefined,
+            plaza: undefined,
+            precioUnitario: 0,
+            activa: true,
+            fechaCreacion: new Date(),
+          };
+          onAgregarPantalla(nuevaPantalla);
+          onAsignarPantalla({
+            id: "a" + uniqueId,
+            pantallaId: nuevaPantalla.id,
+            clienteId: nuevoColaborador.id,
+            precioUnitario: 0,
+            activa: true,
+            fechaAsignacion: new Date(),
+          });
+        }
+      });
+
+      // Productos — eliminar los que ya no están
+      if (
+        onEliminarProducto &&
+        onAgregarProducto &&
+        onActualizarProducto &&
+        onAsignarProducto
+      ) {
+        const idsProductosOriginales = asignacionesProductos
+          .filter((a) => a.clienteId === colaboradorEditando && a.activa)
+          .map((a) => a.productoId);
+
+        const idsProductosEnForm = productosValidos
+          .filter((p) => productos.some((existing) => existing.id === p.tempId))
+          .map((p) => p.tempId);
+
+        idsProductosOriginales.forEach((productoId) => {
+          if (!idsProductosEnForm.includes(productoId))
+            onEliminarProducto(productoId);
+        });
+
+        // Productos — actualizar o crear
+        productosValidos.forEach((productoData, idx) => {
+          const productoExistente = productos.find(
+            (p) => p.id === productoData.tempId,
+          );
+          if (productoExistente) {
+            onActualizarProducto({
+              ...productoExistente,
+              nombre: String(productoData.nombre),
+              precio: Number(productoData.precio),
+            });
+          } else {
+            const uniqueId =
+              Date.now() + idx + Math.floor(Math.random() * 10000);
+            const nuevoProducto: Producto = {
+              id: "prod" + uniqueId,
+              nombre: String(productoData.nombre),
+              precio: Number(productoData.precio),
+              activo: true,
+              fechaCreacion: new Date(),
+            };
+            onAgregarProducto(nuevoProducto);
+            onAsignarProducto({
+              id: "ap" + uniqueId,
+              productoId: nuevoProducto.id,
+              clienteId: nuevoColaborador.id,
+              activa: true,
+              fechaAsignacion: new Date(),
+            });
+          }
+        });
+      }
+
+      // ─── MODO CREACIÓN ───────────────────────────────────
     } else {
-      const creado = await onAgregarCliente(nuevoColaborador);
-      if (creado?.id) idColaborador = creado.id;
+      onAgregarCliente(nuevoColaborador);
+
+      // Pantallas
+      pantallasValidas.forEach((pantallaData, idx) => {
+        const uniqueId = Date.now() + idx + Math.floor(Math.random() * 10000);
+        const nuevaPantalla: Pantalla = {
+          id: "p" + uniqueId,
+          nombre: String(pantallaData.nombre),
+          ubicacion: String(pantallaData.ubicacion) || undefined,
+          plaza: undefined,
+          precioUnitario: 0,
+          activa: true,
+          fechaCreacion: new Date(),
+        };
+        onAgregarPantalla(nuevaPantalla);
+        onAsignarPantalla({
+          id: "a" + uniqueId,
+          pantallaId: nuevaPantalla.id,
+          clienteId: nuevoColaborador.id,
+          precioUnitario: 0,
+          activa: true,
+          fechaAsignacion: new Date(),
+        });
+      });
+
+      // Productos
+      if (onAgregarProducto && onAsignarProducto) {
+        productosValidos.forEach((productoData, idx) => {
+          const uniqueId = Date.now() + idx + Math.floor(Math.random() * 10000);
+          const nuevoProducto: Producto = {
+            id: "prod" + uniqueId,
+            nombre: String(productoData.nombre),
+            precio: Number(productoData.precio),
+            activo: true,
+            fechaCreacion: new Date(),
+          };
+          onAgregarProducto(nuevoProducto);
+          onAsignarProducto({
+            id: "ap" + uniqueId,
+            productoId: nuevoProducto.id,
+            clienteId: nuevoColaborador.id,
+            activa: true,
+            fechaAsignacion: new Date(),
+          });
+        });
+      }
     }
 
-    // Asignar solo pantallas existentes seleccionadas
-    const idsOriginales =
-      modoEdicion && colaboradorEditando
-        ? asignaciones
-            .filter(
-              (a) => a.clienteId === colaboradorEditando && a.activa,
-            )
-            .map((a) => a.pantallaId)
-        : [];
-
-    idsOriginales.forEach((pantallaId) => {
-      if (!pantallasSeleccionadasIds.includes(pantallaId)) {
-        onDesasignarPantalla(idColaborador, pantallaId);
-      }
-    });
-
-    pantallasSeleccionadasIds.forEach((pantallaId) => {
-      const pantalla = pantallas.find((p) => p.id === pantallaId);
-      if (!pantalla) return;
-      const yaAsignada = asignaciones.some(
-        (a) =>
-          a.clienteId === idColaborador &&
-          a.pantallaId === pantallaId &&
-          a.activa,
-      );
-      if (yaAsignada) return;
-      const uniqueId =
-        "a" + Date.now() + Math.floor(Math.random() * 10000);
-      onAsignarPantalla({
-        id: uniqueId,
-        pantallaId: pantalla.id,
-        clienteId: idColaborador,
-        precioUnitario: pantalla.precioUnitario ?? 0,
-        activa: true,
-        fechaAsignacion: new Date(),
-      });
-    });
-
-    setNuevoColaboradorNombre("");
-    setNuevoColaboradorContacto("");
-    setNuevoColaboradorTel("");
-    setNuevoColaboradorEmail("");
-    setNuevoColaboradorColor("");
-    setNuevoColaboradorPorcentajeSocio(30);
-    setPantallasSeleccionadasIds([]);
-    setMostrarModal(false);
-    setModoEdicion(false);
-    setColaboradorEditando(null);
+    resetFormulario();
   };
 
-  const togglePantallaSeleccionada = (pantallaId: string) => {
-    setPantallasSeleccionadasIds((prev) =>
-      prev.includes(pantallaId)
-        ? prev.filter((id) => id !== pantallaId)
-        : [...prev, pantallaId],
-    );
-  };
-
-  const handleEditarColaborador = (colaborador: Cliente) => {
+  const handleEditarColaborador = (colaborador: Colaborador) => {
     setNuevoColaboradorNombre(colaborador.nombre);
-    setNuevoColaboradorContacto(colaborador.contacto || "");
+    setNuevoColaboradorAlias(colaborador.alias || "");
     setNuevoColaboradorTel(colaborador.telefono || "");
     setNuevoColaboradorEmail(colaborador.email || "");
     setNuevoColaboradorColor(colaborador.color || "");
-    setNuevoColaboradorPorcentajeSocio(colaborador.porcentajeSocio || 30);
-    const idsAsociados = asignaciones
+    setTipoComision(colaborador.tipoComision ?? "ninguno");
+    setNuevoColaboradorPorcentajeSocio(colaborador.porcentajeSocio ?? 30);
+
+    // Cargar pantallas asociadas
+    const pantallasAsociadas = asignaciones
       .filter((a) => a.clienteId === colaborador.id && a.activa)
-      .map((a) => a.pantallaId);
-    setPantallasSeleccionadasIds(idsAsociados);
+      .map((a) => {
+        const pantalla = pantallas.find((p) => p.id === a.pantallaId);
+        return pantalla
+          ? {
+              nombre: pantalla.nombre,
+              ubicacion: pantalla.ubicacion || "",
+              tempId: pantalla.id,
+            }
+          : null;
+      })
+      .filter(Boolean) as Array<{
+      nombre: string;
+      ubicacion: string;
+      tempId: string;
+    }>;
+
+    pantallasForm.setFilas(
+      pantallasAsociadas.length > 0
+        ? pantallasAsociadas
+        : [
+            {
+              nombre: "",
+              ubicacion: "",
+              tempId: Math.random().toString(36).substring(2, 15),
+            },
+          ],
+    );
+
+    // Cargar productos asociados
+    const productosAsociados = asignacionesProductos
+      .filter((a) => a.clienteId === colaborador.id && a.activa)
+      .map((a) => {
+        const producto = productos.find((p) => p.id === a.productoId);
+        return producto
+          ? {
+              nombre: producto.nombre,
+              precio: producto.precio,
+              tempId: producto.id,
+            }
+          : null;
+      })
+      .filter(Boolean) as Array<{
+      nombre: string;
+      precio: number;
+      tempId: string;
+    }>;
+
+    productosForm.setFilas(
+      productosAsociados.length > 0
+        ? productosAsociados
+        : [
+            {
+              nombre: "",
+              precio: 0,
+              tempId: Math.random().toString(36).substring(2, 15),
+            },
+          ],
+    );
+
     setModoEdicion(true);
     setColaboradorEditando(colaborador.id);
     setMostrarModal(true);
@@ -172,36 +381,44 @@ export const GestorPantallasClientes: React.FC<
         "¿Está seguro de que desea eliminar este colaborador y todas sus pantallas asociadas?",
       )
     ) {
-      const pantallasDelCol = asignaciones
-        .filter((a) => a.clienteId === colaboradorId)
-        .map((a) => a.pantallaId);
-      pantallasDelCol.forEach((id) => onEliminarPantalla(id));
-      // También deberías llamar onEliminarCliente si tienes esa prop
+      onEliminarPantallasYAsignaciones(colaboradorId);
+      resetFormulario();
     }
   };
 
+  // ─── 5. VARIABLES DERIVADAS ──────────────────────────────
   const colaboradoresActivos = clientes.filter((c) => c.activo);
 
-  const obtenerPantallasDelColaborador = (colaboradorId: string) => {
-    return asignaciones
+  const obtenerPantallasDelColaborador = (colaboradorId: string): Pantalla[] =>
+    asignaciones
       .filter((a) => a.clienteId === colaboradorId && a.activa)
       .map((a) => pantallas.find((p) => p.id === a.pantallaId))
       .filter((p) => p !== undefined) as Pantalla[];
+
+  const obtenerProductosDelColaborador = (colaboradorId: string): Producto[] =>
+    asignacionesProductos
+      .filter((a) => a.clienteId === colaboradorId && a.activa)
+      .map((a) => productos.find((p) => p.id === a.productoId))
+      .filter((p) => p !== undefined) as Producto[];
+
+  const etiquetaTipoComision: Record<TipoComision, string> = {
+    porcentaje: "Porcentaje",
+    ninguno: "Ninguno",
+    consideracion: "Consideración",
+    precio_fijo: "Precio fijo",
   };
 
+  // ─── 6. JSX ──────────────────────────────────────────────
   return (
     <div className="gestor-pantallas-clientes">
-      <h2>📺 Gestión de Colaboradores y Pantallas</h2>
+      <h2>Gestión de Colaboradores</h2>
 
       {colaboradoresActivos.length === 0 ? (
         <div className="estado-vacio">
           <div className="estado-vacio-contenido">
             <div className="icono-grande">👥</div>
             <h3>No hay colaboradores registrados</h3>
-            <p>
-              Comienza agregando tu primer colaborador y sus pantallas
-              asociadas.
-            </p>
+            <p>Comienza agregando tu primer colaborador</p>
             <button
               className="btn btn-primary btn-lg"
               onClick={() => setMostrarModal(true)}
@@ -227,6 +444,9 @@ export const GestorPantallasClientes: React.FC<
               const pantallasDelCol = obtenerPantallasDelColaborador(
                 colaborador.id,
               );
+              const productosDelCol = obtenerProductosDelColaborador(
+                colaborador.id,
+              );
               return (
                 <div key={colaborador.id} className="colaborador-card">
                   <div className="colaborador-header">
@@ -236,9 +456,9 @@ export const GestorPantallasClientes: React.FC<
                       {pantallasDelCol.length !== 1 ? "s" : ""}
                     </span>
                   </div>
-                  {colaborador.contacto && (
+                  {colaborador.alias && (
                     <p>
-                      <strong>Contacto:</strong> {colaborador.contacto}
+                      <strong>Alias:</strong> {colaborador.alias}
                     </p>
                   )}
                   {colaborador.telefono && (
@@ -251,6 +471,17 @@ export const GestorPantallasClientes: React.FC<
                       <strong>Email:</strong> {colaborador.email}
                     </p>
                   )}
+                  {colaborador.tipoComision && (
+                    <p>
+                      <strong>Comisión:</strong>{" "}
+                      {etiquetaTipoComision[colaborador.tipoComision]}
+                      {colaborador.tipoComision === "porcentaje" &&
+                      colaborador.porcentajeSocio !== undefined
+                        ? ` — ${colaborador.porcentajeSocio}%`
+                        : ""}
+                    </p>
+                  )}
+
                   {pantallasDelCol.length > 0 && (
                     <div className="pantallas-asociadas">
                       <h5>Pantallas Asociadas</h5>
@@ -270,13 +501,29 @@ export const GestorPantallasClientes: React.FC<
                       </ul>
                     </div>
                   )}
+
+                  {productosDelCol.length > 0 && (
+                    <div className="pantallas-asociadas">
+                      <h5>Otros Productos</h5>
+                      <ul className="pantallas-list">
+                        {productosDelCol.map((producto) => (
+                          <li key={producto.id}>
+                            <span className="pantalla-nombre">
+                              {producto.nombre}
+                            </span>
+                            <span className="pantalla-ubicacion">
+                              $
+                              {producto.precio.toLocaleString("es-MX", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   <div className="colaborador-acciones">
-                    <button
-                      className="btn btn-accion btn-agregar-pantalla"
-                      onClick={() => handleEditarColaborador(colaborador)}
-                    >
-                      ➕ Pantalla
-                    </button>
                     <button
                       className="btn btn-accion btn-editar"
                       onClick={() => handleEditarColaborador(colaborador)}
@@ -297,15 +544,9 @@ export const GestorPantallasClientes: React.FC<
         </>
       )}
 
+      {/* ─── MODAL ───────────────────────────────────────── */}
       {mostrarModal && (
-        <div
-          className="modal-overlay"
-          onClick={() => {
-            setMostrarModal(false);
-            setModoEdicion(false);
-            setColaboradorEditando(null);
-          }}
-        >
+        <div className="modal-overlay" onClick={resetFormulario}>
           <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>
@@ -313,10 +554,7 @@ export const GestorPantallasClientes: React.FC<
                   ? "Editar Colaborador"
                   : "Agregar Nuevo Colaborador"}
               </h3>
-              <button
-                className="modal-close"
-                onClick={() => setMostrarModal(false)}
-              >
+              <button className="modal-close" onClick={resetFormulario}>
                 ✕
               </button>
             </div>
@@ -324,6 +562,7 @@ export const GestorPantallasClientes: React.FC<
             <div className="modal-body">
               <div className="seccion-formulario">
                 <h4>Datos del Colaborador</h4>
+
                 <div className="form-group">
                   <label>Nombre del Colaborador *</label>
                   <input
@@ -333,15 +572,14 @@ export const GestorPantallasClientes: React.FC<
                     placeholder="Ej: Juan Pérez"
                   />
                 </div>
+
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Contacto</label>
+                    <label>Alias</label>
                     <input
                       type="text"
-                      value={nuevoColaboradorContacto}
-                      onChange={(e) =>
-                        setNuevoColaboradorContacto(e.target.value)
-                      }
+                      value={nuevoColaboradorAlias}
+                      onChange={(e) => setNuevoColaboradorAlias(e.target.value)}
                       placeholder="Nombre del contacto"
                     />
                   </div>
@@ -355,6 +593,7 @@ export const GestorPantallasClientes: React.FC<
                     />
                   </div>
                 </div>
+
                 <div className="form-group">
                   <label>Email</label>
                   <input
@@ -364,6 +603,7 @@ export const GestorPantallasClientes: React.FC<
                     placeholder="correo@colaborador.com"
                   />
                 </div>
+
                 <div className="form-group">
                   <label>Color para identificar colaborador</label>
                   <ColorPicker
@@ -371,71 +611,95 @@ export const GestorPantallasClientes: React.FC<
                     onChange={setNuevoColaboradorColor}
                   />
                 </div>
+
                 <div className="form-group">
-                  <label>Porcentaje para socio/dueño (%) *</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={nuevoColaboradorPorcentajeSocio}
+                  <label>Tipo de comisión *</label>
+                  <select
+                    value={tipoComision}
                     onChange={(e) =>
-                      setNuevoColaboradorPorcentajeSocio(
-                        e.target.value === ""
-                          ? 0
-                          : parseInt(e.target.value) || 0,
-                      )
+                      setTipoComision(e.target.value as TipoComision)
                     }
-                    placeholder="Ej: 30"
-                  />
+                    className="form-select"
+                  >
+                    <option value="ninguno">Ninguno</option>
+                    <option value="porcentaje">Porcentaje</option>
+                    <option value="consideracion">Consideración</option>
+                    <option value="precio_fijo">Precio fijo</option>
+                  </select>
                 </div>
+
+                {tipoComision === "porcentaje" && (
+                  <div className="form-group" style={{ marginTop: "-8px" }}>
+                    <label>Porcentaje (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={nuevoColaboradorPorcentajeSocio}
+                      onChange={(e) =>
+                        setNuevoColaboradorPorcentajeSocio(
+                          e.target.value === ""
+                            ? 0
+                            : parseInt(e.target.value) || 0,
+                        )
+                      }
+                      placeholder="Ej: 30"
+                    />
+                  </div>
+                )}
+
                 {errorColaborador && (
                   <div className="error-message">{errorColaborador}</div>
                 )}
               </div>
 
-              <div className="seccion-formulario">
-                <h4>Pantallas Asociadas *</h4>
-                {pantallas.length === 0 ? (
-                  <p className="aviso-sin-pantallas">
-                    No hay pantallas en el catálogo. Ve a la pestaña{" "}
-                    <strong>Catálogo de Pantallas</strong> para agregar pantallas
-                    y luego podrás asignarlas aquí.
-                  </p>
-                ) : (
-                  <div className="pantallas-checkbox-list">
-                    {pantallas.map((p) => (
-                      <label
-                        key={p.id}
-                        className="checkbox-pantalla-item"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={pantallasSeleccionadasIds.includes(p.id)}
-                          onChange={() => togglePantallaSeleccionada(p.id)}
-                        />
-                        <span className="checkbox-label">
-                          {p.nombre}
-                          {p.ubicacion ? ` — ${p.ubicacion}` : ""}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-                {errorPantalla && (
-                  <div className="error-message">{errorPantalla}</div>
-                )}
-              </div>
+              <FilasFormulario
+                titulo="Pantallas Asociadas *"
+                campos={[
+                  {
+                    key: "nombre",
+                    label: "Nombre de Pantalla",
+                    placeholder: "Ej: Pantalla Principal",
+                  },
+                  {
+                    key: "ubicacion",
+                    label: "Ubicación",
+                    placeholder: "Ej: Centro Comercial",
+                  },
+                ]}
+                filas={pantallasForm.filas}
+                onActualizarCampo={pantallasForm.actualizarCampo}
+                onAgregarFila={pantallasForm.agregarFila}
+                onEliminarFila={pantallasForm.eliminarFila}
+                textoAgregar="➕ Agregar otra Pantalla"
+                error={errorPantalla}
+              />
+
+              <FilasFormulario
+                titulo="Otros Productos Asociados"
+                campos={[
+                  {
+                    key: "nombre",
+                    label: "Nombre de Producto",
+                    placeholder: "Ej: Valla Principal",
+                  },
+                  {
+                    key: "precio",
+                    label: "Precio",
+                    placeholder: "Ej: 5000",
+                    tipo: "number",
+                  },
+                ]}
+                filas={productosForm.filas}
+                onActualizarCampo={productosForm.actualizarCampo}
+                onAgregarFila={productosForm.agregarFila}
+                onEliminarFila={productosForm.eliminarFila}
+                textoAgregar="➕ Agregar otro Producto"
+              />
             </div>
 
             <div className="modal-footer">
-              <button
-                className="btn btn-outline"
-                onClick={() => {
-                  setMostrarModal(false);
-                  setModoEdicion(false);
-                  setColaboradorEditando(null);
-                }}
-              >
+              <button className="btn btn-outline" onClick={resetFormulario}>
                 Cancelar
               </button>
               <button

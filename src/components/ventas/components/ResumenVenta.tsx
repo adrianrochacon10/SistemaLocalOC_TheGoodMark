@@ -34,7 +34,6 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   <div className="resumen-venta">
     <h4>📋 Resumen de la Venta</h4>
     <div className="resumen-grid">
-
       <div className="resumen-item">
         <span className="label">Pantallas:</span>
         <span className="valor">
@@ -79,9 +78,12 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
 
       <div className="resumen-item">
         <span className="label">Duración:</span>
-        <span className="valor">{mesesRenta} mes{mesesRenta !== 1 ? "es" : ""}</span>
+        <span className="valor">
+          {mesesRenta} mes{mesesRenta !== 1 ? "es" : ""}
+        </span>
       </div>
 
+      {/* ─── PRECIO GENERAL — siempre visible ─────── */}
       <div className="resumen-item total">
         <span className="label">PRECIO BASE (cantidad × precio):</span>
         <span className="valor" style={{ color: "#22c55e", fontWeight: 800 }}>
@@ -92,6 +94,17 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
         <strong>Tipo de pago:</strong> Porcentaje → aplica %; Precio fijo → mantiene; Consideración/Ninguno → $0.
       </p>
 
+      {/* ─── SIN COMISIÓN — importe directo ──────── */}
+      {!aplicarDescuento && (
+        <div className="resumen-item total">
+          <span className="label">
+            Importe total ({mesesRenta} {mesesRenta === 1 ? "mes" : "meses"}):
+          </span>
+          <span className="valor" style={{ color: "#22c55e", fontWeight: 800 }}>
+            {formatearMoneda(precioGeneral * mesesRenta)}
+          </span>
+        </div>
+      )}
     </div>
   </div>
 );
