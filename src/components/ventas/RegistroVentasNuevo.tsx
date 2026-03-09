@@ -3,8 +3,9 @@ import {
   RegistroVenta,
   Pantalla,
   AsignacionPantalla,
-  Cliente,
+  Colaborador,
   Usuario,
+  ItemVenta,
 } from "../../types";
 import "./RegistroVentasNuevo.css";
 import { calcularFechaFin, stringAFecha } from "../../utils/formateoFecha";
@@ -20,7 +21,7 @@ import { EstadisticasVentas } from "./components/EstadisticasVenta";
 interface RegistroVentasNuevoProps {
   pantallas: Pantalla[];
   asignaciones: AsignacionPantalla[];
-  clientes: Cliente[];
+  clientes: Colaborador[];
   ventasRegistradas: RegistroVenta[];
   usuarioActual: Usuario;
   onRegistrarVenta: (venta: RegistroVenta) => void;
@@ -38,22 +39,19 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   pantallas,
   errorExterno,
 }) => {
+  // ─── 1. ESTADOS ──────────────────────────────────────────
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("");
-  const [pantallasSeleccionadas, setPantallasSeleccionadas] = useState<
-    string[]
-  >([]);
+  const [itemsVenta, setItemsVenta] = useState<ItemVenta[]>([]);
+  const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId);
 
-  //Fechas
   const [fechaInicio, setFechaInicio] = useState<string>("");
   const [mesesRenta, setMesesRenta] = useState<number>(1);
-
-  //Para mostrar el modal de edicion de cards
   const [mostrarModalEditar, setMostrarModalEditar] = useState(false);
-
   const [vendidoA, setVendidoA] = useState<string>("");
   const [precioGeneral, setPrecioGeneral] = useState<number>(0);
-  const [porcentajeSocio, setPorcentajeSocio] = useState<number>(30); // Por defecto 30%
+  const [porcentajeSocio, setPorcentajeSocio] = useState<number>(30);
   const [montoSocio, setMontoSocio] = useState<number>(0);
+  const [aplicarDescuento, setAplicarDescuento] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [exito, setExito] = useState<string>("");
   const [mostrarModalVenta, setMostrarModalVenta] = useState(false);
@@ -70,6 +68,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
   const ventasPorPagina = 20;
 
+  // ─── 2. VARIABLES DERIVADAS ──────────────────────────────
   const opcionesClientes = clientes
     .filter(
       (c) =>
@@ -87,19 +86,15 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
   const ventasFiltradas = ventasRegistradas.filter((venta) => {
     const cliente = clientes.find((c) => c.id === venta.clienteId);
-
     const coincideBusqueda =
       busquedaVenta === "" ||
       (cliente &&
         cliente.nombre.toLowerCase().includes(busquedaVenta.toLowerCase())) ||
       venta.vendidoA.toLowerCase().includes(busquedaVenta.toLowerCase());
-
     const coincideEstado =
       filtroEstado === "Todos" || venta.estadoVenta === filtroEstado;
-
     const coincideCliente =
       filtroCliente === "Todos" || venta.clienteId === filtroCliente;
-
     return coincideBusqueda && coincideEstado && coincideCliente;
   });
 
@@ -109,39 +104,64 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     paginaActual * ventasPorPagina,
   );
 
-  // Obtener pantallas asignadas al cliente seleccionado
   const pantallasDelCliente = asignaciones.filter(
     (a) => a.clienteId === clienteSeleccionado && a.activa,
   );
 
-  // Obtener el cliente
   const clienteActual = clientes.find((c) => c.id === clienteSeleccionado);
 
-  // Obtener información de las pantallas seleccionadas
+  // ✅ true solo cuando el colaborador tiene tipo "porcentaje"
+  const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
+
   const pantallasActuales = pantallasSeleccionadas
     .map((id) => pantallas.find((p) => p.id === id))
     .filter((p) => p !== undefined) as Pantalla[];
 
-  //Calcular fechas
   const fechaFin = calcularFechaFin(fechaInicio, mesesRenta);
 
-  // Calcular monto del socio en tiempo real
+  const hoy = new Date();
+  const mesActual = hoy.getMonth();
+  const añoActual = hoy.getFullYear();
+
+  // ─── 3. EFECTOS ──────────────────────────────────────────
   React.useEffect(() => {
-    const precioMes = precioGeneral;
     if (clienteActual && typeof clienteActual.porcentajeSocio === "number") {
       setPorcentajeSocio(clienteActual.porcentajeSocio);
       setMontoSocio(
-        Math.round(((precioMes * clienteActual.porcentajeSocio) / 100) * 100) /
-          100,
+        Math.round(
+          ((precioGeneral * clienteActual.porcentajeSocio) / 100) * 100,
+        ) / 100,
       );
     } else {
       setMontoSocio(
-        Math.round(((precioMes * porcentajeSocio) / 100) * 100) / 100,
+        Math.round(((precioGeneral * porcentajeSocio) / 100) * 100) / 100,
       );
     }
   }, [precioGeneral, porcentajeSocio, clienteActual]);
 
-  // Validar y registrar venta
+  // ─── 4. HANDLERS ─────────────────────────────────────────
+  const togglePantalla = (pantallaId: string) => {
+    const yaSeleccionada = itemsVenta.some((i) => i.pantallaId === pantallaId);
+    if (yaSeleccionada) {
+      setItemsVenta((prev) => prev.filter((i) => i.pantallaId !== pantallaId));
+    } else {
+      setItemsVenta((prev) => [...prev, { pantallaId, sinDescuento: false }]);
+    }
+  };
+
+  const resetFormularioVenta = () => {
+    setClienteSeleccionado("");
+    setItemsVenta([]);
+    setVendidoA("");
+    setFechaInicio("");
+    setMesesRenta(1);
+    setPrecioGeneral(0);
+    setEstadoVenta("Prospecto");
+    setAplicarDescuento(false);
+    setError("");
+    setExito("");
+  };
+
   const handleRegistrarVenta = () => {
     setError("");
     setExito("");
@@ -150,7 +170,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       setError("Selecciona un cliente");
       return;
     }
-    if (pantallasSeleccionadas.length === 0) {
+    if (itemsVenta.length === 0) {
       setError("Selecciona al menos una pantalla");
       return;
     }
@@ -173,11 +193,16 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
     const nuevaVenta: RegistroVenta = {
       id: "v" + Date.now(),
-      pantallasIds: pantallasSeleccionadas,
+      pantallasIds: itemsVenta.map((i) => i.pantallaId),
+      itemsVenta,
       clienteId: clienteSeleccionado,
       vendidoA: vendidoA.trim(),
       precioGeneral: precioGeneral * mesesRenta,
-      importeTotal: montoSocio,
+      // ✅ solo aplica monto socio si el colaborador es de tipo porcentaje y tiene activo el toggle
+      importeTotal:
+        tieneComisionPorcentaje && aplicarDescuento
+          ? montoSocio
+          : precioGeneral * mesesRenta,
       fechaRegistro: new Date(),
       fechaInicio: stringAFecha(fechaInicio),
       fechaFin: stringAFecha(fechaFin),
@@ -189,33 +214,15 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
     onRegistrarVenta(nuevaVenta);
     setExito("Venta registrada correctamente");
-    setClienteSeleccionado("");
-    setPantallasSeleccionadas([]);
-    setVendidoA("");
-    setFechaInicio("");
-    setMesesRenta(1);
-    setPrecioGeneral(0);
-
+    resetFormularioVenta();
     setTimeout(() => setExito(""), 3000);
   };
 
-  // Manejar selección múltiple de pantallas
-  const togglePantalla = (pantallaId: string) => {
-    setPantallasSeleccionadas((prev) =>
-      prev.includes(pantallaId)
-        ? prev.filter((id) => id !== pantallaId)
-        : [...prev, pantallaId],
-    );
-  };
-
-  // Obtener ventas del mes actual
-  const hoy = new Date();
-  const mesActual = hoy.getMonth();
-  const añoActual = hoy.getFullYear();
-
+  // ─── 5. JSX ──────────────────────────────────────────────
   return (
     <div className="registro-ventas-nuevo">
       <div>{errorExterno && <p>{errorExterno}</p>}</div>
+
       <FiltrosVentas
         busquedaVenta={busquedaVenta}
         filtroEstado={filtroEstado}
@@ -236,6 +243,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
         }}
         onNuevaVenta={() => setMostrarModalVenta(true)}
       />
+
       <h2>
         📅 Registros de{" "}
         {new Date(añoActual, mesActual).toLocaleString("es-ES", {
@@ -243,7 +251,9 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
         })}{" "}
         de {añoActual}
       </h2>
+
       <EstadisticasVentas ventasFiltradas={ventasFiltradas} />
+
       <div className="ventas-list ventas-compacta">
         {ventasPagina.map((venta) => (
           <VentaCard
@@ -259,6 +269,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
           />
         ))}
       </div>
+
       <div className="paginacion-ventas">
         <button
           disabled={paginaActual === 1}
@@ -276,11 +287,15 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
           ▶
         </button>
       </div>
-      {/* MODAL REGISTRO VENTA */}
+
+      {/* ─── MODAL REGISTRO VENTA ──────────────────────────── */}
       {mostrarModalVenta && (
         <div
           className="modal-overlay"
-          onClick={() => setMostrarModalVenta(false)}
+          onClick={() => {
+            setMostrarModalVenta(false);
+            resetFormularioVenta();
+          }}
         >
           <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
             <h3
@@ -299,7 +314,12 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                 value={clienteSeleccionado}
                 onChange={(v) => {
                   setClienteSeleccionado(v);
-                  setPantallasSeleccionadas([]);
+                  setItemsVenta([]);
+                  // ✅ auto-configura el toggle según tipo del colaborador
+                  const colaborador = clientes.find((c) => c.id === v);
+                  setAplicarDescuento(
+                    colaborador?.tipoComision === "porcentaje",
+                  );
                 }}
                 placeholder="-- Seleccionar colaborador --"
                 className="select-lg"
@@ -368,21 +388,109 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                     placeholder="0.00"
                   />
 
-                  <InputField
-                    label="Porcentaje para socio/dueño (%)"
-                    value={porcentajeSocio}
-                    type="number"
-                    readOnly
-                  />
+                  {/* ✅ Bloque de comisión — SOLO aparece si tipoComision es "porcentaje" */}
+                  {tieneComisionPorcentaje && (
+                    <>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-end",
+                          gap: 10,
+                        }}
+                      >
+                        {aplicarDescuento && (
+                          <div style={{ flex: 1 }}>
+                            <InputField
+                              label="Porcentaje para socio/dueño (%)"
+                              value={porcentajeSocio}
+                              type="number"
+                              readOnly
+                            />
+                          </div>
+                        )}
 
-                  <InputField
-                    label="Monto para socio/dueño"
-                    value={montoSocio}
-                    type="number"
-                    readOnly
-                  />
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 4,
+                            paddingBottom: 8,
+                            minWidth: 84,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "0.78em",
+                              fontWeight: 600,
+                              color: "#475569",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Comisión
+                          </span>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "0.75em",
+                                fontWeight: 600,
+                                color: aplicarDescuento ? "#16a34a" : "#b45309",
+                              }}
+                            >
+                              {aplicarDescuento ? "Activa" : "Inactiva"}
+                            </span>
+                            <div
+                              onClick={() =>
+                                setAplicarDescuento((prev) => !prev)
+                              }
+                              style={{
+                                width: 40,
+                                height: 22,
+                                borderRadius: 11,
+                                background: aplicarDescuento
+                                  ? "#22c55e"
+                                  : "#d1d5db",
+                                position: "relative",
+                                cursor: "pointer",
+                                transition: "background 0.2s",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: 2,
+                                  left: aplicarDescuento ? 20 : 2,
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: "50%",
+                                  background: "#fff",
+                                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                                  transition: "left 0.2s",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-                  {/* RESUMEN DE LA VENTA */}
+                      {aplicarDescuento && (
+                        <InputField
+                          label="Monto para socio/dueño"
+                          value={montoSocio}
+                          type="number"
+                          readOnly
+                        />
+                      )}
+                    </>
+                  )}
+
                   {fechaInicio &&
                     mesesRenta > 0 &&
                     pantallasSeleccionadas.length > 0 && (
@@ -397,6 +505,9 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                         precioGeneral={precioGeneral}
                         porcentajeSocio={porcentajeSocio}
                         montoSocio={montoSocio}
+                        aplicarDescuento={
+                          tieneComisionPorcentaje && aplicarDescuento
+                        }
                       />
                     )}
                 </>
@@ -422,7 +533,10 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
             </BotonAccion>
 
             <BotonAccion
-              onClick={() => setMostrarModalVenta(false)}
+              onClick={() => {
+                setMostrarModalVenta(false);
+                resetFormularioVenta();
+              }}
               variante="secundario"
               fullWidth
             >

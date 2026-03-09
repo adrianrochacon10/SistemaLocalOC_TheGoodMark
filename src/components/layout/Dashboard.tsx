@@ -164,9 +164,8 @@ export const Dashboard: React.FC = () => {
     cargarDatos();
   }, [profile]);
 
-  // Guardar siempre una copia en localStorage (sin importar Supabase)
   useEffect(() => {
-    if (!profile) return; // ✅ usa profile, que sí existe arriba
+    if (!profile) return;
     try {
       localStorage.setItem(
         "datosApp",
@@ -229,6 +228,7 @@ export const Dashboard: React.FC = () => {
   if (!profile) {
     return <div>No hay perfil disponible</div>;
   }
+
   const usuarioActual: Usuario = {
     id: profile.id,
     nombre: profile.nombre,
@@ -287,7 +287,6 @@ export const Dashboard: React.FC = () => {
       );
     }
 
-    // Siempre guardamos en estado/localStorage, aunque falle la BD remota
     setVentasRegistradas((prev) => [...prev, venta]);
   };
 
@@ -432,7 +431,6 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // Quita solo la asignación colaborador–pantalla (la pantalla sigue en el catálogo)
   const handleDesasignarPantalla = (clienteId: string, pantallaId: string) => {
     setAsignaciones((prev) =>
       prev.filter(
@@ -441,18 +439,15 @@ export const Dashboard: React.FC = () => {
     );
   };
 
-  // Elimina todas las pantallas y asignaciones de un colaborador
   const eliminarPantallasYAsignacionesDeColaborador = async (
     colaboradorId: string,
   ) => {
-    // 1. Llamar al backend para eliminar el colaborador
     try {
       await backendApi.del(`/api/colaboradores/${colaboradorId}`);
     } catch (e) {
       console.error("Error eliminando colaborador en backend:", e);
     }
 
-    // 2. Obtener pantallas que le pertenecen
     const pantallasAsignadas = asignaciones
       .filter((a) => a.clienteId === colaboradorId)
       .map((a) => a.pantallaId);
@@ -482,7 +477,6 @@ export const Dashboard: React.FC = () => {
     return <Login onSignIn={signIn} error={authError} loading={loading} />;
   }
 
-  // Dashboard principal
   const esAdmin = usuarioActual.rol === "admin";
 
   return (

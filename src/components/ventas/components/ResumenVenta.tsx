@@ -15,6 +15,7 @@ interface ResumenVentaProps {
   precioGeneral: number;
   porcentajeSocio: number;
   montoSocio: number;
+  aplicarDescuento: boolean;
 }
 
 export const ResumenVenta: React.FC<ResumenVentaProps> = ({
@@ -28,14 +29,16 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   precioGeneral,
   porcentajeSocio,
   montoSocio,
+  aplicarDescuento,
 }) => (
   <div className="resumen-venta">
     <h4>📋 Resumen de la Venta</h4>
     <div className="resumen-grid">
-
       <div className="resumen-item">
         <span className="label">Pantallas:</span>
-        <span className="valor">{pantallasActuales.map((p) => p.nombre).join(", ")}</span>
+        <span className="valor">
+          {pantallasActuales.map((p) => p.nombre).join(", ")}
+        </span>
       </div>
 
       <div className="resumen-item">
@@ -46,7 +49,8 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
       <div className="resumen-item">
         <span className="label">Cantidad:</span>
         <span className="valor">
-          {pantallasSeleccionadas.length} pantalla{pantallasSeleccionadas.length !== 1 ? "s" : ""}
+          {pantallasSeleccionadas.length} pantalla
+          {pantallasSeleccionadas.length !== 1 ? "s" : ""}
         </span>
       </div>
 
@@ -67,30 +71,55 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
 
       <div className="resumen-item">
         <span className="label">Duración:</span>
-        <span className="valor">{mesesRenta} mes{mesesRenta !== 1 ? "es" : ""}</span>
+        <span className="valor">
+          {mesesRenta} mes{mesesRenta !== 1 ? "es" : ""}
+        </span>
       </div>
 
+      {/* ─── PRECIO GENERAL — siempre visible ─────── */}
       <div className="resumen-item total">
         <span className="label">
           PRECIO GENERAL ({mesesRenta} {mesesRenta === 1 ? "mes" : "meses"}):
         </span>
-        <span className="valor">{formatearMoneda(precioGeneral * mesesRenta)}</span>
-      </div>
-
-      <div className="resumen-item total">
-        <span className="label">Porcentaje socio:</span>
-        <span className="valor">{porcentajeSocio}%</span>
-      </div>
-
-      <div className="resumen-item total">
-        <span className="label">
-          Monto socio total ({mesesRenta} {mesesRenta === 1 ? "mes" : "meses"}):
-        </span>
-        <span className="valor" style={{ color: "#22c55e", fontWeight: 800 }}>
-          {formatearMoneda(montoSocio * mesesRenta)}
+        <span className="valor">
+          {formatearMoneda(precioGeneral * mesesRenta)}
         </span>
       </div>
 
+      {/* ─── CON COMISIÓN — porcentaje + monto socio ─ */}
+      {aplicarDescuento && (
+        <>
+          <div className="resumen-item total">
+            <span className="label">Porcentaje socio:</span>
+            <span className="valor">{porcentajeSocio}%</span>
+          </div>
+
+          <div className="resumen-item total">
+            <span className="label">
+              Monto socio total ({mesesRenta}{" "}
+              {mesesRenta === 1 ? "mes" : "meses"}):
+            </span>
+            <span
+              className="valor"
+              style={{ color: "#22c55e", fontWeight: 800 }}
+            >
+              {formatearMoneda(montoSocio * mesesRenta)}
+            </span>
+          </div>
+        </>
+      )}
+
+      {/* ─── SIN COMISIÓN — importe directo ──────── */}
+      {!aplicarDescuento && (
+        <div className="resumen-item total">
+          <span className="label">
+            Importe total ({mesesRenta} {mesesRenta === 1 ? "mes" : "meses"}):
+          </span>
+          <span className="valor" style={{ color: "#22c55e", fontWeight: 800 }}>
+            {formatearMoneda(precioGeneral * mesesRenta)}
+          </span>
+        </div>
+      )}
     </div>
   </div>
 );

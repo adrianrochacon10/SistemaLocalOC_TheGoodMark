@@ -21,19 +21,20 @@ export interface Pantalla {
 }
 
 // Clientes (pueden tener 1 o varias pantallas)
-export interface Cliente {
+export interface Colaborador {
   id: string;
   nombre: string;
-  contacto?: string;
+  alias?: string;
   telefono?: string;
   email?: string;
   color?: string;
-  porcentajeSocio?: number;
   activo: boolean;
   fechaCreacion: Date;
+  tipoComision?: "porcentaje" | "ninguno" | "consideracion" | "precio_fijo";
+  porcentajeSocio?: number;
 }
 
-// ✅ NUEVO: Empresa (usada en EmpresaForm, OrdenCompleja, OrdenSimple)
+// ✅ Empresa (usada en EmpresaForm, OrdenCompleja, OrdenSimple)
 export interface Empresa {
   id: string;
   nombre: string;
@@ -54,10 +55,34 @@ export interface AsignacionPantalla {
   fechaAsignacion: Date;
 }
 
+// ✅ Producto asociado a un colaborador (vallas, otros servicios, etc.)
+export interface Producto {
+  id: string;
+  nombre: string;
+  precio: number;
+  activo: boolean;
+  fechaCreacion: Date;
+}
+
+// ✅ Asignación de producto a colaborador
+export interface AsignacionProducto {
+  id: string;
+  productoId: string;
+  clienteId: string;
+  activa: boolean;
+  fechaAsignacion: Date;
+}
+
+export interface ItemVenta {
+  pantallaId: string;
+  sinDescuento: boolean;
+}
+
 // Registro de venta/renta de pantalla
 export interface RegistroVenta {
   id: string;
   pantallasIds: string[];
+  itemsVenta: ItemVenta[];
   clienteId: string;
   vendidoA: string;
   precioGeneral: number;
@@ -71,7 +96,7 @@ export interface RegistroVenta {
   estadoVenta?: "Aceptado" | "Rechazado" | "Prospecto";
 }
 
-// ✅ NUEVO: Concepto para OrdenCompleja
+// ✅ Concepto para OrdenCompleja
 export interface ConceptoComplejo {
   id: string;
   ordenId: string;
@@ -85,7 +110,7 @@ export interface ConceptoComplejo {
   fechaFin: Date;
 }
 
-// ✅ NUEVO: Concepto para OrdenSimple
+// ✅ Concepto para OrdenSimple
 export interface ConceptoSimple {
   id: string;
   ordenId: string;
