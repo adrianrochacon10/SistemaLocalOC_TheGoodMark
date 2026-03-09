@@ -6,7 +6,6 @@ import { validarYConsumirCodigo } from "./codigos.js";
 const router = Router();
 router.use(requireAuth);
 
-// Lista de clientes
 router.get("/", async (_req, res) => {
   try {
     const { data, error } = await supabase
@@ -20,7 +19,6 @@ router.get("/", async (_req, res) => {
   }
 });
 
-// Crear cliente
 router.post("/", async (req, res) => {
   const body = req.body || {};
   const userId = req.user.id;
@@ -52,7 +50,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Editar cliente (con código para vendedores)
 router.patch("/:id", async (req, res) => {
   const { id } = req.params;
   const body = req.body;
@@ -84,7 +81,6 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
-// Detalle de cliente
 router.get("/:id", async (req, res) => {
   try {
     const { data, error } = await supabase

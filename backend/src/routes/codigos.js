@@ -15,7 +15,6 @@ export async function validarYConsumirCodigo(codigo, vendedorId, entidad, entida
   }
   const codigoClean = String(codigo).trim().toUpperCase();
 
-  // Primero buscamos solo por código + entidad + entidad_id para poder dar errores claros
   const { data: row, error: errSelect } = await supabase
     .from("codigos_edicion")
     .select("id, vendedor_id, usado, expira_at, entidad, entidad_id")
@@ -52,7 +51,6 @@ router.post("/solicitar", requireAuth, async (req, res) => {
   if (!entidad || !entidad_id) return res.status(400).json({ error: "entidad (cliente|orden) y entidad_id son obligatorios" });
   if (entidad !== "cliente" && entidad !== "orden") return res.status(400).json({ error: "entidad debe ser cliente u orden" });
 
-  // Destino: admins + vendedor + cliente (si aplica); sin duplicados
   const { data: admins } = await supabase.from("perfiles").select("email").eq("rol", "admin");
   const adminEmails = admins?.map((a) => a.email).filter(Boolean) ?? [];
   const destinatarios = new Set(adminEmails);
@@ -73,7 +71,6 @@ router.post("/solicitar", requireAuth, async (req, res) => {
 
   const codigo = generarCodigo();
   const expiraAt = new Date();
-  // Código válido por 30 minutos
   expiraAt.setMinutes(expiraAt.getMinutes() + 30);
 
   try {

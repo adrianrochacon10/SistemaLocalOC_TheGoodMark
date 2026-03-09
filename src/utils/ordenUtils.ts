@@ -42,10 +42,9 @@ export const generarOrdenDelMes = (
   // Obtener registros del mes
   const registrosDelMes = obtenerRegistrosDelMes(ventasRegistradas, mesTarget, añoTarget);
 
-  // Calcular subtotal - ahora es la suma directa de precios generales
-  // (el precio ya estaba establecido para todo el período de renta)
+  // Calcular subtotal - suma de precio total de cada venta
   const subtotal = registrosDelMes.reduce((total, v) => {
-    return total + v.precioGeneral;
+    return total + (v.precioTotal ?? v.importeTotal ?? v.precioGeneral ?? 0);
   }, 0);
 
   // Calcular IVA

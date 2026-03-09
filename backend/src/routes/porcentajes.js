@@ -4,7 +4,6 @@ import { requireAuth, requireAdmin } from "../middleware/auth.js";
 
 const router = Router();
 
-// Lista de porcentajes (cualquier usuario autenticado)
 router.get("/", requireAuth, async (_req, res) => {
   try {
     const { data, error } = await supabase
@@ -18,7 +17,6 @@ router.get("/", requireAuth, async (_req, res) => {
   }
 });
 
-// Crear porcentaje (solo admin) siempre ligado al tipo de pago "porcentaje"
 router.post("/", requireAuth, requireAdmin, async (req, res) => {
   const { valor, descripcion } = req.body || {};
   const valorNum = Number(valor);
@@ -27,7 +25,6 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
   }
 
   try {
-    // Buscar el tipo de pago 'porcentaje'
     const { data: tp, error: errTp } = await supabase
       .from("tipo_pago")
       .select("id")

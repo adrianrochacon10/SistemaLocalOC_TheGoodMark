@@ -12,9 +12,10 @@ interface ResumenVentaProps {
   fechaInicio: string;
   fechaFin: string;
   mesesRenta: number;
-  precioGeneral: number;
-  porcentajeSocio: number;
-  montoSocio: number;
+  cantidad: number;
+  precioUnitario: number;
+  precioTotal: number;
+  tipoPagoNombre: string;
 }
 
 export const ResumenVenta: React.FC<ResumenVentaProps> = ({
@@ -25,9 +26,10 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   fechaInicio,
   fechaFin,
   mesesRenta,
-  precioGeneral,
-  porcentajeSocio,
-  montoSocio,
+  cantidad,
+  precioUnitario,
+  precioTotal,
+  tipoPagoNombre,
 }) => (
   <div className="resumen-venta">
     <h4>📋 Resumen de la Venta</h4>
@@ -35,7 +37,9 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
 
       <div className="resumen-item">
         <span className="label">Pantallas:</span>
-        <span className="valor">{pantallasActuales.map((p) => p.nombre).join(", ")}</span>
+        <span className="valor">
+          {pantallasSeleccionadas.length} pantalla{pantallasSeleccionadas.length !== 1 ? "s" : ""} – {pantallasActuales.map((p) => p.nombre).join(", ")}
+        </span>
       </div>
 
       <div className="resumen-item">
@@ -45,9 +49,17 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
 
       <div className="resumen-item">
         <span className="label">Cantidad:</span>
-        <span className="valor">
-          {pantallasSeleccionadas.length} pantalla{pantallasSeleccionadas.length !== 1 ? "s" : ""}
-        </span>
+        <span className="valor">{cantidad}</span>
+      </div>
+
+      <div className="resumen-item">
+        <span className="label">Precio unitario:</span>
+        <span className="valor">{formatearMoneda(precioUnitario)}</span>
+      </div>
+
+      <div className="resumen-item">
+        <span className="label">Tipo de pago:</span>
+        <span className="valor">{tipoPagoNombre || "-"}</span>
       </div>
 
       <div className="resumen-item">
@@ -71,25 +83,14 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
       </div>
 
       <div className="resumen-item total">
-        <span className="label">
-          PRECIO GENERAL ({mesesRenta} {mesesRenta === 1 ? "mes" : "meses"}):
-        </span>
-        <span className="valor">{formatearMoneda(precioGeneral * mesesRenta)}</span>
-      </div>
-
-      <div className="resumen-item total">
-        <span className="label">Porcentaje socio:</span>
-        <span className="valor">{porcentajeSocio}%</span>
-      </div>
-
-      <div className="resumen-item total">
-        <span className="label">
-          Monto socio total ({mesesRenta} {mesesRenta === 1 ? "mes" : "meses"}):
-        </span>
+        <span className="label">PRECIO BASE (cantidad × precio):</span>
         <span className="valor" style={{ color: "#22c55e", fontWeight: 800 }}>
-          {formatearMoneda(montoSocio * mesesRenta)}
+          {formatearMoneda(precioTotal)}
         </span>
       </div>
+      <p className="resumen-nota" style={{ fontSize: "0.85em", color: "#64748b", marginTop: 8 }}>
+        <strong>Tipo de pago:</strong> Porcentaje → aplica %; Precio fijo → mantiene; Consideración/Ninguno → $0.
+      </p>
 
     </div>
   </div>

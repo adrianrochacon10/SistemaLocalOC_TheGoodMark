@@ -4,7 +4,6 @@ import { requireAuth, requireAdmin } from "../middleware/auth.js";
 
 const router = Router();
 
-// Lista de productos (cualquier usuario autenticado)
 router.get("/", requireAuth, async (_req, res) => {
   try {
     const { data, error } = await supabase.from("productos").select("*").order("nombre");
@@ -15,7 +14,6 @@ router.get("/", requireAuth, async (_req, res) => {
   }
 });
 
-// Crear producto (solo admin)
 router.post("/", requireAuth, requireAdmin, async (req, res) => {
   const { nombre, precio } = req.body || {};
   if (!nombre?.trim()) return res.status(400).json({ error: "Nombre es obligatorio" });

@@ -2,31 +2,28 @@ import { backendApi } from "./backendApi";
 
 /**
  * Payload para registrar una venta.
- * Ajusta los nombres de columnas según tu tabla `ventas` en Supabase.
+ * Coincide con el formato esperado por el backend /api/ventas.
  */
 export interface RegistroVentaPayload {
-  pantallas_ids: string[];
-  colaborador_id: string;
+  cliente_id: string;
+  pantalla_id: string;
   producto_id?: string | null;
-  vendido_a: string;
-  precio_general: number;
+  cantidad?: number;
+  precio_unitario_manual?: number | null;
+  tipo_pago_id?: string | null;
+  estado: string;
   fecha_inicio: string;
   fecha_fin: string;
-  meses_renta: number;
-  importe_total: number;
-  usuario_registro_id?: string;
+  duracion_meses: number;
 }
 
 /**
  * Registra una venta a través del backend Express (`/api/ventas`),
- * que a su vez guarda en Supabase.
+ * que calcula precio_total según cantidad × precio y tipo de pago.
  */
 export async function registrarVenta(payload: RegistroVentaPayload) {
   try {
-    const data = await backendApi.post("/api/ventas", {
-      ...payload,
-      activo: true,
-    });
+    const data = await backendApi.post("/api/ventas", payload);
     return { data, error: null as Error | null };
   } catch (e) {
     return {

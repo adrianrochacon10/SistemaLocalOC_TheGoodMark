@@ -21,20 +21,26 @@ interface RegistroVentasNuevoProps {
   pantallas: Pantalla[];
   asignaciones: AsignacionPantalla[];
   clientes: Cliente[];
+  productos: { id: string; nombre: string; precio: number }[];
+  tiposPago: { id: string; nombre: string }[];
   ventasRegistradas: RegistroVenta[];
   usuarioActual: Usuario;
   onRegistrarVenta: (venta: RegistroVenta) => void;
   onEliminarVenta: (ventaId: string) => void;
+  errorExterno?: string | null;
 }
 
 export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   asignaciones,
   clientes,
+  productos,
+  tiposPago,
   ventasRegistradas,
   usuarioActual,
   onRegistrarVenta,
   onEliminarVenta,
   pantallas,
+  errorExterno,
 }) => {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("");
   const [pantallasSeleccionadas, setPantallasSeleccionadas] = useState<
@@ -49,9 +55,10 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   const [mostrarModalEditar, setMostrarModalEditar] = useState(false);
 
   const [vendidoA, setVendidoA] = useState<string>("");
-  const [precioGeneral, setPrecioGeneral] = useState<number>(0);
-  const [porcentajeSocio, setPorcentajeSocio] = useState<number>(30); // Por defecto 30%
-  const [montoSocio, setMontoSocio] = useState<number>(0);
+  const [productoId, setProductoId] = useState<string>("");
+  const [cantidad, setCantidad] = useState<number>(1);
+  const [precioUnitarioManual, setPrecioUnitarioManual] = useState<number>(0);
+  const [tipoPagoId, setTipoPagoId] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [exito, setExito] = useState<string>("");
   const [mostrarModalVenta, setMostrarModalVenta] = useState(false);
@@ -123,21 +130,21 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   //Calcular fechas
   const fechaFin = calcularFechaFin(fechaInicio, mesesRenta);
 
-  // Calcular monto del socio en tiempo real
+  // Tipo de pago por defecto al seleccionar cliente
   React.useEffect(() => {
-    const precioMes = precioGeneral;
-    if (clienteActual && typeof clienteActual.porcentajeSocio === "number") {
-      setPorcentajeSocio(clienteActual.porcentajeSocio);
-      setMontoSocio(
-        Math.round(((precioMes * clienteActual.porcentajeSocio) / 100) * 100) /
-          100,
-      );
-    } else {
-      setMontoSocio(
-        Math.round(((precioMes * porcentajeSocio) / 100) * 100) / 100,
-      );
-    }
-  }, [precioGeneral, porcentajeSocio, clienteActual]);
+    if (!clienteSeleccionado || tiposPago.length === 0) return;
+    const id = clienteActual?.tipoPagoId && tiposPago.some((t) => t.id === clienteActual.tipoPagoId)
+      ? clienteActual.tipoPagoId
+      : tiposPago[0].id;
+    setTipoPagoId(id);
+  }, [clienteSeleccionado, clienteActual?.tipoPagoId, tiposPago]);
+
+  // Precio unitario: producto o precio (ingresado en la venta)
+  const productoSeleccionado = productos.find((p) => p.id === productoId);
+  const precioUnitario = productoId && productoSeleccionado
+    ? productoSeleccionado.precio
+    : precioUnitarioManual;
+  const precioBase = cantidad * precioUnitario;
 
   // Validar y registrar venta
   const handleRegistrarVenta = () => {
@@ -152,10 +159,6 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       setError("Selecciona al menos una pantalla");
       return;
     }
-    if (!vendidoA.trim()) {
-      setError("Especifica a quién se vendió/rentó");
-      return;
-    }
     if (!fechaInicio) {
       setError("Selecciona una fecha de inicio");
       return;
@@ -164,8 +167,8 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       setError("La duración debe ser al menos 1 mes");
       return;
     }
-    if (precioGeneral <= 0) {
-      setError("El precio debe ser mayor a 0");
+    if (!productoId && precioUnitarioManual <= 0) {
+      setError("Selecciona un producto o ingresa el precio");
       return;
     }
 
@@ -173,9 +176,12 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       id: "v" + Date.now(),
       pantallasIds: pantallasSeleccionadas,
       clienteId: clienteSeleccionado,
-      vendidoA: vendidoA.trim(),
-      precioGeneral: precioGeneral * mesesRenta,
-      importeTotal: montoSocio,
+      productoId: productoId || undefined,
+      vendidoA: vendidoA.trim() || clienteActual?.nombre ?? "-",
+      precioGeneral: precioUnitarioManual || (productoSeleccionado?.precio ?? 0),
+      cantidad,
+      precioTotal: precioBase,
+      importeTotal: precioBase,
       fechaRegistro: new Date(),
       fechaInicio: stringAFecha(fechaInicio),
       fechaFin: stringAFecha(fechaFin),
@@ -183,6 +189,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       activo: true,
       usuarioRegistroId: usuarioActual.id,
       estadoVenta,
+      tipoPagoId: tipoPagoId || undefined,
     };
 
     onRegistrarVenta(nuevaVenta);
@@ -190,9 +197,11 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     setClienteSeleccionado("");
     setPantallasSeleccionadas([]);
     setVendidoA("");
+    setProductoId("");
+    setCantidad(1);
+    setPrecioUnitarioManual(0);
     setFechaInicio("");
     setMesesRenta(1);
-    setPrecioGeneral(0);
 
     setTimeout(() => setExito(""), 3000);
   };
@@ -313,10 +322,64 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                   />
 
                   <InputField
-                    label="Vendido a (Nombre del receptor) *"
+                    label="Vendido a (Nombre del receptor)"
                     value={vendidoA}
                     onChange={setVendidoA}
-                    placeholder="Ej: ABC Company, Juan Pérez, Empresa XYZ"
+                    placeholder="Ej: ABC Company, Juan Pérez (opcional)"
+                  />
+
+                  <SelectField
+                    label="Producto"
+                    value={productoId}
+                    onChange={(v) => {
+                      setProductoId(v);
+                      if (v) setPrecioUnitarioManual(0);
+                    }}
+                    placeholder="-- Sin producto (ingresar precio) --"
+                    className="select-lg"
+                    options={[
+                      { value: "", label: "-- Sin producto (ingresar precio) --" },
+                      ...productos.map((p) => ({
+                        value: p.id,
+                        label: `${p.nombre} - $${p.precio.toFixed(2)}`,
+                      })),
+                    ]}
+                  />
+
+                  {!productoId && (
+                    <InputField
+                      label="Precio *"
+                      value={precioUnitarioManual || ""}
+                      onChange={(v) =>
+                        setPrecioUnitarioManual(v === "" ? 0 : parseFloat(v) || 0)
+                      }
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="0.00"
+                    />
+                  )}
+
+                  <InputField
+                    label="Cantidad *"
+                    value={cantidad || ""}
+                    onChange={(v) =>
+                      setCantidad(v === "" ? 1 : Math.max(1, parseInt(v) || 1))
+                    }
+                    type="number"
+                    min={1}
+                  />
+
+                  <SelectField
+                    label="Tipo de pago"
+                    value={tipoPagoId}
+                    onChange={setTipoPagoId}
+                    placeholder="-- Seleccionar --"
+                    className="select-lg"
+                    options={tiposPago.map((t) => ({
+                      value: t.id,
+                      label: t.nombre,
+                    }))}
                   />
 
                   <SelectField
@@ -353,36 +416,11 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                     />
                   </div>
 
-                  <InputField
-                    label="Precio Por Mes *"
-                    value={precioGeneral || ""}
-                    onChange={(v) =>
-                      setPrecioGeneral(v === "" ? 0 : parseInt(v) || 0)
-                    }
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    placeholder="0.00"
-                  />
-
-                  <InputField
-                    label="Porcentaje para socio/dueño (%)"
-                    value={porcentajeSocio}
-                    type="number"
-                    readOnly
-                  />
-
-                  <InputField
-                    label="Monto para socio/dueño"
-                    value={montoSocio}
-                    type="number"
-                    readOnly
-                  />
-
                   {/* RESUMEN DE LA VENTA */}
                   {fechaInicio &&
                     mesesRenta > 0 &&
-                    pantallasSeleccionadas.length > 0 && (
+                    pantallasSeleccionadas.length > 0 &&
+                    (productoId || precioUnitarioManual > 0) && (
                       <ResumenVenta
                         pantallasActuales={pantallasActuales}
                         estadoVenta={estadoVenta}
@@ -391,9 +429,10 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
                         fechaInicio={fechaInicio}
                         fechaFin={fechaFin}
                         mesesRenta={mesesRenta}
-                        precioGeneral={precioGeneral}
-                        porcentajeSocio={porcentajeSocio}
-                        montoSocio={montoSocio}
+                        cantidad={cantidad}
+                        precioUnitario={precioUnitario}
+                        precioTotal={precioBase}
+                        tipoPagoNombre={tiposPago.find((t) => t.id === tipoPagoId)?.nombre ?? ""}
                       />
                     )}
                 </>
@@ -408,6 +447,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
             </div>
 
             {error && <div className="error-message">{error}</div>}
+            {errorExterno && <div className="error-message">{errorExterno}</div>}
             {exito && <div className="success-message">{exito}</div>}
 
             <BotonAccion

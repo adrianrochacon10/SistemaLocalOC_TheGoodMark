@@ -42,9 +42,59 @@ router.post("/", async (req, res) => {
     tipoPagoId = cliente.tipo_pago_id;
   }
 
+  const cantidad = Math.max(1, Number(body.cantidad) || 1);
+  let precioBase = 0;
+  let fuentePrecio = null;
+
+  // Precio base: manual (en la venta) o producto
+  if (body.precio_unitario_manual != null && body.precio_unitario_manual !== "" && Number(body.precio_unitario_manual) >= 0) {
+    precioBase = cantidad * Number(body.precio_unitario_manual);
+    fuentePrecio = "precio_venta";
+  } else if (body.producto_id) {
+    const { data: producto, error: errProd } = await supabase
+      .from("productos")
+      .select("precio")
+      .eq("id", body.producto_id)
+      .single();
+    if (errProd || !producto) return res.status(400).json({ error: "Producto no encontrado" });
+    precioBase = cantidad * Number(producto.precio);
+    fuentePrecio = "producto";
+  }
+
+  // Aplicar tipo de pago
+  const { data: tipoPago } = await supabase
+    .from("tipo_pago")
+    .select("id, nombre")
+    .eq("id", tipoPagoId)
+    .single();
+
+  let precioTotal = precioBase;
+  let tipoPagoAplicado = tipoPago?.nombre ?? "precio fijo";
+
+  if (tipoPago?.nombre === "porcentaje") {
+    const { data: pct } = await supabase
+      .from("porcentajes")
+      .select("valor")
+      .eq("tipo_pago_id", tipoPagoId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (pct?.valor != null) {
+      precioTotal = (precioBase * Number(pct.valor)) / 100;
+      tipoPagoAplicado = `porcentaje (${pct.valor}%)`;
+    }
+  } else if (tipoPago?.nombre === "consideracion" || tipoPago?.nombre === "ninguno") {
+    precioTotal = 0;
+    tipoPagoAplicado = tipoPago.nombre;
+  }
+  // "precio fijo" mantiene el precioTotal = precioBase
+
   const insertPayload = {
     cliente_id: body.cliente_id,
     producto_id: body.producto_id ?? null,
+    cantidad,
+    precio_unitario_manual: body.precio_unitario_manual != null && body.precio_unitario_manual !== "" ? Number(body.precio_unitario_manual) : null,
+    precio_total: Math.round(precioTotal * 100) / 100,
     estado: body.estado,
     pantalla_id: body.pantalla_id,
     fecha_inicio: body.fecha_inicio,
@@ -63,6 +113,15 @@ router.post("/", async (req, res) => {
       .select("*, cliente:clientes(id, nombre, email, telefono), pantalla:pantallas(id, nombre, direccion), producto:productos(id, nombre, precio), tipo_pago(id, nombre)")
       .single();
     if (error) return res.status(500).json({ error: error.message });
+
+    // Respuesta con info según tipo de pago
+    const respuesta = {
+      ...data,
+      precio_base: Math.round(precioBase * 100) / 100,
+      precio_total: Math.round(precioTotal * 100) / 100,
+      tipo_pago_aplicado: tipoPagoAplicado,
+      fuente_precio: fuentePrecio,
+    };
 
     // Notificar por correo a admins, vendedor que hizo la venta y cliente
     try {
@@ -83,6 +142,8 @@ router.post("/", async (req, res) => {
         `Cliente: ${data?.cliente?.nombre || "N/D"}`,
         `Pantalla: ${data?.pantalla?.nombre || "N/D"}`,
         `Producto: ${data?.producto?.nombre || "N/D"}`,
+        `Cantidad: ${data?.cantidad ?? 1}`,
+        `Precio total: $${(data?.precio_total ?? 0).toFixed(2)}`,
         `Estado: ${data?.estado}`,
         `Fechas: ${data?.fecha_inicio} al ${data?.fecha_fin}`,
         `Meses: ${data?.duracion_meses}`,
@@ -93,6 +154,8 @@ router.post("/", async (req, res) => {
           <li><strong>Cliente:</strong> ${data?.cliente?.nombre || "N/D"}</li>
           <li><strong>Pantalla:</strong> ${data?.pantalla?.nombre || "N/D"}</li>
           <li><strong>Producto:</strong> ${data?.producto?.nombre || "N/D"}</li>
+          <li><strong>Cantidad:</strong> ${data?.cantidad ?? 1}</li>
+          <li><strong>Precio total:</strong> $${(data?.precio_total ?? 0).toFixed(2)}</li>
           <li><strong>Estado:</strong> ${data?.estado}</li>
           <li><strong>Fechas:</strong> ${data?.fecha_inicio} al ${data?.fecha_fin}</li>
           <li><strong>Meses:</strong> ${data?.duracion_meses}</li>
@@ -108,7 +171,7 @@ router.post("/", async (req, res) => {
       console.error("[VENTAS] Error enviando notificaciones de venta:", e?.message || e);
     }
 
-    res.status(201).json(data);
+    res.status(201).json(respuesta);
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
   }
@@ -132,6 +195,9 @@ router.patch("/:id", async (req, res) => {
   if (body.tipo_pago_id !== undefined) payload.tipo_pago_id = body.tipo_pago_id;
   if (body.renovable !== undefined) payload.renovable = body.renovable;
   if (body.producto_id !== undefined) payload.producto_id = body.producto_id || null;
+  if (body.cantidad !== undefined) payload.cantidad = Math.max(1, Number(body.cantidad) || 1);
+  if (body.precio_unitario_manual !== undefined) payload.precio_unitario_manual = body.precio_unitario_manual != null ? Number(body.precio_unitario_manual) : null;
+  if (body.precio_total !== undefined) payload.precio_total = Math.max(0, Number(body.precio_total) || 0);
 
   try {
     const { data, error } = await supabase.from("ventas").update(payload).eq("id", id).select().single();
@@ -161,6 +227,9 @@ router.post("/:id/renovar", async (req, res) => {
       .insert({
         cliente_id: venta.cliente_id,
         producto_id: venta.producto_id ?? null,
+        cantidad: venta.cantidad ?? 1,
+        precio_unitario_manual: venta.precio_unitario_manual ?? null,
+        precio_total: venta.precio_total ?? 0,
         estado: "aceptado",
         pantalla_id: venta.pantalla_id,
         fecha_inicio: nuevaInicio,

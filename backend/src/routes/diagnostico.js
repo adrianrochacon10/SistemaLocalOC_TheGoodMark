@@ -3,7 +3,6 @@ import { sendEmail } from "../lib/email.js";
 
 const router = Router();
 
-// GET /api/diagnostico/email?to=correo@ejemplo.com
 router.get("/email", async (req, res) => {
   const to = String(req.query.to || "").trim();
   if (!to) return res.status(400).json({ ok: false, error: "Parámetro ?to= obligatorio" });

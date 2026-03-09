@@ -30,6 +30,7 @@ export interface Cliente {
   color?: string;
   porcentajeSocio?: number;
   tipoPdf?: 1 | 2;
+  tipoPagoId?: string;
   activo: boolean;
   fechaCreacion: Date;
 }
@@ -43,6 +44,13 @@ export interface Empresa {
   telefono?: string;
   contacto?: string;
   fechaCreacion: Date;
+}
+
+// Producto del catálogo (para ventas)
+export interface Producto {
+  id: string;
+  nombre: string;
+  precio: number;
 }
 
 // Asignación de pantalla a cliente
@@ -63,6 +71,8 @@ export interface RegistroVenta {
   productoId?: string | null;
   vendidoA: string;
   precioGeneral: number;
+  cantidad: number;
+  precioTotal: number;
   fechaRegistro: Date;
   fechaInicio: Date;
   fechaFin: Date;
@@ -71,6 +81,7 @@ export interface RegistroVenta {
   activo: boolean;
   usuarioRegistroId: string;
   estadoVenta?: "Aceptado" | "Rechazado" | "Prospecto";
+  tipoPagoId?: string;
 }
 
 // ✅ NUEVO: Concepto para OrdenCompleja
