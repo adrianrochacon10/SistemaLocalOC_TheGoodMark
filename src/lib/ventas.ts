@@ -6,7 +6,8 @@ import { backendApi } from "./backendApi";
  */
 export interface RegistroVentaPayload {
   pantallas_ids: string[];
-  cliente_id: string;
+  colaborador_id: string;
+  producto_id?: string | null;
   vendido_a: string;
   precio_general: number;
   fecha_inicio: string;

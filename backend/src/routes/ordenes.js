@@ -24,7 +24,7 @@ router.get("/", async (req, res) => {
         if (ids.length === 0) return { ...orden, ventas: [] };
         const { data: ventas } = await supabase
           .from("ventas")
-          .select("*, cliente:clientes(id, nombre, email, telefono), pantalla:pantallas(id, nombre, tipo_pdf), vendedor:perfiles(id, nombre, email), tipo_pago(id, nombre)")
+          .select("*, colaborador:colaboradores(id, nombre, email, telefono, tipo_pdf), pantalla:pantallas(id, nombre, direccion), producto:productos(id, nombre, precio), vendedor:perfiles(id, nombre, email), tipo_pago(id, nombre)")
           .in("id", ids)
           .order("fecha_inicio");
         return { ...orden, ventas: ventas ?? [] };
@@ -47,7 +47,7 @@ router.get("/ventas", async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("ventas")
-      .select("*, cliente:clientes(id, nombre, email, telefono), pantalla:pantallas(id, nombre, tipo_pdf), vendedor:perfiles(id, nombre, email), tipo_pago(id, nombre)")
+      .select("*, colaborador:colaboradores(id, nombre, email, telefono, tipo_pdf), pantalla:pantallas(id, nombre, direccion), producto:productos(id, nombre, precio), vendedor:perfiles(id, nombre, email), tipo_pago(id, nombre)")
       .gte("fecha_inicio", inicio)
       .lte("fecha_fin", finStr)
       .order("fecha_inicio");
@@ -69,10 +69,10 @@ router.post("/generar", async (req, res) => {
   const finStr = fin.toISOString().slice(0, 10);
 
   try {
-    const { data: ventas, error: errVentas } = await supabase.from("ventas").select("id, pantalla_id, pantallas(id, nombre, tipo_pdf)").gte("fecha_inicio", inicio).lte("fecha_fin", finStr);
+    const { data: ventas, error: errVentas } = await supabase.from("ventas").select("id, colaborador_id, colaborador:colaboradores(id, nombre, tipo_pdf)").gte("fecha_inicio", inicio).lte("fecha_fin", finStr);
     if (errVentas) return res.status(500).json({ error: errVentas.message });
     const ventasIds = (ventas ?? []).map((v) => v.id);
-    const porTipoPdf = { 1: (ventas ?? []).filter((v) => v.pantallas?.tipo_pdf === 1), 2: (ventas ?? []).filter((v) => v.pantallas?.tipo_pdf === 2) };
+    const porTipoPdf = { 1: (ventas ?? []).filter((v) => v.colaborador?.tipo_pdf === 1), 2: (ventas ?? []).filter((v) => v.colaborador?.tipo_pdf === 2) };
     const { data: orden, error: errOrden } = await supabase.from("ordenes_mes").upsert({ mes: m, anio: a, ventas_ids: ventasIds, generado_por: userId }, { onConflict: "mes,anio" }).select().single();
     if (errOrden) return res.status(500).json({ error: errOrden.message });
     res.json({ orden, ventas_ids: ventasIds, por_tipo_pdf: porTipoPdf });

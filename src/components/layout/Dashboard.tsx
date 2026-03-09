@@ -101,6 +101,7 @@ export const Dashboard: React.FC = () => {
           email: row.email ?? undefined,
           color: row.color ?? undefined,
           porcentajeSocio: row.porcentaje_socio ?? undefined,
+          tipoPdf: row.tipo_pdf === 2 ? 2 : 1,
           activo: row.activo ?? true,
           fechaCreacion: row.fecha_creacion
             ? new Date(row.fecha_creacion)
@@ -135,7 +136,8 @@ export const Dashboard: React.FC = () => {
           (row: any) => ({
             id: row.id,
             pantallasIds: row.pantallas_ids ?? [],
-            clienteId: row.cliente_id,
+            clienteId: row.colaborador_id ?? row.cliente_id,
+            productoId: row.producto_id ?? undefined,
             vendidoA: row.vendido_a,
             precioGeneral: row.precio_general,
             fechaRegistro: row.fecha_registro
@@ -212,7 +214,8 @@ export const Dashboard: React.FC = () => {
     try {
       const { error } = await registrarVenta({
         pantallas_ids: venta.pantallasIds,
-        cliente_id: venta.clienteId,
+        colaborador_id: venta.clienteId,
+        producto_id: venta.productoId ?? undefined,
         vendido_a: venta.vendidoA,
         precio_general: venta.precioGeneral,
         fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
@@ -296,6 +299,7 @@ export const Dashboard: React.FC = () => {
           email: cliente.email ?? null,
           tipo_pago_id: extras.tipo_pago_id,
           pantalla_id: extras.pantalla_id,
+          tipo_pdf: cliente.tipoPdf ?? 1,
         });
 
         if (data) {
@@ -307,6 +311,7 @@ export const Dashboard: React.FC = () => {
             email: data.email ?? undefined,
             color: (data as any).color ?? undefined,
             porcentajeSocio: (data as any).porcentaje_socio ?? undefined,
+            tipoPdf: (data as any).tipo_pdf === 2 ? 2 : 1,
             activo: (data as any).activo ?? true,
             fechaCreacion: data.created_at
               ? new Date(data.created_at)

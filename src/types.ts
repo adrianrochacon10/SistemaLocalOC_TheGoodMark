@@ -20,7 +20,7 @@ export interface Pantalla {
   fechaCreacion: Date;
 }
 
-// Clientes (pueden tener 1 o varias pantallas)
+// Colaboradores (antes clientes; tienen tipo_pdf para el PDF)
 export interface Cliente {
   id: string;
   nombre: string;
@@ -29,6 +29,7 @@ export interface Cliente {
   email?: string;
   color?: string;
   porcentajeSocio?: number;
+  tipoPdf?: 1 | 2;
   activo: boolean;
   fechaCreacion: Date;
 }
@@ -59,6 +60,7 @@ export interface RegistroVenta {
   id: string;
   pantallasIds: string[];
   clienteId: string;
+  productoId?: string | null;
   vendidoA: string;
   precioGeneral: number;
   fechaRegistro: Date;

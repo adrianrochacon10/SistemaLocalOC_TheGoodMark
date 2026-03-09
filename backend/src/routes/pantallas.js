@@ -19,14 +19,11 @@ router.post("/", async (req, res) => {
   const body = req.body;
   const userId = req.user.id;
   if (!body.nombre?.trim()) return res.status(400).json({ error: "Nombre es obligatorio" });
-  const tipoPdf = Number(body.tipo_pdf);
-  if (tipoPdf !== 1 && tipoPdf !== 2) return res.status(400).json({ error: "Tipo de PDF debe ser 1 o 2" });
 
   try {
     const { data, error } = await supabase.from("pantallas").insert({
       nombre: body.nombre.trim(),
       direccion: body.direccion ?? null,
-      tipo_pdf: tipoPdf,
       creado_por: userId,
     }).select().single();
     if (error) return res.status(500).json({ error: error.message });
@@ -42,10 +39,6 @@ router.patch("/:id", async (req, res) => {
   const payload = {};
   if (body.nombre !== undefined) payload.nombre = body.nombre;
   if (body.direccion !== undefined) payload.direccion = body.direccion;
-  if (body.tipo_pdf !== undefined) {
-    if (body.tipo_pdf !== 1 && body.tipo_pdf !== 2) return res.status(400).json({ error: "Tipo de PDF debe ser 1 o 2" });
-    payload.tipo_pdf = body.tipo_pdf;
-  }
   if (Object.keys(payload).length === 0) return res.status(400).json({ error: "Nada que actualizar" });
 
   try {

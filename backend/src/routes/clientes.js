@@ -6,9 +6,13 @@ import { validarYConsumirCodigo } from "./codigos.js";
 const router = Router();
 router.use(requireAuth);
 
+// Lista de clientes
 router.get("/", async (_req, res) => {
   try {
-    const { data, error } = await supabase.from("clientes").select("*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre, direccion, tipo_pdf)").order("nombre");
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre, direccion)")
+      .order("nombre");
     if (error) return res.status(500).json({ error: error.message });
     res.json(data ?? []);
   } catch (e) {
@@ -16,6 +20,7 @@ router.get("/", async (_req, res) => {
   }
 });
 
+// Crear cliente
 router.post("/", async (req, res) => {
   const body = req.body || {};
   const userId = req.user.id;
@@ -38,7 +43,7 @@ router.post("/", async (req, res) => {
         creado_por: userId,
         actualizado_por: userId,
       })
-      .select("*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre, direccion, tipo_pdf)")
+      .select("*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre, direccion)")
       .single();
     if (error) return res.status(500).json({ error: error.message });
     res.status(201).json(data);
@@ -47,6 +52,7 @@ router.post("/", async (req, res) => {
   }
 });
 
+// Editar cliente (con código para vendedores)
 router.patch("/:id", async (req, res) => {
   const { id } = req.params;
   const body = req.body;
@@ -64,7 +70,12 @@ router.patch("/:id", async (req, res) => {
   if (body.pantalla_id !== undefined) payload.pantalla_id = body.pantalla_id;
 
   try {
-    const { data, error } = await supabase.from("clientes").update(payload).eq("id", id).select("*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre, direccion, tipo_pdf)").single();
+    const { data, error } = await supabase
+      .from("clientes")
+      .update(payload)
+      .eq("id", id)
+      .select("*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre, direccion)")
+      .single();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: "Cliente no encontrado" });
     res.json(data);
@@ -73,9 +84,14 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
+// Detalle de cliente
 router.get("/:id", async (req, res) => {
   try {
-    const { data, error } = await supabase.from("clientes").select("*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre, direccion, tipo_pdf)").eq("id", req.params.id).single();
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre, direccion)")
+      .eq("id", req.params.id)
+      .single();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: "Cliente no encontrado" });
     res.json(data);
