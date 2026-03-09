@@ -9,7 +9,7 @@ export const generarPDFOrden = (
   config: ConfiguracionEmpresa,
   nombreUsuario: string
 ): void => {
-  const mesFormato = new Date(orden.año, orden.mes).toLocaleDateString("es-MX", {
+  const mesFormato = new Date(orden.año ?? 0, orden.mes ?? 0).toLocaleDateString("es-MX", {
     month: "long",
     year: "numeric",
   });
@@ -288,7 +288,7 @@ export const generarPDFOrden = (
               </tr>
             </thead>
             <tbody>
-              ${orden.registrosVenta.map(venta => `
+              ${(orden.registrosVenta ?? []).map(venta => `
                 <tr>
                   <td>${venta.clienteId.substring(0, 20)}</td>
                   <td>${venta.vendidoA.substring(0, 25)}</td>
@@ -305,15 +305,15 @@ export const generarPDFOrden = (
           <div class="totales-column">
             <div class="total-row subtotal">
               <span class="label">Subtotal</span>
-              <span class="valor">$${orden.subtotal.toFixed(2)}</span>
+              <span class="valor">$${(orden.subtotal ?? 0).toFixed(2)}</span>
             </div>
             <div class="total-row iva">
-              <span class="label">I.V.A. (${orden.ivaPercentaje}%)</span>
-              <span class="valor">$${orden.ivaTotal.toFixed(2)}</span>
+              <span class="label">I.V.A. (${orden.ivaPercentaje ?? 0}%)</span>
+              <span class="valor">$${(orden.ivaTotal ?? 0).toFixed(2)}</span>
             </div>
             <div class="total-row total">
               <span class="label">TOTAL</span>
-              <span class="valor">$${orden.total.toFixed(2)}</span>
+              <span class="valor">$${(orden.total ?? 0).toFixed(2)}</span>
             </div>
           </div>
         </div>

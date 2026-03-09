@@ -20,7 +20,7 @@ export interface Pantalla {
   fechaCreacion: Date;
 }
 
-// Colaboradores (antes clientes; tienen tipo_pdf para el PDF)
+// En BD/backend: clientes. En frontend se muestran como "Colaborador"
 export interface Cliente {
   id: string;
   nombre: string;
@@ -36,6 +36,9 @@ export interface Cliente {
   tipoComision?: "porcentaje" | "ninguno" | "consideracion" | "precio_fijo";
   porcentajeSocio?: number;
 }
+
+/** Alias para uso en frontend: BD/backend usa "clientes", UI muestra "Colaborador" */
+export type Colaborador = Cliente;
 
 // ✅ Empresa (usada en EmpresaForm, OrdenCompleja, OrdenSimple)
 export interface Empresa {
