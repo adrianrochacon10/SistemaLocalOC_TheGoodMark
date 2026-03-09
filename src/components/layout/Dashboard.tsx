@@ -13,7 +13,6 @@ import { registrarVenta } from "../../lib/ventas";
 import { backendApi } from "../../lib/backendApi";
 import { Login } from "../auth/Login";
 import { GestorPantallasClientes } from "../pantallas/GestorPantallasClientes";
-import { CatalogoPantallas } from "../pantallas/CatalogoPantallas";
 import { RegistroVentasNuevo } from "../ventas/RegistroVentasNuevo";
 import { OrdenesMensualesNuevo } from "../ordenes/OrdenesMensualesNuevo";
 import { AdminUsuarios } from "../admin/AdminUsuarios";
@@ -21,16 +20,6 @@ import "./Dashboard.css";
 
 export const Dashboard: React.FC = () => {
   const { profile, loading, error: authError, signIn, signOut } = useAuth();
-  
-  const usuarioActual: Usuario = profile
-    ? {
-        id: profile.id,
-        nombre: profile.nombre,
-        email: profile.email,
-        rol: profile.rol,
-        activo: true,
-      }
-    : null
 
   const [errorVenta, setErrorVenta] = useState<string | null>(null);
   const [estadoBD, setEstadoBD] = useState<"checking" | "ok" | "error">(
@@ -38,6 +27,7 @@ export const Dashboard: React.FC = () => {
   );
   const [mensajeBD, setMensajeBD] = useState<string | null>(null);
 
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   // Estado del negocio
   const [pantallas, setPantallas] = useState<Pantalla[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -171,7 +161,7 @@ export const Dashboard: React.FC = () => {
 
   // Guardar siempre una copia en localStorage (sin importar Supabase)
   useEffect(() => {
-    if (!usuarioActual) return;
+    if (!profile) return; // ✅ usa profile, que sí existe arriba
     try {
       localStorage.setItem(
         "datosApp",
@@ -194,11 +184,69 @@ export const Dashboard: React.FC = () => {
     ventasRegistradas,
     ordenes,
     config,
-    usuarioActual,
+    profile,
   ]);
+
+  // Verificar conexión con Supabase (BD) después de autenticación
+  useEffect(() => {
+    if (!profile) return;
+
+    let cancelado = false;
+
+    const probarConexion = async () => {
+      setEstadoBD("checking");
+      setMensajeBD(null);
+      try {
+        await backendApi.get("/api/health");
+        if (cancelado) return;
+        setEstadoBD("ok");
+        setMensajeBD(null);
+      } catch (e) {
+        if (cancelado) return;
+        setEstadoBD("error");
+        setMensajeBD(
+          e instanceof Error ? e.message : "Error desconocido de conexión",
+        );
+      }
+    };
+
+    probarConexion();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [profile]);
+
+  if (loading) {
+    return <div>Cargando perfil...</div>;
+  }
+
+  if (!profile) {
+    return <div>No hay perfil disponible</div>;
+  }
+  const usuarioActual: Usuario = {
+    id: profile.id,
+    nombre: profile.nombre,
+    email: profile.email,
+    rol: profile.rol,
+    activo: true,
+  };
+
+  const handleCrearUsuario = (nuevoUsuario: Usuario) => {
+    setUsuarios((prev) => [...prev, nuevoUsuario]);
+  };
 
   const handleLogout = () => {
     signOut();
+  };
+
+  const handleEliminarVenta = async (ventaId: string) => {
+    try {
+      await backendApi.del(`/api/ventas/${ventaId}`);
+    } catch (e) {
+      console.error("Error eliminando venta en backend:", e);
+    }
+    setVentasRegistradas((prev) => prev.filter((v) => v.id !== ventaId));
   };
 
   const handleRegistrarVentaConSupabase = async (venta: RegistroVenta) => {
@@ -222,7 +270,7 @@ export const Dashboard: React.FC = () => {
         setErrorVenta(
           error instanceof Error
             ? `La venta se guardó solo en este dispositivo.\nDetalle BD: ${error.message}`
-            : "La venta se guardó solo en este dispositivo. Error al guardar en la base de datos."
+            : "La venta se guardó solo en este dispositivo. Error al guardar en la base de datos.",
         );
       }
     } catch (e) {
@@ -230,7 +278,7 @@ export const Dashboard: React.FC = () => {
       setErrorVenta(
         e instanceof Error
           ? `La venta se guardó solo en este dispositivo.\nDetalle BD: ${e.message}`
-          : "La venta se guardó solo en este dispositivo. Error desconocido al guardar en la base de datos."
+          : "La venta se guardó solo en este dispositivo. Error desconocido al guardar en la base de datos.",
       );
     }
 
@@ -271,7 +319,9 @@ export const Dashboard: React.FC = () => {
     setPantallas((prev) => {
       const existe = prev.find((p) => p.id === pantallaParaEstado.id);
       return existe
-        ? prev.map((p) => (p.id === pantallaParaEstado.id ? pantallaParaEstado : p))
+        ? prev.map((p) =>
+            p.id === pantallaParaEstado.id ? pantallaParaEstado : p,
+          )
         : [...prev, pantallaParaEstado];
     });
   };
@@ -316,7 +366,9 @@ export const Dashboard: React.FC = () => {
     setClientes((prev) => {
       const existe = prev.find((c) => c.id === clienteParaEstado.id);
       return existe
-        ? prev.map((c) => (c.id === clienteParaEstado.id ? clienteParaEstado : c))
+        ? prev.map((c) =>
+            c.id === clienteParaEstado.id ? clienteParaEstado : c,
+          )
         : [...prev, clienteParaEstado];
     });
     return clienteParaEstado;
@@ -345,10 +397,6 @@ export const Dashboard: React.FC = () => {
     });
   };
 
-  const handleRegistrarVenta = (venta: RegistroVenta) => {
-    setVentasRegistradas((prev) => [...prev, venta]);
-  };
-
   const handleGenerarOrden = (orden: OrdenDeCompra) => {
     setOrdenes((prev) => [...prev, orden]);
   };
@@ -373,40 +421,10 @@ export const Dashboard: React.FC = () => {
       alert(
         e instanceof Error
           ? `Error al guardar configuración: ${e.message}`
-          : "Error al guardar configuración de la empresa"
+          : "Error al guardar configuración de la empresa",
       );
     }
   };
-
-  // Verificar conexión con Supabase (BD) después de autenticación
-  useEffect(() => {
-    if (!profile) return;
-
-    let cancelado = false;
-
-    const probarConexion = async () => {
-      setEstadoBD("checking");
-      setMensajeBD(null);
-      try {
-        await backendApi.get("/api/health");
-        if (cancelado) return;
-        setEstadoBD("ok");
-        setMensajeBD(null);
-      } catch (e) {
-        if (cancelado) return;
-        setEstadoBD("error");
-        setMensajeBD(
-          e instanceof Error ? e.message : "Error desconocido de conexión",
-        );
-      }
-    };
-
-    probarConexion();
-
-    return () => {
-      cancelado = true;
-    };
-  }, [profile]);
 
   // Quita solo la asignación colaborador–pantalla (la pantalla sigue en el catálogo)
   const handleDesasignarPantalla = (clienteId: string, pantallaId: string) => {
@@ -418,13 +436,23 @@ export const Dashboard: React.FC = () => {
   };
 
   // Elimina todas las pantallas y asignaciones de un colaborador
-  const eliminarPantallasYAsignacionesDeColaborador = (
+  const eliminarPantallasYAsignacionesDeColaborador = async (
     colaboradorId: string,
   ) => {
-    // Obtener los IDs de pantallas asignadas a este colaborador
+    // 1. Llamar al backend para eliminar el colaborador
+    try {
+      await backendApi.del(`/api/colaboradores/${colaboradorId}`);
+    } catch (e) {
+      console.error("Error eliminando colaborador en backend:", e);
+    }
+
+    // 2. Obtener pantallas que le pertenecen
     const pantallasAsignadas = asignaciones
       .filter((a) => a.clienteId === colaboradorId)
       .map((a) => a.pantallaId);
+
+    // 3. Limpiar estado local
+    setClientes((prev) => prev.filter((c) => c.id !== colaboradorId)); // ✅ elimina el colaborador
     setAsignaciones((prev) =>
       prev.filter((a) => a.clienteId !== colaboradorId),
     );
@@ -435,20 +463,17 @@ export const Dashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="dashboard-nuevo" style={{ padding: "2rem", textAlign: "center" }}>
+      <div
+        className="dashboard-nuevo"
+        style={{ padding: "2rem", textAlign: "center" }}
+      >
         Cargando...
       </div>
     );
   }
 
   if (!profile || !usuarioActual) {
-    return (
-      <Login
-        onSignIn={signIn}
-        error={authError}
-        loading={loading}
-      />
-    );
+    return <Login onSignIn={signIn} error={authError} loading={loading} />;
   }
 
   // Dashboard principal
@@ -533,14 +558,6 @@ export const Dashboard: React.FC = () => {
           />
         )}
 
-        {vistaActual === "catalogo" && (
-          <CatalogoPantallas
-            pantallas={pantallas}
-            onAgregarPantalla={handleAgregarPantalla}
-            onEliminarPantalla={handleEliminarPantalla}
-          />
-        )}
-
         {vistaActual === "ventas" && (
           <RegistroVentasNuevo
             pantallas={pantallas}
@@ -549,6 +566,7 @@ export const Dashboard: React.FC = () => {
             ventasRegistradas={ventasRegistradas}
             usuarioActual={usuarioActual}
             onRegistrarVenta={handleRegistrarVentaConSupabase}
+            onEliminarVenta={handleEliminarVenta}
             errorExterno={errorVenta}
           />
         )}
@@ -656,7 +674,11 @@ export const Dashboard: React.FC = () => {
         )}
 
         {vistaActual === "admin" && esAdmin && (
-          <AdminUsuarios usuarioActualId={usuarioActual.id} />
+          <AdminUsuarios
+            usuarioActualId={usuarioActual.id}
+            usuarios={usuarios}
+            onCrearUsuario={handleCrearUsuario}
+          />
         )}
       </main>
     </div>

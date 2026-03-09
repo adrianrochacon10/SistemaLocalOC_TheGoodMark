@@ -1,9 +1,7 @@
 import React from "react";
 
 const COLORS = [
-  "#FFFFFF", "#FFCCCC", "#FFE5CC", "#FFFFCC", "#CCFFCC", "#CCFFFF", "#CCCCFF", "#FFCCFF",
-  "#CCCCCC", "#FF9999", "#FFCC99", "#FFFF99", "#99FF99", "#99FFFF", "#9999FF", "#FF99FF",
-  "#999999", "#FF6666", "#FF9966", "#FFFF66", "#66FF66", "#66FFFF", "#6666FF", "#FF66FF",
+  "#FFFFFF",
   "#666666", "#FF3333", "#FF6633", "#FFFF33", "#33FF33", "#33FFFF", "#3333FF", "#FF33FF",
   "#333333", "#FF0000", "#FF6600", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FF00FF",
   "#000000", "#990000", "#996600", "#999900", "#009900", "#009999", "#000099", "#990099",
