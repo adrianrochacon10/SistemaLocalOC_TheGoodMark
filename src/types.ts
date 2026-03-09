@@ -20,15 +20,14 @@ export interface Pantalla {
   fechaCreacion: Date;
 }
 
-// En BD/backend: clientes. En frontend se muestran como "Colaborador"
-export interface Cliente {
+// Colaboradores (antes clientes; tienen tipo_pdf para el PDF)
+export interface Colaborador {
   id: string;
   nombre: string;
   alias?: string;
   telefono?: string;
   email?: string;
   color?: string;
-  porcentajeSocio?: number;
   tipoPdf?: 1 | 2;
   tipoPagoId?: string;
   activo: boolean;
