@@ -1,11 +1,11 @@
-import { Cliente, Pantalla, RegistroVenta } from "../../../types";
+import { Colaborador, Pantalla, RegistroVenta } from "../../../types";
 import { colorPorEstado } from "../../../utils/colores";
 import { formatearFecha } from "../../../utils/formateoFecha";
 import { formatearMoneda } from "../../../utils/formateoMoneda";
 
 interface VentaCardProps {
   venta: RegistroVenta;
-  clientes: Cliente[];
+  clientes: Colaborador[];
   pantallas: Pantalla[];
   onEditar: (venta: RegistroVenta) => void;
   onEliminar: (id: string) => void;

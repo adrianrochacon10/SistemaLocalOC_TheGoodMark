@@ -14,9 +14,15 @@ export interface Pantalla {
   id: string;
   nombre: string;
   ubicacion?: string;
-  plaza?: string;
-  precioUnitario: number;
   activa: boolean;
+  fechaCreacion: Date;
+}
+
+export interface Producto {
+  id: string;
+  nombre: string;
+  precio: number;
+  activo: boolean;
   fechaCreacion: Date;
 }
 
@@ -36,53 +42,23 @@ export interface Colaborador {
   porcentajeSocio?: number;
 }
 
-/** Alias para uso en frontend: BD/backend usa "clientes", UI muestra "Colaborador" */
-export type Colaborador = Cliente;
-
-// ✅ Empresa (usada en EmpresaForm, OrdenCompleja, OrdenSimple)
-export interface Empresa {
-  id: string;
-  nombre: string;
-  rfc?: string;
-  direccion?: string;
-  telefono?: string;
-  contacto?: string;
-  fechaCreacion: Date;
-}
-
-// Producto del catálogo (para ventas)
-export interface Producto {
-  id: string;
-  nombre: string;
-  precio: number;
-}
-
 // Asignación de pantalla a cliente
 export interface AsignacionPantalla {
   id: string;
   pantallaId: string;
   clienteId: string;
-  precioUnitario: number;
   activa: boolean;
   fechaAsignacion: Date;
 }
 
-// ✅ Producto asociado a un colaborador (vallas, otros servicios, etc.)
-export interface Producto {
+export interface AsignacionProductoExtra {
   id: string;
-  nombre: string;
-  precio: number;
-  activo: boolean;
-  fechaCreacion: Date;
-}
-
-// ✅ Asignación de producto a colaborador
-export interface AsignacionProducto {
-  id: string;
-  productoId: string;
   clienteId: string;
-  activa: boolean;
+  productoId: string;
+  precioUnitario: number;
+  activo: boolean;
   fechaAsignacion: Date;
+  // opcionalmente precio, notas, etc.
 }
 
 export interface ItemVenta {

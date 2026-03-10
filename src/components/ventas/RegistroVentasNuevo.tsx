@@ -3,9 +3,11 @@ import React, { useState } from "react";
 import {
   RegistroVenta,
   Pantalla,
+  Producto,
   AsignacionPantalla,
   Colaborador,
   Usuario,
+  AsignacionProductoExtra,
 } from "../../types";
 import "./RegistroVentasNuevo.css";
 import { RegistroVentasLista } from "./components/RegistroVentaListas";
@@ -13,7 +15,9 @@ import { RegistroVentaModal } from "./components/RegistroVentaModal";
 
 interface RegistroVentasNuevoProps {
   pantallas: Pantalla[];
+  productos: Producto[];
   asignaciones: AsignacionPantalla[];
+  asignacionProductos: AsignacionProductoExtra[];
   clientes: Colaborador[];
   ventasRegistradas: RegistroVenta[];
   usuarioActual: Usuario;
@@ -25,7 +29,9 @@ interface RegistroVentasNuevoProps {
 export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   pantallas,
   asignaciones,
+  asignacionProductos,
   clientes,
+  productos,
   ventasRegistradas,
   usuarioActual,
   onRegistrarVenta,
@@ -33,7 +39,9 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   errorExterno,
 }) => {
   const [mostrarModalVenta, setMostrarModalVenta] = useState(false);
-  const [ventaEditando, setVentaEditando] = useState<RegistroVenta | null>(null);
+  const [ventaEditando, setVentaEditando] = useState<RegistroVenta | null>(
+    null,
+  );
 
   const handleNuevaVenta = () => {
     setVentaEditando(null);
@@ -68,6 +76,8 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
           asignaciones={asignaciones}
           clientes={clientes}
           usuarioActual={usuarioActual}
+          productos={productos}
+          asignacionesProductos={asignacionProductos}
           onRegistrarVenta={onRegistrarVenta}
           onCerrar={handleCerrarModal}
           ventaInicial={ventaEditando}
