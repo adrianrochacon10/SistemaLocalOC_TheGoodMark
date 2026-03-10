@@ -7,6 +7,8 @@ import {
   Colaborador,
   Usuario,
   ItemVenta,
+  Producto,
+  AsignacionProductoExtra,
 } from "../../../types";
 import { calcularFechaFin, stringAFecha } from "../../../utils/formateoFecha";
 import { SelectField } from "../../ui/SelectField";
@@ -17,7 +19,9 @@ import { BotonAccion } from "../../ui/BotonAccion";
 
 interface RegistroVentaModalProps {
   pantallas: Pantalla[];
+  productos: Producto[];
   asignaciones: AsignacionPantalla[];
+  asignacionesProductos: AsignacionProductoExtra[];
   clientes: Colaborador[];
   usuarioActual: Usuario;
   onRegistrarVenta: (venta: RegistroVenta) => void;
@@ -27,6 +31,7 @@ interface RegistroVentaModalProps {
 
 export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   pantallas,
+  productos,
   asignaciones,
   clientes,
   usuarioActual,

@@ -119,9 +119,9 @@ export const Dashboard: React.FC = () => {
           <RegistroVentasNuevo
             pantallas={datos.pantallas}
             asignaciones={datos.asignaciones}
+            asignacionProductos={datos.asignacionesProductos}
             clientes={datos.clientes}
             productos={datos.productos}
-            tiposPago={datos.tiposPago}
             ventasRegistradas={datos.ventasRegistradas}
             usuarioActual={usuarioActual}
             onRegistrarVenta={acciones.handleRegistrarVentaConSupabase}
