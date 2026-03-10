@@ -12,10 +12,10 @@ interface ResumenVentaProps {
   fechaInicio: string;
   fechaFin: string;
   mesesRenta: number;
-  cantidad: number;
-  precioUnitario: number;
-  precioTotal: number;
-  tipoPagoNombre: string;
+  precioGeneral: number;
+  porcentajeSocio: number;
+  montoSocio: number;
+  aplicarDescuento: boolean;
 }
 
 export const ResumenVenta: React.FC<ResumenVentaProps> = ({
@@ -26,10 +26,10 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   fechaInicio,
   fechaFin,
   mesesRenta,
-  cantidad,
-  precioUnitario,
-  precioTotal,
-  tipoPagoNombre,
+  precioGeneral,
+  porcentajeSocio,
+  montoSocio,
+  aplicarDescuento,
 }) => (
   <div className="resumen-venta">
     <h4>📋 Resumen de la Venta</h4>
@@ -37,7 +37,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
       <div className="resumen-item">
         <span className="label">Pantallas:</span>
         <span className="valor">
-          {pantallasSeleccionadas.length} pantalla{pantallasSeleccionadas.length !== 1 ? "s" : ""} – {pantallasActuales.map((p) => p.nombre).join(", ")}
+          {pantallasActuales.map((p) => p.nombre).join(", ")}
         </span>
       </div>
 
@@ -48,17 +48,10 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
 
       <div className="resumen-item">
         <span className="label">Cantidad:</span>
-        <span className="valor">{cantidad}</span>
-      </div>
-
-      <div className="resumen-item">
-        <span className="label">Precio unitario:</span>
-        <span className="valor">{formatearMoneda(precioUnitario)}</span>
-      </div>
-
-      <div className="resumen-item">
-        <span className="label">Tipo de pago:</span>
-        <span className="valor">{tipoPagoNombre || "-"}</span>
+        <span className="valor">
+          {pantallasSeleccionadas.length} pantalla
+          {pantallasSeleccionadas.length !== 1 ? "s" : ""}
+        </span>
       </div>
 
       <div className="resumen-item">
@@ -85,14 +78,36 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
 
       {/* ─── PRECIO GENERAL — siempre visible ─────── */}
       <div className="resumen-item total">
-        <span className="label">PRECIO BASE (cantidad × precio):</span>
-        <span className="valor" style={{ color: "#22c55e", fontWeight: 800 }}>
-          {formatearMoneda(precioTotal)}
+        <span className="label">
+          PRECIO GENERAL ({mesesRenta} {mesesRenta === 1 ? "mes" : "meses"}):
+        </span>
+        <span className="valor">
+          {formatearMoneda(precioGeneral * mesesRenta)}
         </span>
       </div>
-      <p className="resumen-nota" style={{ fontSize: "0.85em", color: "#64748b", marginTop: 8 }}>
-        <strong>Tipo de pago:</strong> Porcentaje → aplica %; Precio fijo → mantiene; Consideración/Ninguno → $0.
-      </p>
+
+      {/* ─── CON COMISIÓN — porcentaje + monto socio ─ */}
+      {aplicarDescuento && (
+        <>
+          <div className="resumen-item total">
+            <span className="label">Porcentaje socio:</span>
+            <span className="valor">{porcentajeSocio}%</span>
+          </div>
+
+          <div className="resumen-item total">
+            <span className="label">
+              Monto socio total ({mesesRenta}{" "}
+              {mesesRenta === 1 ? "mes" : "meses"}):
+            </span>
+            <span
+              className="valor"
+              style={{ color: "#22c55e", fontWeight: 800 }}
+            >
+              {formatearMoneda(montoSocio * mesesRenta)}
+            </span>
+          </div>
+        </>
+      )}
 
       {/* ─── SIN COMISIÓN — importe directo ──────── */}
       {!aplicarDescuento && (
