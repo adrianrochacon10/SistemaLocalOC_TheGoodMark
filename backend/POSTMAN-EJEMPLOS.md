@@ -1,30 +1,369 @@
 # Postman – Backend TGM
 
-URL base: `http://localhost:4000`
+**URL base:** `http://localhost:4000`
 
-1. **Login:** POST `/api/auth/login` Body: `{"email":"admin@tgm.com","password":"TuContraseña"}` → copiar `session.access_token`.
-2. En el resto de peticiones: **Authorization** → Bearer Token → pegar el token.
-
-**Endpoints:** GET/POST `/api/tipo-pago`, `/api/clientes`, `/api/pantallas`, `/api/productos`, `/api/ventas`, `/api/ordenes`, `/api/ordenes/ventas?mes=3&anio=2025`. POST `/api/vendedores` (solo admin). Usar UUIDs reales de la BD.
-
-**Precio de ventas:** El precio se pone en la venta: usa `producto_id` (precio del producto) o `precio_unitario_manual` (precio que ingresas en la venta). El `tipo_pago` aplica: porcentaje, precio fijo, consideración, ninguno. La respuesta incluye `precio_base`, `precio_total`, `tipo_pago_aplicado`, `fuente_precio`.
+**Paso 1:** Hacer **POST** `/api/auth/login` y copiar `session.access_token`.  
+**Paso 2:** En el resto de peticiones: **Authorization** → Type: **Bearer Token** → pegar el token.
 
 ---
 
-## Código de edición (vendedor → admin)
+## 1. Health (sin auth)
 
-Cuando un **vendedor** quiere editar un cliente o una venta, debe usar un código que el admin le pasa (el admin lo recibe por correo).
+```http
+GET http://localhost:4000/api/health
+```
 
-1. **Vendedor solicita código** (con token del vendedor):
-   - **POST** `/api/codigos/solicitar`
-   - Body: `{"entidad":"cliente","entidad_id":"<uuid-del-cliente>"}` o `{"entidad":"orden","entidad_id":"<uuid-de-la-venta>"}`
-   - El admin recibe un correo con el código (válido 15 min). Respuesta: `{ "mensaje": "Codigo generado y enviado al correo del administrador", "expira_at": "..." }`
+---
 
-2. **Admin** recibe el correo y le pasa el código al vendedor.
+## 2. Auth
 
-3. **Vendedor edita** enviando el código en el body:
-   - **PATCH** `/api/clientes/:id` Body: `{ "nombre": "Nuevo nombre", "codigo_edicion": "ABC123" }` (el código que le dio el admin)
-   - **PATCH** `/api/ventas/:id` Body: `{ "estado": "aceptado", "codigo_edicion": "ABC123" }`
-   - Si el código es inválido, expirado o ya usado → 400 con `{ "error": "..." }`.
+### Login
+```http
+POST http://localhost:4000/api/auth/login
+Content-Type: application/json
 
-El **admin** no necesita código: puede hacer PATCH en clientes/ventas sin `codigo_edicion`.
+{
+  "email": "admin@tgm.com",
+  "password": "TuContraseña"
+}
+```
+→ Respuesta: `user`, `session` (ahí está `session.access_token`), `perfil`. Copia el token para las demás peticiones.
+
+### Perfil actual (requiere auth)
+```http
+GET http://localhost:4000/api/auth/me
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+
+---
+
+## 3. Tipo de pago
+
+```http
+GET http://localhost:4000/api/tipo-pago
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+
+---
+
+## 4. Pantallas
+
+### Listar
+```http
+GET http://localhost:4000/api/pantallas
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+
+### Crear
+```http
+POST http://localhost:4000/api/pantallas
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "nombre": "Pantalla Centro",
+  "direccion": "Av. Principal 123"
+}
+```
+
+### Obtener una
+```http
+GET http://localhost:4000/api/pantallas/<PANTALLA_UUID>
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+
+### Actualizar
+```http
+PATCH http://localhost:4000/api/pantallas/<PANTALLA_UUID>
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "nombre": "Pantalla Centro Actualizada",
+  "direccion": "Av. Principal 456"
+}
+```
+
+---
+
+## 5. Clientes (o Colaboradores)
+
+### Listar
+```http
+GET http://localhost:4000/api/clientes
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+(Misma base: `/api/colaboradores` si usas esa ruta.)
+
+### Crear
+```http
+POST http://localhost:4000/api/clientes
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "nombre": "Cliente Ejemplo",
+  "telefono": "5551234567",
+  "email": "cliente@ejemplo.com",
+  "contacto": "Juan Pérez",
+  "tipo_pago_id": "<UUID_TIPO_PAGO>",
+  "pantalla_id": "<UUID_PANTALLA>"
+}
+```
+`tipo_pago_id` y `pantalla_id` son obligatorios (usa UUIDs de GET tipo-pago y GET pantallas).
+
+### Obtener uno
+```http
+GET http://localhost:4000/api/clientes/<CLIENTE_UUID>
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+
+### Actualizar (admin sin código; vendedor con código)
+```http
+PATCH http://localhost:4000/api/clientes/<CLIENTE_UUID>
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "nombre": "Cliente Actualizado",
+  "codigo_edicion": "ABC123"
+}
+```
+Solo vendedores envían `codigo_edicion` (el que recibe el admin por correo al solicitar el código).
+
+---
+
+## 6. Productos
+
+### Listar
+```http
+GET http://localhost:4000/api/productos
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+
+### Crear (solo admin)
+```http
+POST http://localhost:4000/api/productos
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "nombre": "Producto Premium",
+  "precio": 1500.50
+}
+```
+
+---
+
+## 7. Porcentajes
+
+### Listar
+```http
+GET http://localhost:4000/api/porcentajes
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+
+### Crear (solo admin)
+```http
+POST http://localhost:4000/api/porcentajes
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "valor": 25,
+  "descripcion": "Descuento temporada"
+}
+```
+
+---
+
+## 8. Ventas
+
+### Listar
+```http
+GET http://localhost:4000/api/ventas
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+
+### Crear
+```http
+POST http://localhost:4000/api/ventas
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "cliente_id": "<CLIENTE_UUID>",
+  "estado": "pendiente",
+  "pantalla_id": "<PANTALLA_UUID>",
+  "fecha_inicio": "2025-03-01",
+  "fecha_fin": "2025-03-31",
+  "duracion_meses": 1,
+  "cantidad": 2,
+  "producto_id": "<PRODUCTO_UUID>"
+}
+```
+O con precio manual (sin producto):
+```json
+{
+  "cliente_id": "<CLIENTE_UUID>",
+  "estado": "pendiente",
+  "pantalla_id": "<PANTALLA_UUID>",
+  "fecha_inicio": "2025-03-01",
+  "fecha_fin": "2025-03-31",
+  "duracion_meses": 1,
+  "cantidad": 1,
+  "precio_unitario_manual": 500
+}
+```
+La respuesta incluye `precio_base`, `precio_total`, `tipo_pago_aplicado`, `fuente_precio`.
+
+### Actualizar (admin sin código; vendedor con código)
+```http
+PATCH http://localhost:4000/api/ventas/<VENTA_UUID>
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "estado": "aceptado",
+  "codigo_edicion": "ABC123"
+}
+```
+
+### Renovar (solo admin)
+```http
+POST http://localhost:4000/api/ventas/<VENTA_UUID>/renovar
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "fecha_inicio": "2025-04-01",
+  "fecha_fin": "2025-04-30",
+  "duracion_meses": 1
+}
+```
+
+---
+
+## 9. Códigos de edición
+
+### Solicitar código (vendedor; el admin recibe el correo)
+```http
+POST http://localhost:4000/api/codigos/solicitar
+Authorization: Bearer <TOKEN_VENDEDOR>
+Content-Type: application/json
+
+{
+  "entidad": "cliente",
+  "entidad_id": "<CLIENTE_UUID>"
+}
+```
+Para una venta/orden: `"entidad": "orden", "entidad_id": "<VENTA_UUID>"`. El código es válido 30 minutos.
+
+### Validar código (sin consumir; opcional)
+```http
+POST http://localhost:4000/api/codigos/validar
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "codigo": "ABC123",
+  "entidad": "cliente",
+  "entidad_id": "<CLIENTE_UUID>"
+}
+```
+
+### Listar códigos vigentes (solo admin)
+```http
+GET http://localhost:4000/api/codigos
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+
+---
+
+## 10. Órdenes / Ordenes mes
+
+### Listar órdenes
+```http
+GET http://localhost:4000/api/ordenes
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+Opcional: `?mes=3&anio=2025`
+
+### Ventas por mes
+```http
+GET http://localhost:4000/api/ordenes/ventas?mes=3&anio=2025
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+
+### Generar orden del mes
+```http
+POST http://localhost:4000/api/ordenes/generar
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "mes": 3,
+  "anio": 2025
+}
+```
+
+---
+
+## 11. Vendedores (solo admin)
+
+### Listar
+```http
+GET http://localhost:4000/api/vendedores
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+
+### Crear
+```http
+POST http://localhost:4000/api/vendedores
+Authorization: Bearer <TU_ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "nombre": "María Vendedora",
+  "email": "maria@tgm.com",
+  "password": "UnaContraseñaSegura123",
+  "rol": "vendedor"
+}
+```
+`rol` puede ser `"vendedor"` o `"admin"`.
+
+---
+
+## 12. Diagnóstico (correo de prueba)
+
+```http
+GET http://localhost:4000/api/diagnostico/email?to=tu@email.com
+```
+No requiere auth. Envía un correo de prueba (Resend/SMTP configurado en `.env`).
+
+---
+
+## Resumen rápido
+
+| Método | Ruta | Auth | Notas |
+|--------|------|------|--------|
+| GET | `/api/health` | No | OK del backend |
+| POST | `/api/auth/login` | No | Body: email, password |
+| GET | `/api/auth/me` | Sí | Perfil del token |
+| GET | `/api/tipo-pago` | Sí | Lista tipos de pago |
+| GET/POST | `/api/pantallas` | Sí | CRUD pantallas |
+| GET/POST/PATCH | `/api/clientes` | Sí | CRUD; vendedor usa código para PATCH |
+| GET/POST/PATCH | `/api/ventas` | Sí | Crear con cliente_id, pantalla_id, fechas, etc. |
+| POST | `/api/ventas/:id/renovar` | Sí Admin | Renovar venta |
+| GET/POST | `/api/productos` | Sí; POST admin | Lista y crear producto |
+| GET/POST | `/api/porcentajes` | Sí; POST admin | Lista y crear porcentaje |
+| POST | `/api/codigos/solicitar` | Sí | Vendedor pide código |
+| POST | `/api/codigos/validar` | Sí | Validar código |
+| GET | `/api/codigos` | Sí Admin | Códigos vigentes |
+| GET | `/api/ordenes` | Sí | Órdenes (opcional ?mes=&anio=) |
+| GET | `/api/ordenes/ventas` | Sí | Query: mes, anio |
+| POST | `/api/ordenes/generar` | Sí | Body: mes, anio |
+| GET/POST | `/api/vendedores` | Sí Admin | Lista y crear vendedor |
+| GET | `/api/diagnostico/email?to=` | No | Prueba de correo |
+
+Sustituye `<TU_ACCESS_TOKEN>` y los `<..._UUID>` por valores reales de tu entorno.

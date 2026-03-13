@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["deno.ns", "dom"]
+  },
+  "imports": {
+    "npm:nodemailer@6.9.10": "npm:nodemailer@6.9.10",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+  }
+}
