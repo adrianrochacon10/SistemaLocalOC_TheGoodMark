@@ -1,114 +1,142 @@
-import React, { useState } from "react";
-import { OrdenDeCompra, Cliente, ConfiguracionEmpresa } from "../../types";
+// src/components/pantallas/CrearOrden.tsx
+import React, { useState, useMemo } from "react";
+import {
+  OrdenDeCompra,
+  Colaborador,
+  ConfiguracionEmpresa,
+  RegistroVenta,
+} from "../../types";
+import { asignarOrdenMes, etiquetaMes } from "../../utils/ordenUtils";
 import "./CrearOrden.css";
 
-interface ProductoOrden {
-  id: string;
-  descripcion: string;
-  cantidad: number;
-  precioUnitario: number;
-  importe: number;
-}
-
 interface CrearOrdenProps {
-  clientes: Cliente[];
+  clientes: Colaborador[];
+  ventas: RegistroVenta[]; // todas las ventas registradas en el sistema
   config: ConfiguracionEmpresa;
+  diaCorte?: number; // default: 5
   onCrear: (orden: OrdenDeCompra) => void;
   onCancelar: () => void;
 }
 
 export const CrearOrden: React.FC<CrearOrdenProps> = ({
   clientes,
+  ventas,
   config,
+  diaCorte = 5,
   onCrear,
   onCancelar,
 }) => {
-  const [clienteId, setClienteId] = useState("");
-  const [productos, setProductos] = useState<ProductoOrden[]>([]);
-  const [nuevoProducto, setNuevoProducto] = useState({
-    descripcion: "",
-    cantidad: 1,
-    precioUnitario: 0,
-  });
+  const hoy = new Date();
+  const [mesOrden, setMesOrden] = useState(hoy.getMonth());
+  const [añoOrden, setAñoOrden] = useState(hoy.getFullYear());
+  const [clienteIdFiltro, setClienteIdFiltro] = useState(""); // "" = todos
 
-  const clienteSeleccionado = clientes.find((c) => c.id === clienteId);
+  // ── Clasificación automática de ventas ────────────────────────────────
+  const { ventasActuales, ventasSiguienteMes } = useMemo(() => {
+    const filtradas = clienteIdFiltro
+      ? ventas.filter((v) => v.clienteId === clienteIdFiltro)
+      : ventas;
 
-  const handleAgregarProducto = () => {
-    if (!nuevoProducto.descripcion || nuevoProducto.precioUnitario <= 0) {
-      alert("Completa los campos del producto");
-      return;
-    }
-    const producto: ProductoOrden = {
-      id: Math.random().toString(36).substring(2, 9),
-      descripcion: nuevoProducto.descripcion,
-      cantidad: nuevoProducto.cantidad,
-      precioUnitario: nuevoProducto.precioUnitario,
-      importe: nuevoProducto.cantidad * nuevoProducto.precioUnitario,
+    return {
+      ventasActuales: filtradas.filter(
+        (v) => asignarOrdenMes(v, mesOrden, añoOrden, diaCorte) === "actual",
+      ),
+      ventasSiguienteMes: filtradas.filter(
+        (v) => asignarOrdenMes(v, mesOrden, añoOrden, diaCorte) === "siguiente",
+      ),
     };
-    setProductos((prev) => [...prev, producto]);
-    setNuevoProducto({ descripcion: "", cantidad: 1, precioUnitario: 0 });
+  }, [ventas, mesOrden, añoOrden, diaCorte, clienteIdFiltro]);
+
+  // ── Selección manual (por defecto todas las "actuales" están seleccionadas)
+  const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
+
+  // Sincronizar selección cuando cambia el mes
+  const ventasIds = useMemo(
+    () => new Set(ventasActuales.map((v) => v.id)),
+    [ventasActuales],
+  );
+  // Al cambiar de mes, preseleccionar todas las automáticas
+  React.useEffect(() => {
+    setSeleccionadas(new Set(ventasActuales.map((v) => v.id)));
+  }, [mesOrden, añoOrden, clienteIdFiltro]); // eslint-disable-line
+
+  const toggleSeleccion = (id: string) => {
+    setSeleccionadas((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   };
 
-  const handleEditarProducto = (id: string, campo: string, valor: string) => {
-    setProductos((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        const actualizado = {
-          ...p,
-          [campo]: campo === "descripcion" ? valor : parseFloat(valor) || 0,
-        };
-        actualizado.importe = actualizado.cantidad * actualizado.precioUnitario;
-        return actualizado;
-      }),
-    );
-  };
-
-  const handleEliminarProducto = (id: string) => {
-    setProductos((prev) => prev.filter((p) => p.id !== id));
-  };
-
-  const subtotal = productos.reduce((sum, p) => sum + p.importe, 0);
+  // ── Totales ────────────────────────────────────────────────────────────
+  const ventasIncluidas = ventasActuales.filter((v) => seleccionadas.has(v.id));
+  const subtotal = ventasIncluidas.reduce((s, v) => s + v.importeTotal, 0);
   const iva = subtotal * ((config.ivaPercentaje || 16) / 100);
   const total = subtotal + iva;
 
+  const fechaCorteDisplay = new Date(
+    añoOrden,
+    mesOrden,
+    diaCorte,
+  ).toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  // ── Crear orden ────────────────────────────────────────────────────────
   const handleCrear = () => {
-    if (!clienteId) {
-      alert("Selecciona un cliente");
-      return;
-    }
-    if (productos.length === 0) {
-      alert("Agrega al menos un producto");
+    if (ventasIncluidas.length === 0) {
+      alert("No hay ventas seleccionadas para esta orden");
       return;
     }
 
-    // ✅ CÓDIGO CORREGIDO:
     const orden: OrdenDeCompra = {
       id: "oc" + Date.now(),
-      numeroOrden: `OC-${Date.now()}`, // ✅ campo requerido que faltaba
-      fecha: new Date(), // ✅ nombre correcto
+      numeroOrden: `OC-${añoOrden}${String(mesOrden + 1).padStart(2, "0")}-${Date.now()}`,
+      fecha: new Date(),
       estado: "descargada",
-      // Campos del modelo nuevo:
+
+      // ✅ Nombres correctos según la interfaz
+      mes: mesOrden,
+      año: añoOrden,
+
       subtotal,
-      ivaTotal: iva, // ✅ nombre correcto
+      ivaTotal: iva,
       ivaPercentaje: config.ivaPercentaje,
       total,
-      // Cliente va aquí como empresaId o simplemente guardarlo aparte
-      empresaId: clienteId, // ✅ mapear al campo correcto
-      // Productos como conceptos simples:
-      conceptos: productos.map((p) => ({
-        id: p.id,
-        ordenId: "",
-        concepto: p.descripcion,
-        precioUnitario: p.precioUnitario,
-        cantidad: p.cantidad,
-        importeTotal: p.importe,
-        fechaInicio: new Date(),
-        fechaFin: new Date(),
+      empresaId: clienteIdFiltro || undefined,
+
+      // Usando registrosVenta en lugar de conceptos
+      registrosVenta: ventasIncluidas.map((v) => ({
+        id: v.id,
+        pantallasIds: v.pantallasIds,
+        itemsVenta: v.itemsVenta,
+        clienteId: v.clienteId,
+        productoId: v.productoId ?? null,
+        vendidoA: v.vendidoA,
+        precioGeneral: v.precioGeneral,
+        cantidad: v.cantidad,
+        precioTotal: v.precioTotal,
+        fechaRegistro: v.fechaRegistro,
+        fechaInicio: v.fechaInicio,
+        fechaFin: v.fechaFin,
+        mesesRenta: v.mesesRenta,
+        importeTotal: v.importeTotal,
+        activo: v.activo,
+        usuarioRegistroId: v.usuarioRegistroId,
+        estadoVenta: v.estadoVenta,
+        tipoPagoId: v.tipoPagoId,
       })),
     };
 
     onCrear(orden);
   };
+
+  const meses = Array.from({ length: 12 }, (_, i) => ({
+    value: i,
+    label: new Date(2000, i).toLocaleDateString("es-MX", { month: "long" }),
+  }));
 
   return (
     <div className="crear-orden-overlay" onClick={onCancelar}>
@@ -119,211 +147,224 @@ export const CrearOrden: React.FC<CrearOrdenProps> = ({
         {/* TÍTULO */}
         <div className="orden-titulo">
           <h2>📋 Crear Orden de Compra</h2>
-          <p>Completa los datos para generar la orden</p>
+          <p>Las ventas se asignan automáticamente según la fecha de corte</p>
         </div>
 
-        {/* SECCIÓN EMPRESA/CLIENTE */}
+        {/* ── SELECTOR DE MES ── */}
         <div className="orden-section">
-          <h3>🏢 Cliente</h3>
-          <div className="select-with-button">
-            <select
-              value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
-            >
-              <option value="">-- Seleccionar cliente --</option>
-              {clientes
-                .filter((c) => c.activo)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre}
+          <h3>📅 Mes de la Orden</h3>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Mes</label>
+              <select
+                value={mesOrden}
+                onChange={(e) => setMesOrden(Number(e.target.value))}
+                className="form-select"
+              >
+                {meses.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
                   </option>
                 ))}
-            </select>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Año</label>
+              <input
+                type="number"
+                value={añoOrden}
+                onChange={(e) => setAñoOrden(Number(e.target.value))}
+              />
+            </div>
+            <div className="form-group">
+              <label>Filtrar por cliente (opcional)</label>
+              <select
+                value={clienteIdFiltro}
+                onChange={(e) => setClienteIdFiltro(e.target.value)}
+                className="form-select"
+              >
+                <option value="">— Todos los clientes —</option>
+                {clientes
+                  .filter((c) => c.activo)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre}
+                    </option>
+                  ))}
+              </select>
+            </div>
           </div>
 
-          {clienteSeleccionado && (
-            <div className="empresa-seleccionada">
-              <p>
-                <strong>Cliente:</strong> {clienteSeleccionado.nombre}
-              </p>
-              {clienteSeleccionado.contacto && (
-                <p>
-                  <strong>Contacto:</strong> {clienteSeleccionado.contacto}
-                </p>
-              )}
-              {clienteSeleccionado.telefono && (
-                <p>
-                  <strong>Teléfono:</strong> {clienteSeleccionado.telefono}
-                </p>
-              )}
-              {clienteSeleccionado.email && (
-                <p>
-                  <strong>Email:</strong> {clienteSeleccionado.email}
-                </p>
-              )}
-            </div>
-          )}
+          {/* RESUMEN DE CORTE */}
+          <div className="corte-info">
+            <span className="corte-badge">
+              ✂️ Fecha de corte: <strong>{fechaCorteDisplay}</strong>
+            </span>
+            <span className="corte-sub">
+              Ventas registradas <strong>antes</strong> de esa fecha y con
+              inicio en {etiquetaMes(mesOrden, añoOrden)} → esta orden.
+              Registradas <strong>después</strong> → orden de{" "}
+              {etiquetaMes(mesOrden + 1, añoOrden)}.
+            </span>
+          </div>
         </div>
 
-        {/* SECCIÓN PRODUCTOS */}
+        {/* ── VENTAS DE ESTA ORDEN ── */}
         <div className="orden-section">
-          <h3>📦 Productos / Servicios</h3>
+          <h3>
+            ✅ Ventas incluidas en {etiquetaMes(mesOrden, añoOrden)}
+            <span className="badge-count">{ventasActuales.length}</span>
+          </h3>
 
-          <div className="producto-form">
-            <div className="form-row">
-              <div className="form-group">
-                <label>Descripción *</label>
-                <input
-                  type="text"
-                  value={nuevoProducto.descripcion}
-                  onChange={(e) =>
-                    setNuevoProducto({
-                      ...nuevoProducto,
-                      descripcion: e.target.value,
-                    })
-                  }
-                  placeholder="Ej: Publicidad en pantalla"
-                />
-              </div>
-              <div className="form-group">
-                <label>Cantidad</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={nuevoProducto.cantidad}
-                  onChange={(e) =>
-                    setNuevoProducto({
-                      ...nuevoProducto,
-                      cantidad: parseInt(e.target.value) || 1,
-                    })
-                  }
-                />
-              </div>
-              <div className="form-group">
-                <label>Precio Unitario *</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={nuevoProducto.precioUnitario}
-                  onChange={(e) =>
-                    setNuevoProducto({
-                      ...nuevoProducto,
-                      precioUnitario: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-            <button
-              className="btn btn-secondary"
-              onClick={handleAgregarProducto}
-            >
-              ➕ Agregar Producto
-            </button>
-          </div>
-
-          {/* TABLA DE PRODUCTOS */}
-          {productos.length > 0 && (
-            <div className="productos-tabla">
-              <table>
-                <thead>
-                  <tr>
-                    <th className="desc-cell">Descripción</th>
-                    <th>Cantidad</th>
-                    <th>Precio Unitario</th>
-                    <th>Importe</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {productos.map((p) => (
-                    <tr key={p.id}>
-                      <td className="desc-cell">
-                        <input
-                          className="cell-input"
-                          value={p.descripcion}
-                          onChange={(e) =>
-                            handleEditarProducto(
-                              p.id,
-                              "descripcion",
-                              e.target.value,
-                            )
-                          }
-                        />
-                      </td>
+          {ventasActuales.length === 0 ? (
+            <p className="empty-msg">
+              No hay ventas que cumplan los criterios para este mes.
+            </p>
+          ) : (
+            <table className="ventas-tabla">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Descripción</th>
+                  <th>Cliente</th>
+                  <th>Periodo</th>
+                  <th>Registrada</th>
+                  <th className="text-right">Importe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ventasActuales.map((v) => {
+                  const cliente = clientes.find((c) => c.id === v.clienteId);
+                  return (
+                    <tr
+                      key={v.id}
+                      className={
+                        seleccionadas.has(v.id)
+                          ? "fila-activa"
+                          : "fila-inactiva"
+                      }
+                    >
                       <td>
                         <input
-                          className="cell-input"
-                          type="number"
-                          min="1"
-                          value={p.cantidad}
-                          onChange={(e) =>
-                            handleEditarProducto(
-                              p.id,
-                              "cantidad",
-                              e.target.value,
-                            )
-                          }
+                          type="checkbox"
+                          checked={seleccionadas.has(v.id)}
+                          onChange={() => toggleSeleccion(v.id)}
                         />
                       </td>
-                      <td>
-                        <input
-                          className="cell-input"
-                          type="number"
-                          min="0"
-                          value={p.precioUnitario}
-                          onChange={(e) =>
-                            handleEditarProducto(
-                              p.id,
-                              "precioUnitario",
-                              e.target.value,
-                            )
-                          }
-                        />
+                      <td>{v.vendidoA}</td>
+                      <td>{cliente?.nombre ?? "—"}</td>
+                      <td className="fecha-cell">
+                        {v.fechaInicio.toLocaleDateString("es-MX")} →{" "}
+                        {v.fechaFin.toLocaleDateString("es-MX")}
                       </td>
-                      <td className="importe">${p.importe.toFixed(2)}</td>
-                      <td>
-                        <button
-                          className="btn-remove"
-                          onClick={() => handleEliminarProducto(p.id)}
-                        >
-                          ✕
-                        </button>
+                      <td className="fecha-cell">
+                        {v.fechaRegistro.toLocaleDateString("es-MX")}
+                      </td>
+                      <td className="text-right importe">
+                        $
+                        {v.importeTotal.toLocaleString("es-MX", {
+                          minimumFractionDigits: 2,
+                        })}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* TOTALES */}
-              <div className="total-section">
-                <div className="total-row">
-                  <span className="total-label">Subtotal:</span>
-                  <span>${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="total-row">
-                  <span className="total-label">
-                    IVA ({config.ivaPercentaje}%):
-                  </span>
-                  <span>${iva.toFixed(2)}</span>
-                </div>
-                <div className="total-row">
-                  <span className="total-label">Total:</span>
-                  <span className="total-amount">${total.toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </div>
+
+        {/* ── VENTAS QUE SE VAN AL MES SIGUIENTE ── */}
+        {ventasSiguienteMes.length > 0 && (
+          <div className="orden-section seccion-advertencia">
+            <h3>
+              ⏭️ Ventas que pasan a {etiquetaMes(mesOrden + 1, añoOrden)}
+              <span className="badge-count badge-warn">
+                {ventasSiguienteMes.length}
+              </span>
+            </h3>
+            <p className="advertencia-texto">
+              Estas ventas inician en {etiquetaMes(mesOrden, añoOrden)} pero
+              fueron registradas <strong>después del {diaCorte}</strong>, por lo
+              que aparecerán en la orden de{" "}
+              <strong>{etiquetaMes(mesOrden + 1, añoOrden)}</strong> con su
+              fecha de inicio original indicada.
+            </p>
+            <table className="ventas-tabla ventas-siguiente">
+              <thead>
+                <tr>
+                  <th>Descripción</th>
+                  <th>Cliente</th>
+                  <th>Inicio real</th>
+                  <th>Registrada</th>
+                  <th className="text-right">Importe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ventasSiguienteMes.map((v) => {
+                  const cliente = clientes.find((c) => c.id === v.clienteId);
+                  return (
+                    <tr key={v.id}>
+                      <td>{v.vendidoA}</td>
+                      <td>{cliente?.nombre ?? "—"}</td>
+                      <td className="fecha-cell alerta">
+                        📌 {v.fechaInicio.toLocaleDateString("es-MX")}
+                      </td>
+                      <td className="fecha-cell">
+                        {v.fechaRegistro.toLocaleDateString("es-MX")}
+                      </td>
+                      <td className="text-right importe">
+                        $
+                        {v.importeTotal.toLocaleString("es-MX", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ── TOTALES ── */}
+        {ventasIncluidas.length > 0 && (
+          <div className="total-section">
+            <div className="total-row">
+              <span className="total-label">Subtotal:</span>
+              <span>
+                $
+                {subtotal.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="total-row">
+              <span className="total-label">
+                IVA ({config.ivaPercentaje}%):
+              </span>
+              <span>
+                ${iva.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="total-row total-final">
+              <span className="total-label">Total:</span>
+              <span className="total-amount">
+                ${total.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* ACCIONES */}
         <div className="form-actions">
           <button className="btn btn-outline" onClick={onCancelar}>
             Cancelar
           </button>
-          <button className="btn btn-primary" onClick={handleCrear}>
-            ✅ Crear Orden
+          <button
+            className="btn btn-primary"
+            onClick={handleCrear}
+            disabled={ventasIncluidas.length === 0}
+          >
+            ✅ Crear Orden — {etiquetaMes(mesOrden, añoOrden)}
           </button>
         </div>
       </div>

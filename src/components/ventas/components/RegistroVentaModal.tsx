@@ -23,6 +23,7 @@ interface RegistroVentaModalProps {
   asignaciones: AsignacionPantalla[];
   asignacionesProductos: AsignacionProductoExtra[];
   clientes: Colaborador[];
+  usuarios: Usuario[];
   usuarioActual: Usuario;
   onRegistrarVenta: (venta: RegistroVenta) => void;
   onCerrar: () => void;
@@ -31,25 +32,26 @@ interface RegistroVentaModalProps {
 
 export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   pantallas,
-  productos,
   asignaciones,
   clientes,
+  usuarios = [],
   usuarioActual,
   onRegistrarVenta,
   onCerrar,
   ventaInicial,
 }) => {
+  // ── Estados ───────────────────────────────────────────────────────────
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>(
     ventaInicial?.clienteId ?? "",
   );
   const [itemsVenta, setItemsVenta] = useState<ItemVenta[]>(
     ventaInicial?.itemsVenta ?? [],
   );
-  const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId);
-
-  const [fechaInicio, setFechaInicio] = useState<string>(
-    ventaInicial ? ventaInicial.fechaInicio.toISOString().slice(0, 10) : "",
-  );
+  const [fechaInicio, setFechaInicio] = useState<string>(() => {
+    if (!ventaInicial?.fechaInicio) return "";
+    const fecha = new Date(ventaInicial.fechaInicio); // acepta Date o string
+    return isNaN(fecha.getTime()) ? "" : fecha.toISOString().slice(0, 10);
+  });
   const [mesesRenta, setMesesRenta] = useState<number>(
     ventaInicial?.mesesRenta ?? 1,
   );
@@ -65,8 +67,16 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const [estadoVenta, setEstadoVenta] = useState<
     "Aceptado" | "Rechazado" | "Prospecto"
   >(ventaInicial?.estadoVenta ?? "Prospecto");
+  const [vendedorId, setVendedorId] = useState<string>(
+    ventaInicial?.vendedorId ?? "",
+  );
+  const [costos, setCostos] = useState<number>(ventaInicial?.costos ?? 0);
+  const [comision, setComision] = useState<number>(ventaInicial?.comision ?? 0); // ✅ NUEVO
   const [error, setError] = useState<string>("");
   const [exito, setExito] = useState<string>("");
+
+  // ── Derivados ─────────────────────────────────────────────────────────
+  const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId);
 
   const opcionesClientes = clientes
     .filter(
@@ -83,17 +93,24 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       };
     });
 
+  // ✅ rol correcto: "vendedor", no "usuario"
+  const opcionesVendedores = (usuarios ?? [])
+    .filter((u) => u.rol === "usuario")
+    .map((u) => ({ value: u.id, label: u.nombre }));
+
   const pantallasDelCliente = asignaciones.filter(
     (a) => a.clienteId === clienteSeleccionado && a.activa,
   );
   const clienteActual = clientes.find((c) => c.id === clienteSeleccionado);
   const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
-
   const pantallasActuales = pantallasSeleccionadas
     .map((id) => pantallas.find((p) => p.id === id))
-    .filter((p) => p !== undefined) as Pantalla[];
-
+    .filter(Boolean) as Pantalla[];
   const fechaFin = calcularFechaFin(fechaInicio, mesesRenta);
+  const totalVenta = precioGeneral * mesesRenta;
+  const costosTotales = costos * mesesRenta;
+  const comisionTotal = comision * mesesRenta;
+  const utilidad = totalVenta - costosTotales - comisionTotal;
 
   useEffect(() => {
     if (clienteActual && typeof clienteActual.porcentajeSocio === "number") {
@@ -112,11 +129,11 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
 
   const togglePantalla = (pantallaId: string) => {
     const yaSeleccionada = itemsVenta.some((i) => i.pantallaId === pantallaId);
-    if (yaSeleccionada) {
-      setItemsVenta((prev) => prev.filter((i) => i.pantallaId !== pantallaId));
-    } else {
-      setItemsVenta((prev) => [...prev, { pantallaId, sinDescuento: false }]);
-    }
+    setItemsVenta((prev) =>
+      yaSeleccionada
+        ? prev.filter((i) => i.pantallaId !== pantallaId)
+        : [...prev, { pantallaId, sinDescuento: false }],
+    );
   };
 
   const resetFormularioVenta = () => {
@@ -128,14 +145,17 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setPrecioGeneral(0);
     setEstadoVenta("Prospecto");
     setAplicarDescuento(false);
+    setVendedorId("");
+    setCostos(0);
+    setComision(0); // ✅ reset
     setError("");
     setExito("");
   };
 
+  // ── Registrar ─────────────────────────────────────────────────────────
   const handleRegistrarVenta = () => {
     setError("");
     setExito("");
-
     if (!clienteSeleccionado) {
       setError("Selecciona un cliente");
       return;
@@ -181,6 +201,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       activo: true,
       usuarioRegistroId: usuarioActual.id,
       estadoVenta,
+      vendedorId: vendedorId,
+      costos: costosTotales,
+      comision: comisionTotal,
     };
 
     onRegistrarVenta(nuevaVenta);
@@ -190,6 +213,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     onCerrar();
   };
 
+  // ── JSX ───────────────────────────────────────────────────────────────
   return (
     <div className="modal-overlay" onClick={onCerrar}>
       <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
@@ -207,7 +231,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
           <SelectField
             label="Colaborador *"
             value={clienteSeleccionado}
-            onChange={(v:any) => {
+            onChange={(v: any) => {
               setClienteSeleccionado(v);
               setItemsVenta([]);
               const colaborador = clientes.find((c) => c.id === v);
@@ -226,18 +250,24 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 pantallas={pantallas}
                 onToggle={togglePantalla}
               />
-
               <InputField
                 label="Vendido a (Nombre del receptor) *"
                 value={vendidoA}
                 onChange={setVendidoA}
                 placeholder="Ej: ABC Company, Juan Pérez, Empresa XYZ"
               />
-
+              <SelectField
+                label="Vendedor"
+                value={vendedorId}
+                onChange={(v: any) => setVendedorId(v)}
+                placeholder="— Sin asignar —"
+                className="select-lg"
+                options={opcionesVendedores}
+              />
               <SelectField
                 label="Estado de la venta *"
                 value={estadoVenta}
-                onChange={(v:any) =>
+                onChange={(v: any) =>
                   setEstadoVenta(v as "Aceptado" | "Rechazado" | "Prospecto")
                 }
                 className="select-lg"
@@ -247,7 +277,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                   { value: "Rechazado", label: "Rechazado" },
                 ]}
               />
-
               <div className="form-row">
                 <InputField
                   label="Fecha de Inicio *"
@@ -258,33 +287,81 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 <InputField
                   label="Duración (meses) *"
                   value={mesesRenta || ""}
-                  onChange={(v:any) =>
+                  onChange={(v: any) =>
                     setMesesRenta(v === "" ? 0 : parseInt(v) || 0)
                   }
                   type="number"
                   min={1}
                 />
               </div>
-
               <InputField
                 label="Precio Por Mes *"
                 value={precioGeneral || ""}
-                onChange={(v:any) =>
-                  setPrecioGeneral(v === "" ? 0 : parseInt(v) || 0)
+                onChange={(v: any) =>
+                  setPrecioGeneral(v === "" ? 0 : parseFloat(v) || 0)
                 }
                 type="number"
                 min={0}
                 step={0.01}
                 placeholder="0.00"
               />
-
-              {tieneComisionPorcentaje && (
-                <>
-                  {/* bloque comisión, igual que el tuyo */}
-                  {/* ... si quieres luego lo sacamos a otro componente */}
-                </>
+              {/* ── COMISIÓN ✅ ── */}
+              <InputField
+                label="Comisión (por mes)"
+                value={comision || ""}
+                onChange={(v: any) =>
+                  setComision(v === "" ? 0 : parseFloat(v) || 0)
+                }
+                type="number"
+                min={0}
+                step={0.01}
+                placeholder="0.00"
+              />
+              {comision > 0 && mesesRenta > 1 && (
+                <small className="campo-hint hint-neutro">
+                  Total comisión ({mesesRenta} meses): $
+                  {comisionTotal.toLocaleString("es-MX", {
+                    minimumFractionDigits: 2,
+                  })}
+                </small>
               )}
-
+              {/* ── COSTOS ── */}
+              <div className="form-group">
+                <label>Costos de la venta (por mes)</label>
+                <div className="input-prefix">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={costos === 0 ? "" : costos}
+                    onChange={(e) => setCostos(parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="form-input"
+                  />
+                </div>
+                {/* Total costos por meses */}
+                {costos > 0 && mesesRenta > 1 && (
+                  <small className="campo-hint hint-neutro">
+                    Total costos ({mesesRenta} meses): $
+                    {costosTotales.toLocaleString("es-MX", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </small>
+                )}
+                {/* Utilidad estimada */}
+                {(costos > 0 || comision > 0) && totalVenta > 0 && (
+                  <small
+                    className={`campo-hint ${utilidad < 0 ? "hint-negativo" : "hint-positivo"}`}
+                  >
+                    {utilidad >= 0
+                      ? `✅ Utilidad estimada (${mesesRenta} meses): $${utilidad.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
+                      : `⚠️ Pérdida estimada (${mesesRenta} meses): $${Math.abs(utilidad).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`}
+                  </small>
+                )}
+              </div>
+              {tieneComisionPorcentaje && (
+                <>{/* bloque comisión porcentaje socio */}</>
+              )}
               {fechaInicio &&
                 mesesRenta > 0 &&
                 pantallasSeleccionadas.length > 0 && (

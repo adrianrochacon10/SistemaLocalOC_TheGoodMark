@@ -86,6 +86,9 @@ export interface RegistroVenta {
   usuarioRegistroId: string;
   estadoVenta?: "Aceptado" | "Rechazado" | "Prospecto";
   tipoPagoId?: string;
+  vendedorId?: string;
+  costos?: number;
+  comision?: number;
 }
 
 // ✅ Concepto para OrdenCompleja
@@ -124,6 +127,7 @@ export interface OrdenDeCompra {
   // Modelo nuevo (OrdenesMensualesNuevo)
   mes?: number;
   año?: number;
+  fechaCorte?: Date;
   registrosVenta?: RegistroVenta[];
   subtotal?: number;
   ivaPercentaje?: number;

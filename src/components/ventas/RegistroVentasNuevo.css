@@ -578,6 +578,145 @@
   border-left: 3px solid #ff9800;
 }
 
+/* ═══════════════════════ KPI CARDS ═══════════════════════ */
+.ventas-graficas {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+.kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+.kpi-icon {
+  font-size: 1.8rem;
+}
+.kpi-label {
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin: 0;
+}
+.kpi-valor {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.kpi-ingreso .kpi-valor {
+  color: #1e3a5f;
+}
+.kpi-utilidad .kpi-valor {
+  color: #16a34a;
+}
+.kpi-costos .kpi-valor {
+  color: #dc2626;
+}
+.kpi-comision .kpi-valor {
+  color: #d97706;
+}
+
+/* ═══════════════════════ GRÁFICA CARDS ═══════════════════════ */
+.grafica-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+.grafica-card h4 {
+  margin: 0 0 16px;
+  font-size: 0.95rem;
+  color: #374151;
+}
+
+/* Barras apiladas */
+.grafica-barras {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 0 8px;
+}
+.barra-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  gap: 6px;
+}
+.barra-stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  border-radius: 6px 6px 0 0;
+  overflow: hidden;
+}
+.seg-utilidad {
+  background: #20c997;
+  transition: height 0.4s ease;
+}
+.seg-comision {
+  background: #fd7e14;
+  transition: height 0.4s ease;
+}
+.seg-costos {
+  background: #e74c3c;
+  transition: height 0.4s ease;
+}
+.barra-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* Línea SVG */
+.grafica-linea-wrap {
+  overflow-x: auto;
+}
+.grafica-svg {
+  width: 100%;
+  min-width: 400px;
+}
+
+/* Leyenda compartida */
+.grafica-leyenda {
+  display: flex;
+  gap: 20px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.leyenda-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: #374151;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dot-utilidad {
+  background: #20c997;
+}
+.dot-comision {
+  background: #fd7e14;
+}
+.dot-costos {
+  background: #e74c3c;
+}
+
 /* Botón registrar venta flotante */
 .btn.btn-flotante {
   background: linear-gradient(90deg, #1461a1 60%, #0e0e47 100%);
@@ -660,4 +799,179 @@
   color: #222;
   font-size: 1rem;
   margin: 0 8px;
+}
+
+/* ═══════════════════════ VENTA DETALLE MODAL ═══════════════════════ */
+.vd-overlay {
+  align-items: center;
+  justify-content: center;
+}
+
+.vd-container {
+  background: #fff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.22);
+  animation: slideUp 0.2s ease;
+  overflow: hidden;
+}
+
+/* Header */
+.vd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+.vd-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.vd-titulo {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #1e3a5f;
+  font-weight: 700;
+}
+
+/* Badges estado */
+.vd-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-aceptado {
+  background: #dcfce7;
+  color: #16a34a;
+}
+.badge-rechazado {
+  background: #fee2e2;
+  color: #dc2626;
+}
+.badge-prospecto {
+  background: #fef9c3;
+  color: #92400e;
+}
+
+/* Body */
+.vd-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.vd-section {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f3f4f6;
+}
+.vd-section:last-child {
+  border-bottom: none;
+}
+.vd-section-title {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Grid de datos */
+.vd-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.vd-dato {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vd-dato-label {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+.vd-dato-valor {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Pantallas chips */
+.vd-pantallas-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.vd-pantalla-chip {
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+.vd-empty {
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
+/* Financiero */
+.vd-financiero {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vd-fin-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: #374151;
+  padding: 4px 0;
+}
+.vd-fin-negativo {
+  color: #dc2626;
+}
+.vd-fin-total {
+  font-size: 1rem;
+  font-weight: 700;
+  padding-top: 10px;
+  border-top: 2px solid #e5e7eb;
+  margin-top: 4px;
+}
+.vd-fin-ganancia {
+  color: #16a34a;
+}
+.vd-fin-perdida {
+  color: #dc2626;
+}
+
+/* Footer */
+.vd-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+/* Card clickeable */
+.cursor-pointer {
+  cursor: pointer;
+}
+.venta-card.cursor-pointer:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
