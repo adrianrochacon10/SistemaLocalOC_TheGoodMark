@@ -61,8 +61,7 @@ Authorization: Bearer <TU_ACCESS_TOKEN>
 Content-Type: application/json
 
 {
-  "nombre": "Pantalla Centro",
-  "direccion": "Av. Principal 123"
+  "nombre": "Pantalla Centro"
 }
 ```
 
@@ -79,8 +78,7 @@ Authorization: Bearer <TU_ACCESS_TOKEN>
 Content-Type: application/json
 
 {
-  "nombre": "Pantalla Centro Actualizada",
-  "direccion": "Av. Principal 456"
+  "nombre": "Pantalla Centro Actualizada"
 }
 ```
 
@@ -177,13 +175,30 @@ Content-Type: application/json
 
 ---
 
-## 8. Ventas
+## 8. Ventas (unidas con Ordenes del mes)
 
-### Listar
+Cada venta puede pertenecer a una **orden del mes** (`orden_mes_id`). Al generar una orden (POST `/api/ordenes/generar`), las ventas del mes quedan enlazadas a esa orden.
+
+### Listar todas
 ```http
 GET http://localhost:4000/api/ventas
 Authorization: Bearer <TU_ACCESS_TOKEN>
 ```
+Cada ítem incluye `orden_mes: { id, mes, anio }` si la venta está asignada a una orden del mes.
+
+### Listar ventas por mes (desde Ventas)
+```http
+GET http://localhost:4000/api/ventas?mes=3&anio=2025
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+Filtra por ventas cuya `fecha_inicio`/`fecha_fin` caen en ese mes.
+
+### Listar ventas de una orden del mes
+```http
+GET http://localhost:4000/api/ventas?orden_mes_id=<ORDEN_MES_UUID>
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+Devuelve solo las ventas asignadas a esa orden (la misma lista que al generar la orden).
 
 ### Crear
 ```http
@@ -199,7 +214,8 @@ Content-Type: application/json
   "fecha_fin": "2025-03-31",
   "duracion_meses": 1,
   "cantidad": 2,
-  "producto_id": "<PRODUCTO_UUID>"
+  "producto_id": "<PRODUCTO_UUID>",
+  "comisiones": 250.00
 }
 ```
 O con precio manual (sin producto):
@@ -212,7 +228,8 @@ O con precio manual (sin producto):
   "fecha_fin": "2025-03-31",
   "duracion_meses": 1,
   "cantidad": 1,
-  "precio_unitario_manual": 500
+  "precio_unitario_manual": 500,
+  "comisiones": 250.00
 }
 ```
 La respuesta incluye `precio_base`, `precio_total`, `tipo_pago_aplicado`, `fuente_precio`.
@@ -280,16 +297,18 @@ Authorization: Bearer <TU_ACCESS_TOKEN>
 
 ---
 
-## 10. Órdenes / Ordenes mes
+## 10. Órdenes del mes (datos guardados en Ventas)
 
-### Listar órdenes
+Las órdenes del mes agrupan ventas por mes/año. Al **generar** una orden, se crea/actualiza el registro en `ordenes_mes` y se asigna `orden_mes_id` a todas las ventas de ese mes (para verlas desde **Ventas** con `?orden_mes_id=` o `?mes=&anio=`).
+
+### Listar órdenes (resumen mes/año + ventas embebidas)
 ```http
 GET http://localhost:4000/api/ordenes
 Authorization: Bearer <TU_ACCESS_TOKEN>
 ```
 Opcional: `?mes=3&anio=2025`
 
-### Ventas por mes
+### Ventas por mes (mismo filtro que GET /api/ventas?mes=&anio=)
 ```http
 GET http://localhost:4000/api/ordenes/ventas?mes=3&anio=2025
 Authorization: Bearer <TU_ACCESS_TOKEN>
@@ -306,6 +325,7 @@ Content-Type: application/json
   "anio": 2025
 }
 ```
+Crea o actualiza la orden para ese mes, guarda los IDs de ventas en `ordenes_mes.ventas_ids` y asigna `ventas.orden_mes_id` a cada venta del mes. Respuesta: `{ orden, ventas_ids }`.
 
 ---
 
@@ -353,7 +373,7 @@ No requiere auth. Envía un correo de prueba (Resend/SMTP configurado en `.env`)
 | GET | `/api/tipo-pago` | Sí | Lista tipos de pago |
 | GET/POST | `/api/pantallas` | Sí | CRUD pantallas |
 | GET/POST/PATCH | `/api/clientes` | Sí | CRUD; vendedor usa código para PATCH |
-| GET/POST/PATCH | `/api/ventas` | Sí | Crear con cliente_id, pantalla_id, fechas, etc. |
+| GET/POST/PATCH | `/api/ventas` | Sí | Listar: opcional ?mes=&anio= o ?orden_mes_id=; crear con cliente_id, pantalla_id, fechas |
 | POST | `/api/ventas/:id/renovar` | Sí Admin | Renovar venta |
 | GET/POST | `/api/productos` | Sí; POST admin | Lista y crear producto |
 | GET/POST | `/api/porcentajes` | Sí; POST admin | Lista y crear porcentaje |

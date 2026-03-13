@@ -109,7 +109,7 @@ ${venta.fecha_fin ? `Fecha fin: ${venta.fecha_fin}` : ""}
     const html = `
 <p><strong>Venta Exitosa</strong></p>
 <ul>
-  <li><strong>Cliente:</strong> ${nombreCliente}</li>
+  <li><strong>Colaborador:</strong> ${nombreCliente}</li>
   <li><strong>Monto:</strong> ${montoFormato}</li>
   ${venta.estado ? `<li><strong>Estado:</strong> ${venta.estado}</li>` : ""}
   ${venta.fecha_inicio ? `<li><strong>Fecha inicio:</strong> ${venta.fecha_inicio}</li>` : ""}

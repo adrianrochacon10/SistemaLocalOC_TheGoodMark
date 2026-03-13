@@ -2,13 +2,22 @@ import { supabase } from "../config/supabase.js";
 import { sendEmail } from "../lib/email.js";
 
 const SELECT_VENTA =
-  "*, cliente:clientes(id, nombre, email, telefono), pantalla:pantallas(id, nombre, direccion), producto:productos(id, nombre, precio), tipo_pago(id, nombre)";
+  "*, cliente:clientes(id, nombre, email, telefono), pantalla:pantallas(id, nombre), producto:productos(id, nombre, precio), tipo_pago(id, nombre), orden_mes:ordenes_mes(id, mes, anio)";
 
-export async function listar() {
-  const { data, error } = await supabase
-    .from("ventas")
-    .select(SELECT_VENTA)
-    .order("created_at", { ascending: false });
+export async function listar(query = {}) {
+  let q = supabase.from("ventas").select(SELECT_VENTA).order("created_at", { ascending: false });
+  const { mes, anio, orden_mes_id } = query;
+  if (orden_mes_id) q = q.eq("orden_mes_id", orden_mes_id);
+  if (mes != null && anio != null) {
+    const m = Number(mes);
+    const a = Number(anio);
+    if (m >= 1 && m <= 12 && a) {
+      const inicio = `${a}-${String(m).padStart(2, "0")}-01`;
+      const finStr = new Date(a, m, 0).toISOString().slice(0, 10);
+      q = q.gte("fecha_inicio", inicio).lte("fecha_fin", finStr);
+    }
+  }
+  const { data, error } = await q;
   if (error) throw new Error(error.message);
   return data ?? [];
 }
@@ -90,9 +99,12 @@ export async function crear(body, vendedorId) {
     fecha_fin: body.fecha_fin,
     duracion_meses: Number(body.duracion_meses),
     vendedor_id: vendedorId,
-    modo_venta: body.modo_venta ?? null,
     tipo_pago_id: tipoPagoId,
     renovable: body.renovable ?? false,
+    comisiones:
+      body.comisiones != null && body.comisiones !== ""
+        ? Math.max(0, Number(body.comisiones) || 0)
+        : null,
   };
 
   const { data, error } = await supabase
@@ -162,7 +174,6 @@ export async function actualizar(id, body) {
   if (body.fecha_inicio !== undefined) payload.fecha_inicio = body.fecha_inicio;
   if (body.fecha_fin !== undefined) payload.fecha_fin = body.fecha_fin;
   if (body.duracion_meses !== undefined) payload.duracion_meses = body.duracion_meses;
-  if (body.modo_venta !== undefined) payload.modo_venta = body.modo_venta;
   if (body.tipo_pago_id !== undefined) payload.tipo_pago_id = body.tipo_pago_id;
   if (body.renovable !== undefined) payload.renovable = body.renovable;
   if (body.producto_id !== undefined) payload.producto_id = body.producto_id || null;
@@ -170,6 +181,11 @@ export async function actualizar(id, body) {
   if (body.precio_unitario_manual !== undefined)
     payload.precio_unitario_manual = body.precio_unitario_manual != null ? Number(body.precio_unitario_manual) : null;
   if (body.precio_total !== undefined) payload.precio_total = Math.max(0, Number(body.precio_total) || 0);
+  if (body.comisiones !== undefined)
+    payload.comisiones =
+      body.comisiones != null && body.comisiones !== ""
+        ? Math.max(0, Number(body.comisiones) || 0)
+        : null;
 
   const { data, error } = await supabase.from("ventas").update(payload).eq("id", id).select().single();
   if (error) throw new Error(error.message);
@@ -199,7 +215,6 @@ export async function renovar(id, body) {
       fecha_fin: nuevaFin,
       duracion_meses: duracion,
       vendedor_id: venta.vendedor_id,
-      modo_venta: venta.modo_venta,
       tipo_pago_id: venta.tipo_pago_id,
       renovable: false,
     })

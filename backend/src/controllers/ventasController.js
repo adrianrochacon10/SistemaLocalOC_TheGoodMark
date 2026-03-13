@@ -1,9 +1,9 @@
 import * as ventasService from "../services/ventasService.js";
 import { validarYConsumirCodigo } from "../services/codigosService.js";
 
-export async function listar(_req, res) {
+export async function listar(req, res) {
   try {
-    const data = await ventasService.listar();
+    const data = await ventasService.listar(req.query);
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });

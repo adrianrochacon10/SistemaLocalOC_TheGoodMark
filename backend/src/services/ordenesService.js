@@ -1,7 +1,7 @@
 import { supabase } from "../config/supabase.js";
 
 const SELECT_VENTAS =
-  "*, colaborador:colaboradores(id, nombre, email, telefono, tipo_pdf), pantalla:pantallas(id, nombre, direccion), producto:productos(id, nombre, precio), vendedor:perfiles(id, nombre, email), tipo_pago(id, nombre)";
+  "*, cliente:clientes(id, nombre, email, telefono), pantalla:pantallas(id, nombre), producto:productos(id, nombre, precio), vendedor:perfiles(id, nombre, email), tipo_pago(id, nombre), orden_mes:ordenes_mes(id, mes, anio)";
 
 export async function listar(mes, anio) {
   let q = supabase.from("ordenes_mes").select("*");
@@ -13,14 +13,10 @@ export async function listar(mes, anio) {
 
   const ordenesConVentas = await Promise.all(
     ordenes.map(async (orden) => {
-      let ids = orden.ventas_ids;
-      if (typeof ids === "string") try { ids = JSON.parse(ids); } catch { ids = []; }
-      ids = Array.isArray(ids) ? ids.filter(Boolean) : [];
-      if (ids.length === 0) return { ...orden, ventas: [] };
       const { data: ventas } = await supabase
         .from("ventas")
         .select(SELECT_VENTAS)
-        .in("id", ids)
+        .eq("orden_mes_id", orden.id)
         .order("fecha_inicio");
       return { ...orden, ventas: ventas ?? [] };
     })
@@ -53,20 +49,22 @@ export async function generarOrden(mes, anio, userId) {
 
   const { data: ventas, error: errVentas } = await supabase
     .from("ventas")
-    .select("id, colaborador_id, colaborador:colaboradores(id, nombre, tipo_pdf)")
+    .select("id")
     .gte("fecha_inicio", inicio)
     .lte("fecha_fin", finStr);
   if (errVentas) throw new Error(errVentas.message);
   const ventasIds = (ventas ?? []).map((v) => v.id);
-  const porTipoPdf = {
-    1: (ventas ?? []).filter((v) => v.colaborador?.tipo_pdf === 1),
-    2: (ventas ?? []).filter((v) => v.colaborador?.tipo_pdf === 2),
-  };
   const { data: orden, error: errOrden } = await supabase
     .from("ordenes_mes")
-    .upsert({ mes: m, anio: a, ventas_ids: ventasIds, generado_por: userId }, { onConflict: "mes,anio" })
+    .upsert({ mes: m, anio: a, generado_por: userId }, { onConflict: "mes,anio" })
     .select()
     .single();
   if (errOrden) throw new Error(errOrden.message);
-  return { orden, ventas_ids: ventasIds, por_tipo_pdf: porTipoPdf };
+  if (orden?.id && ventasIds.length > 0) {
+    await supabase
+      .from("ventas")
+      .update({ orden_mes_id: orden.id, orden_mes_fecha: inicio })
+      .in("id", ventasIds);
+  }
+  return { orden, ventas_ids: ventasIds };
 }

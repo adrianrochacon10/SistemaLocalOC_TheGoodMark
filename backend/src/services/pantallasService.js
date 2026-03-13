@@ -11,7 +11,6 @@ export async function crear(payload, userId) {
     .from("pantallas")
     .insert({
       nombre: payload.nombre.trim(),
-      direccion: payload.direccion ?? null,
       creado_por: userId,
     })
     .select()
@@ -23,7 +22,9 @@ export async function crear(payload, userId) {
 export async function actualizar(id, payload) {
   const { data, error } = await supabase
     .from("pantallas")
-    .update(payload)
+    .update({
+      nombre: payload.nombre,
+    })
     .eq("id", id)
     .select()
     .single();

@@ -1,6 +1,6 @@
 import { supabase } from "../config/supabase.js";
 
-const SELECT_CLIENTE = "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre, direccion)";
+const SELECT_CLIENTE = "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre)";
 
 export async function listar() {
   const { data, error } = await supabase
