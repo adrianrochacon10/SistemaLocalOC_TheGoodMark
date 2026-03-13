@@ -13,6 +13,7 @@ import codigosRoutes from "./routes/codigos.js";
 import productosRoutes from "./routes/productos.js";
 import porcentajesRoutes from "./routes/porcentajes.js";
 import diagnosticoRoutes from "./routes/diagnostico.js";
+import { swaggerUi, specs } from "./swagger.js";
 
 const PORT = Number(process.env.PORT) || 4000;
 const app = express();
@@ -23,6 +24,9 @@ app.use(express.json());
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, message: "Backend The Good Mark activo" });
 });
+
+// Documentación Swagger
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/tipo-pago", tipoPagoRoutes);
@@ -39,4 +43,5 @@ app.use("/api/diagnostico", diagnosticoRoutes);
 
 app.listen(PORT, () => {
   console.log("The Good Mark (BACKEND) en http://localhost:" + PORT);
+  console.log("Swagger UI en http://localhost:" + PORT + "/api-docs");
 });
