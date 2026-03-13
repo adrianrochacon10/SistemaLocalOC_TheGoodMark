@@ -12,6 +12,7 @@ import {
 import "./RegistroVentasNuevo.css";
 import { RegistroVentasLista } from "./components/RegistroVentaListas";
 import { RegistroVentaModal } from "./components/RegistroVentaModal";
+import { VentasGraficas } from "./components/VentaGrafica";
 
 interface RegistroVentasNuevoProps {
   pantallas: Pantalla[];
@@ -20,6 +21,7 @@ interface RegistroVentasNuevoProps {
   asignacionProductos: AsignacionProductoExtra[];
   clientes: Colaborador[];
   ventasRegistradas: RegistroVenta[];
+  usuarios: Usuario[]; // ← era Usuario (sin [])
   usuarioActual: Usuario;
   onRegistrarVenta: (venta: RegistroVenta) => void;
   onEliminarVenta: (ventaId: string) => void;
@@ -31,6 +33,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   asignaciones,
   asignacionProductos,
   clientes,
+  usuarios,
   productos,
   ventasRegistradas,
   usuarioActual,
@@ -61,6 +64,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
         pantallas={pantallas}
         asignaciones={asignaciones}
         clientes={clientes}
+        usuarios={usuarios}
         ventasRegistradas={ventasRegistradas}
         onEliminarVenta={onEliminarVenta}
         onNuevaVenta={handleNuevaVenta}
@@ -69,6 +73,8 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
           setMostrarModalVenta(true);
         }}
       />
+
+      <VentasGraficas ventasRegistradas={ventasRegistradas} />
 
       {mostrarModalVenta && (
         <RegistroVentaModal
@@ -81,6 +87,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
           onRegistrarVenta={onRegistrarVenta}
           onCerrar={handleCerrarModal}
           ventaInicial={ventaEditando}
+          usuarios={usuarios}
         />
       )}
     </div>

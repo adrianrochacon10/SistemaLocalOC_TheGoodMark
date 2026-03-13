@@ -9,7 +9,7 @@ const etiquetaTipoComision: Record<TipoComision, string> = {
   consideracion: "Consideración",
   precio_fijo: "Precio fijo",
 };
-
+  
 interface Props {
   colaborador: Colaborador;
   pantallas: Pantalla[];
@@ -19,7 +19,11 @@ interface Props {
 }
 
 export const ColaboradorCard: React.FC<Props> = ({
-  colaborador, pantallas, productos, onEditar, onEliminar,
+  colaborador,
+  pantallas,
+  productos,
+  onEditar,
+  onEliminar,
 }) => (
   <div className="colaborador-card">
     <div className="colaborador-header">
@@ -29,15 +33,29 @@ export const ColaboradorCard: React.FC<Props> = ({
       </span>
     </div>
 
-    {colaborador.alias    && <p><strong>Alias:</strong> {colaborador.alias}</p>}
-    {colaborador.telefono && <p><strong>Teléfono:</strong> {colaborador.telefono}</p>}
-    {colaborador.email    && <p><strong>Email:</strong> {colaborador.email}</p>}
+    {colaborador.alias && (
+      <p>
+        <strong>Alias:</strong> {colaborador.alias}
+      </p>
+    )}
+    {colaborador.telefono && (
+      <p>
+        <strong>Teléfono:</strong> {colaborador.telefono}
+      </p>
+    )}
+    {colaborador.email && (
+      <p>
+        <strong>Email:</strong> {colaborador.email}
+      </p>
+    )}
     {colaborador.tipoComision && (
       <p>
         <strong>Comisión:</strong>{" "}
         {etiquetaTipoComision[colaborador.tipoComision]}
-        {colaborador.tipoComision === "porcentaje" && colaborador.porcentajeSocio !== undefined
-          ? ` — ${colaborador.porcentajeSocio}%` : ""}
+        {colaborador.tipoComision === "porcentaje" &&
+        colaborador.porcentajeSocio !== undefined
+          ? ` — ${colaborador.porcentajeSocio}%`
+          : ""}
       </p>
     )}
 
@@ -45,10 +63,12 @@ export const ColaboradorCard: React.FC<Props> = ({
       <div className="pantallas-asociadas">
         <h5>Pantallas Asociadas</h5>
         <ul className="pantallas-list">
-          {pantallas.map(p => (
+          {pantallas.map((p) => (
             <li key={p.id}>
               <span className="pantalla-nombre">{p.nombre}</span>
-              {p.ubicacion && <span className="pantalla-ubicacion">{p.ubicacion}</span>}
+              {p.ubicacion && (
+                <span className="pantalla-ubicacion">{p.ubicacion}</span>
+              )}
             </li>
           ))}
         </ul>
@@ -59,11 +79,12 @@ export const ColaboradorCard: React.FC<Props> = ({
       <div className="pantallas-asociadas">
         <h5>Otros Productos</h5>
         <ul className="pantallas-list">
-          {productos.map(p => (
+          {productos.map((p) => (
             <li key={p.id}>
               <span className="pantalla-nombre">{p.nombre}</span>
               <span className="pantalla-ubicacion">
-                ${p.precio.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                $
+                {p.precio.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
               </span>
             </li>
           ))}
@@ -72,8 +93,18 @@ export const ColaboradorCard: React.FC<Props> = ({
     )}
 
     <div className="colaborador-acciones">
-      <button className="btn btn-accion btn-editar" onClick={() => onEditar(colaborador)}>✏️ Editar</button>
-      <button className="btn btn-accion btn-eliminar" onClick={() => onEliminar(colaborador.id)}>🗑️ Eliminar</button>
+      <button
+        className="btn btn-accion btn-editar"
+        onClick={() => onEditar(colaborador)}
+      >
+        ✏️ Editar
+      </button>
+      <button
+        className="btn btn-accion btn-eliminar"
+        onClick={() => onEliminar(colaborador.id)}
+      >
+        🗑️ Eliminar
+      </button>
     </div>
   </div>
 );

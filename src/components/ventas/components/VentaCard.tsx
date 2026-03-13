@@ -1,3 +1,4 @@
+import React from "react";
 import { Colaborador, Pantalla, RegistroVenta } from "../../../types";
 import { colorPorEstado } from "../../../utils/colores";
 import { formatearFecha } from "../../../utils/formateoFecha";
@@ -9,6 +10,7 @@ interface VentaCardProps {
   pantallas: Pantalla[];
   onEditar: (venta: RegistroVenta) => void;
   onEliminar: (id: string) => void;
+  onClick?: () => void;
 }
 
 export const VentaCard: React.FC<VentaCardProps> = ({
@@ -17,6 +19,7 @@ export const VentaCard: React.FC<VentaCardProps> = ({
   pantallas,
   onEditar,
   onEliminar,
+  onClick,
 }) => {
   const cliente = clientes.find((c) => c.id === venta.clienteId);
   const pantallasNombres = venta.pantallasIds
@@ -30,13 +33,24 @@ export const VentaCard: React.FC<VentaCardProps> = ({
   return (
     <div
       key={venta.id}
-      className="venta-item venta-reducida"
-      // En el div principal de la card agrega paddingRight
+      className="venta-item venta-reducida cursor-pointer"
+      onClick={onClick} // ← abre el detalle
       style={{
         borderLeft: `10px solid ${colorCliente}`,
         borderRadius: "8px",
         position: "relative",
-        paddingRight: "90px", // ← espacio para los botones
+        paddingRight: "90px",
+        transition: "box-shadow .18s ease, transform .18s ease",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.boxShadow =
+          "0 4px 16px rgba(0,0,0,.12)";
+        (e.currentTarget as HTMLDivElement).style.transform =
+          "translateY(-2px)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.boxShadow = "";
+        (e.currentTarget as HTMLDivElement).style.transform = "";
       }}
     >
       {/* Botones acción */}
@@ -50,7 +64,8 @@ export const VentaCard: React.FC<VentaCardProps> = ({
         }}
       >
         <button
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation(); // ← evita abrir el detalle
             onEditar(venta);
           }}
           title="Editar"
@@ -68,7 +83,8 @@ export const VentaCard: React.FC<VentaCardProps> = ({
           ✏️
         </button>
         <button
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation(); // ← evita abrir el detalle
             if (confirm("¿Eliminar esta venta?")) onEliminar(venta.id);
           }}
           title="Eliminar"
@@ -87,7 +103,7 @@ export const VentaCard: React.FC<VentaCardProps> = ({
         </button>
       </div>
 
-      {/* Nombre cliente destacado */}
+      {/* Nombre cliente */}
       <div
         style={{
           display: "flex",
@@ -110,13 +126,7 @@ export const VentaCard: React.FC<VentaCardProps> = ({
         >
           {cliente?.nombre}
         </span>
-        <span
-          style={{
-            fontWeight: 600,
-            color: "#334155",
-            fontSize: "0.9em",
-          }}
-        >
+        <span style={{ fontWeight: 600, color: "#334155", fontSize: "0.9em" }}>
           {pantallasNombres}
         </span>
       </div>

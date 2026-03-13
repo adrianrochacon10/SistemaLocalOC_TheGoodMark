@@ -5,15 +5,18 @@ import {
   Pantalla,
   AsignacionPantalla,
   Colaborador,
+  Usuario,
 } from "../../../types";
 import { FiltrosVentas } from "./filtrosVentas";
 import { EstadisticasVentas } from "./EstadisticasVenta";
 import { VentaCard } from "./VentaCard";
+import { VentaDetalleModal } from "./VentaDetalleModal"; // ← nuevo
 
 interface RegistroVentasListaProps {
   pantallas: Pantalla[];
   asignaciones: AsignacionPantalla[];
   clientes: Colaborador[];
+  usuarios: Usuario[]; // ← nuevo
   ventasRegistradas: RegistroVenta[];
   onEliminarVenta: (ventaId: string) => void;
   onNuevaVenta: () => void;
@@ -24,6 +27,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   pantallas,
   asignaciones,
   clientes,
+  usuarios = [], // ← nuevo
   ventasRegistradas,
   onEliminarVenta,
   onNuevaVenta,
@@ -33,6 +37,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   const [filtroEstado, setFiltroEstado] = useState<string>("Todos");
   const [filtroCliente, setFiltroCliente] = useState<string>("Todos");
   const [paginaActual, setPaginaActual] = useState(1);
+  const [ventaDetalle, setVentaDetalle] = useState<RegistroVenta | null>(null); // ← nuevo
 
   const ventasPorPagina = 20;
 
@@ -102,10 +107,12 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
             pantallas={pantallas}
             onEditar={onEditarVenta}
             onEliminar={onEliminarVenta}
+            onClick={() => setVentaDetalle(venta)} // ← nuevo
           />
         ))}
       </div>
 
+      {/* Paginación */}
       <div className="paginacion-ventas">
         <button
           disabled={paginaActual === 1}
@@ -123,6 +130,21 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
           ▶
         </button>
       </div>
+
+      {/* Modal de detalle ← nuevo */}
+      {ventaDetalle && (
+        <VentaDetalleModal
+          venta={ventaDetalle}
+          clientes={clientes}
+          pantallas={pantallas}
+          usuarios={usuarios}
+          onCerrar={() => setVentaDetalle(null)}
+          onEditar={(v) => {
+            onEditarVenta(v);
+            setVentaDetalle(null);
+          }}
+        />
+      )}
     </>
   );
 };

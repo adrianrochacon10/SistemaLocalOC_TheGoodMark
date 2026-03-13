@@ -8,7 +8,7 @@ import {
   Usuario,
 } from "../../types";
 import "./RegistroVentas.css";
-import { RegistroVentaForm } from "./components/RegistroVentaForm";
+// import { RegistroVentaForm } from "./components/RegistroVentaForm";
 import { RegistroVentasStatsYLista } from "./components/RegistrosVentasStatYListas";
 
 interface RegistroVentasProps {
@@ -21,23 +21,24 @@ interface RegistroVentasProps {
 }
 
 export const RegistroVentas: React.FC<RegistroVentasProps> = ({
-  pantallas,
-  asignaciones,
+  // pantallas,
+  // asignaciones,
   clientes,
   ventasRegistradas,
-  usuarioActual,
-  onRegistrarVenta,
+  // usuarioActual,
+  // onRegistrarVenta,
 }) => {
   return (
     <div className="registro-ventas">
       <div className="registro-container">
-        <RegistroVentaForm
+        {/* <RegistroVentaForm
           pantallas={pantallas}
           asignaciones={asignaciones}
           clientes={clientes}
           usuarioActual={usuarioActual}
           onRegistrarVenta={onRegistrarVenta}
-        />
+          usuarios={}
+        /> */}
 
         <RegistroVentasStatsYLista
           clientes={clientes}
