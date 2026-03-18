@@ -150,8 +150,22 @@ export const VentaCard: React.FC<VentaCardProps> = ({
             fontSize: "1em",
           }}
         >
-          {formatearMoneda(venta.precioTotal ?? venta.importeTotal ?? 0)}
+          {formatearMoneda(venta.precioGeneral ?? venta.precioTotal ?? 0)}
         </span>
+
+        {/* ← Tachado del precio original si hay descuento */}
+        {venta.importeTotal !== venta.precioTotal && venta.precioTotal && (
+          <span
+            style={{
+              textDecoration: "line-through",
+              color: "#9ca3af",
+              fontSize: "0.82em",
+            }}
+          >
+            {formatearMoneda(venta.precioTotal)}
+          </span>
+        )}
+
         <span
           style={{
             background: colores.badge,

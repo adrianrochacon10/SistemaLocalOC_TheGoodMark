@@ -70,8 +70,18 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const [vendedorId, setVendedorId] = useState<string>(
     ventaInicial?.vendedorId ?? "",
   );
-  const [costos, setCostos] = useState<number>(ventaInicial?.costos ?? 0);
-  const [comision, setComision] = useState<number>(ventaInicial?.comision ?? 0); // ✅ NUEVO
+  const mesesIniciales = ventaInicial?.mesesRenta ?? 1;
+
+  const [costos, setCostos] = useState<number>(
+    ventaInicial ? (ventaInicial.costos ?? 0) / mesesIniciales : 0,
+  );
+  const [comision, setComision] = useState<number>(
+    ventaInicial ? (ventaInicial.comision ?? 0) / mesesIniciales : 0,
+  );
+  const [pagoConsiderar, setPagoConsiderar] = useState<number>(
+    ventaInicial?.pagoConsiderar ?? 0,
+  ); // ← nuevo
+
   const [error, setError] = useState<string>("");
   const [exito, setExito] = useState<string>("");
 
@@ -93,7 +103,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       };
     });
 
-  // ✅ rol correcto: "vendedor", no "usuario"
   const opcionesVendedores = (usuarios ?? [])
     .filter((u) => u.rol === "usuario")
     .map((u) => ({ value: u.id, label: u.nombre }));
@@ -103,6 +112,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   );
   const clienteActual = clientes.find((c) => c.id === clienteSeleccionado);
   const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
+  const tieneConsideracion = clienteActual?.tipoComision === "consideracion";
   const pantallasActuales = pantallasSeleccionadas
     .map((id) => pantallas.find((p) => p.id === id))
     .filter(Boolean) as Pantalla[];
@@ -110,11 +120,11 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const totalVenta = precioGeneral * mesesRenta;
   const costosTotales = costos * mesesRenta;
   const comisionTotal = comision * mesesRenta;
-  const utilidad = totalVenta - costosTotales - comisionTotal;
 
   useEffect(() => {
     if (clienteActual && typeof clienteActual.porcentajeSocio === "number") {
       setPorcentajeSocio(clienteActual.porcentajeSocio);
+      // montoSocio = precio por mes × porcentaje  → valor POR MES
       setMontoSocio(
         Math.round(
           ((precioGeneral * clienteActual.porcentajeSocio) / 100) * 100,
@@ -150,6 +160,8 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setComision(0); // ✅ reset
     setError("");
     setExito("");
+    setComision(0);
+    setPagoConsiderar(0);
   };
 
   // ── Registrar ─────────────────────────────────────────────────────────
@@ -187,12 +199,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       itemsVenta,
       clienteId: clienteSeleccionado,
       vendidoA: vendidoA.trim(),
-      precioGeneral: precioGeneral * mesesRenta,
+      precioGeneral: precioGeneral,
       cantidad: 1,
       precioTotal: precioGeneral * mesesRenta,
       importeTotal:
         tieneComisionPorcentaje && aplicarDescuento
-          ? montoSocio
+          ? montoSocio * mesesRenta
           : precioGeneral * mesesRenta,
       fechaRegistro: ventaInicial?.fechaRegistro ?? new Date(),
       fechaInicio: stringAFecha(fechaInicio),
@@ -204,6 +216,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       vendedorId: vendedorId,
       costos: costosTotales,
       comision: comisionTotal,
+      pagoConsiderar: tieneConsideracion
+        ? pagoConsiderar * mesesRenta
+        : undefined,
     };
 
     onRegistrarVenta(nuevaVenta);
@@ -211,6 +226,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     resetFormularioVenta();
     setTimeout(() => setExito(""), 2000);
     onCerrar();
+    console.log(nuevaVenta);
   };
 
   // ── JSX ───────────────────────────────────────────────────────────────
@@ -224,7 +240,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
             borderBottom: "2px solid #e2e8f0",
           }}
         >
-          Registrar Venta/Renta
+          Registrar Venta
         </h3>
 
         <div className="formulario-section">
@@ -305,6 +321,48 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 step={0.01}
                 placeholder="0.00"
               />
+
+              {tieneConsideracion && (
+                <div className="form-group">
+                  <label>Pago a Considerar (por mes)</label>{" "}
+                  {/* ← etiqueta actualizada */}
+                  <div className="input-prefix">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={pagoConsiderar === 0 ? "" : pagoConsiderar}
+                      onChange={(e) =>
+                        setPagoConsiderar(parseFloat(e.target.value) || 0)
+                      }
+                      placeholder="0.00"
+                      className="form-input"
+                    />
+                  </div>
+                  {/* ── Hints ── */}
+                  {pagoConsiderar > 0 && mesesRenta > 1 && (
+                    <small className="campo-hint hint-neutro">
+                      Total pago a considerar ({mesesRenta} meses):{" "}
+                      <strong>
+                        $
+                        {(pagoConsiderar * mesesRenta).toLocaleString("es-MX", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </strong>
+                    </small>
+                  )}
+                  {pagoConsiderar > 0 && totalVenta > 0 && (
+                    <small
+                      className={`campo-hint ${pagoConsiderar * mesesRenta > totalVenta ? "hint-negativo" : "hint-neutro"}`}
+                    >
+                      {pagoConsiderar * mesesRenta > totalVenta
+                        ? "⚠️ El pago a considerar supera el total de la venta"
+                        : `Restante para el colaborador: $${(totalVenta - pagoConsiderar * mesesRenta).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`}
+                    </small>
+                  )}
+                </div>
+              )}
+
               {/* ── COMISIÓN ✅ ── */}
               <InputField
                 label="Comisión (por mes)"
@@ -317,14 +375,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 step={0.01}
                 placeholder="0.00"
               />
-              {comision > 0 && mesesRenta > 1 && (
-                <small className="campo-hint hint-neutro">
-                  Total comisión ({mesesRenta} meses): $
-                  {comisionTotal.toLocaleString("es-MX", {
-                    minimumFractionDigits: 2,
-                  })}
-                </small>
-              )}
               {/* ── COSTOS ── */}
               <div className="form-group">
                 <label>Costos de la venta (por mes)</label>
@@ -339,25 +389,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                     className="form-input"
                   />
                 </div>
-                {/* Total costos por meses */}
-                {costos > 0 && mesesRenta > 1 && (
-                  <small className="campo-hint hint-neutro">
-                    Total costos ({mesesRenta} meses): $
-                    {costosTotales.toLocaleString("es-MX", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </small>
-                )}
-                {/* Utilidad estimada */}
-                {(costos > 0 || comision > 0) && totalVenta > 0 && (
-                  <small
-                    className={`campo-hint ${utilidad < 0 ? "hint-negativo" : "hint-positivo"}`}
-                  >
-                    {utilidad >= 0
-                      ? `✅ Utilidad estimada (${mesesRenta} meses): $${utilidad.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
-                      : `⚠️ Pérdida estimada (${mesesRenta} meses): $${Math.abs(utilidad).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`}
-                  </small>
-                )}
               </div>
               {tieneComisionPorcentaje && (
                 <>{/* bloque comisión porcentaje socio */}</>
@@ -379,6 +410,10 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                     aplicarDescuento={
                       tieneComisionPorcentaje && aplicarDescuento
                     }
+                    costos={costos}
+                    comision={comision}
+                    pagoConsiderar={pagoConsiderar}
+                    tipoComision={clienteActual?.tipoComision}
                   />
                 )}
             </>

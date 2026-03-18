@@ -234,4 +234,125 @@
 .fecha-registro {
   color: #999 !important;
   font-size: 0.85rem !important;
-} 
+}
+
+/* Fila principal — número grande y bold */
+.vd-fin-principal {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+/* Subtotal por mes — pequeño, gris apagado */
+.vd-fin-sub {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: #c4c9d4; /* más transparente/apagado */
+  padding-left: 12px;
+}
+
+/* Total final — el más destacado de todos */
+.vd-fin-total {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 2px solid #e5e7eb;
+  font-size: 1.1rem;
+  font-weight: 800; /* el más grueso */
+  letter-spacing: 0.01em;
+}
+
+/* ── Contenedor del grid ── */
+.resumen-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+}
+
+/* ── El bloque financiero ocupa todo el ancho ── */
+.resumen-financiero {
+  grid-column: 1 / -1; /* ← rompe el grid de 2 columnas */
+  margin-top: 16px;
+  border-top: 2px solid #1f6aa5;
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ── Bloque individual (total / costos / comisión) ── */
+.resumen-fin-bloque {
+  padding: 10px 0;
+  border-bottom: 1px dashed #dbe2ea;
+}
+.resumen-fin-bloque:last-of-type {
+  border-bottom: none;
+}
+
+/* ── Fila principal ── */
+.resumen-fin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.resumen-fin-principal {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* ── Subtotal ── */
+.resumen-fin-sub {
+  margin-top: 4px;
+  padding-left: 14px;
+  font-size: 0.78rem;
+  color: #b8c0cc;
+  font-weight: 400;
+}
+
+/* ── Bloques con fondo ── */
+.resumen-fin-bloque-negativo {
+  background: #fff8f8;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 6px 0;
+  border-bottom: none !important;
+}
+.resumen-fin-bloque-morado {
+  background: #faf5ff;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 6px 0;
+  border-bottom: none !important;
+}
+
+/* ── Colores de texto ── */
+.resumen-fin-negativo {
+  color: #dc2626;
+}
+.resumen-fin-morado {
+  color: #7c3aed;
+}
+
+/* ── Total final ── */
+.resumen-fin-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 2px solid #dbe2ea;
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+.resumen-fin-ganancia {
+  color: #16a34a;
+}
+.resumen-fin-perdida {
+  color: #dc2626;
+}
+
+/* ── Precio tachado ── */
+.tachado {
+  text-decoration: line-through;
+  color: #cbd5e1;
+}

@@ -89,6 +89,7 @@ export interface RegistroVenta {
   vendedorId?: string;
   costos?: number;
   comision?: number;
+  pagoConsiderar?: number;
 }
 
 // ✅ Concepto para OrdenCompleja

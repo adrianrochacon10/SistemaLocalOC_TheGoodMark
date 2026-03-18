@@ -8,7 +8,6 @@ import {
   Usuario,
 } from "../../types";
 import "./RegistroVentas.css";
-// import { RegistroVentaForm } from "./components/RegistroVentaForm";
 import { RegistroVentasStatsYLista } from "./components/RegistrosVentasStatYListas";
 
 interface RegistroVentasProps {

@@ -42,11 +42,6 @@ export const VentaDetalleModal: React.FC<Props> = ({
     .map((id) => pantallas.find((p) => p.id === id))
     .filter(Boolean) as Pantalla[];
 
-  const total = venta.precioGeneral ?? 0;
-  const costos = venta.costos ?? 0;
-  const comision = venta.comision ?? 0;
-  const utilidad = total - costos - comision;
-
   return ReactDOM.createPortal(
     <div className="modal-overlay vd-overlay" onClick={onCerrar}>
       <div className="vd-container" onClick={(e) => e.stopPropagation()}>
@@ -66,7 +61,7 @@ export const VentaDetalleModal: React.FC<Props> = ({
         </div>
 
         <div className="vd-body">
-          {/* ── Sección colaborador / vendedor ── */}
+          {/* ── Partes involucradas ── */}
           <div className="vd-section">
             <h4 className="vd-section-title">👥 Partes involucradas</h4>
             <div className="vd-row-grid">
@@ -133,31 +128,136 @@ export const VentaDetalleModal: React.FC<Props> = ({
           {/* ── Financiero ── */}
           <div className="vd-section">
             <h4 className="vd-section-title">💰 Resumen financiero</h4>
-            <div className="vd-financiero">
-              <div className="vd-fin-row">
-                <span>Precio por mes</span>
-                <span>
-                  {fmt((venta.precioGeneral ?? 0) / (venta.mesesRenta || 1))}
-                </span>
-              </div>
-              <div className="vd-fin-row">
-                <span>Total ({venta.mesesRenta} meses)</span>
-                <span>{fmt(total)}</span>
-              </div>
-              <div className="vd-fin-row vd-fin-negativo">
-                <span>Costos</span>
-                <span>− {fmt(costos)}</span>
-              </div>
-              <div className="vd-fin-row vd-fin-negativo">
-                <span>Comisión</span>
-                <span>− {fmt(comision)}</span>
-              </div>
-              <div
-                className={`vd-fin-row vd-fin-total ${utilidad < 0 ? "vd-fin-perdida" : "vd-fin-ganancia"}`}
-              >
-                <span>Utilidad neta</span>
-                <span>{fmt(utilidad)}</span>
-              </div>
+            <div
+              className="resumen-financiero"
+              style={{ marginTop: 0, borderTop: "none", paddingTop: 0 }}
+            >
+              {(() => {
+                const meses = venta.mesesRenta || 1;
+                const precioMes = venta.precioGeneral ?? 0;
+                const totalBruto = venta.precioTotal ?? precioMes * meses;
+
+                const totalCostos = venta.costos ?? 0;
+                const totalComision = venta.comision ?? 0;
+                const totalPagoCons = venta.pagoConsiderar ?? 0;
+
+                // ✅ importeTotal ya ES el monto socio directamente
+                const totalMontoSocio = venta.importeTotal ?? 0;
+                const montoSocioMes = meses > 0 ? totalMontoSocio / meses : 0;
+
+                // Porcentaje sobre precio por mes
+                const porcentajeSocio =
+                  precioMes > 0
+                    ? Math.round((montoSocioMes / precioMes) * 100)
+                    : 0;
+
+                const utilidad =
+                  totalBruto -
+                  totalCostos -
+                  totalComision -
+                  totalPagoCons -
+                  totalMontoSocio;
+
+                return (
+                  <>
+                    {/* ── TOTAL BRUTO ── */}
+                    <div className="resumen-fin-bloque">
+                      <div className="resumen-fin-row resumen-fin-principal">
+                        <span>
+                          Total ({meses} {meses === 1 ? "mes" : "meses"})
+                        </span>
+                        <span>{fmt(totalBruto)}</span>
+                      </div>
+                      <div className="resumen-fin-row resumen-fin-sub">
+                        <span>↳ Precio por mes</span>
+                        <span>{fmt(precioMes)}</span>
+                      </div>
+                    </div>
+
+                    {/* ── PAGO A CONSIDERAR ── */}
+                    {totalPagoCons > 0 && (
+                      <div className="resumen-fin-bloque resumen-fin-bloque-morado">
+                        <div className="resumen-fin-row resumen-fin-principal resumen-fin-morado">
+                          <span>
+                            Pago a Considerar ({meses}{" "}
+                            {meses === 1 ? "mes" : "meses"})
+                          </span>
+                          <span>− {fmt(totalPagoCons)}</span>
+                        </div>
+                        <div className="resumen-fin-row resumen-fin-sub">
+                          <span>↳ Pago por mes</span>
+                          <span>− {fmt(totalPagoCons / meses)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── COSTOS ── */}
+                    {totalCostos > 0 && (
+                      <div className="resumen-fin-bloque resumen-fin-bloque-negativo">
+                        <div className="resumen-fin-row resumen-fin-principal resumen-fin-negativo">
+                          <span>
+                            Costos ({meses} {meses === 1 ? "mes" : "meses"})
+                          </span>
+                          <span>− {fmt(totalCostos)}</span>
+                        </div>
+                        <div className="resumen-fin-row resumen-fin-sub">
+                          <span>↳ Costo por mes</span>
+                          <span>− {fmt(totalCostos / meses)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── COMISIÓN ── */}
+                    {totalComision > 0 && (
+                      <div className="resumen-fin-bloque resumen-fin-bloque-negativo">
+                        <div className="resumen-fin-row resumen-fin-principal resumen-fin-negativo">
+                          <span>
+                            Comisión ({meses} {meses === 1 ? "mes" : "meses"})
+                          </span>
+                          <span>− {fmt(totalComision)}</span>
+                        </div>
+                        <div className="resumen-fin-row resumen-fin-sub">
+                          <span>↳ Comisión por mes</span>
+                          <span>− {fmt(totalComision / meses)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── MONTO SOCIO ── */}
+                    {totalMontoSocio > 0 && (
+                      <div className="resumen-fin-bloque resumen-fin-bloque-morado">
+                        <div className="resumen-fin-row resumen-fin-principal resumen-fin-morado">
+                          <span>
+                            Monto socio ({meses} {meses === 1 ? "mes" : "meses"}
+                            )
+                          </span>
+                          <span>− {fmt(totalMontoSocio)}</span>
+                        </div>
+                        <div className="resumen-fin-row resumen-fin-sub">
+                          <span>↳ Porcentaje</span>
+                          <span>{porcentajeSocio}%</span>
+                        </div>
+                        <div className="resumen-fin-row resumen-fin-sub">
+                          <span>↳ Monto socio por mes</span>
+                          <span>− {fmt(montoSocioMes)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── UTILIDAD NETA ── */}
+                    <div
+                      className={`resumen-fin-total ${
+                        utilidad < 0
+                          ? "resumen-fin-perdida"
+                          : "resumen-fin-ganancia"
+                      }`}
+                    >
+                      <span>Utilidad neta</span>
+                      <span>{fmt(utilidad)}</span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>

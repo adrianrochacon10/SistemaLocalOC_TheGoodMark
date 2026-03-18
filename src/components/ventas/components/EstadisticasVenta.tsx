@@ -18,7 +18,7 @@ export const EstadisticasVentas: React.FC<EstadisticasVentasProps> = ({
     <div className="stat-card">
       <span className="stat-number">
         {formatearMoneda(
-          ventasFiltradas.reduce((sum, v) => sum + (v.precioTotal ?? v.importeTotal ?? 0), 0),
+          ventasFiltradas.reduce((sum, v) => sum + (v.precioGeneral ?? v.importeTotal ?? 0), 0),
         )}
       </span>
       <span className="stat-label">Ingresos totales</span>
