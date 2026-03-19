@@ -2,6 +2,22 @@ import { useState, useEffect } from "react";
 import { Colaborador } from "../types";
 import { backendApi } from "../lib/backendApi";
 
+const mapBackendColaborador = (row: any): Colaborador => ({
+  id: row.id,
+  nombre: row.nombre,
+  alias: row.contacto ?? row.alias ?? undefined,
+  telefono: row.telefono ?? undefined,
+  email: row.email ?? undefined,
+  productoId: row.producto_id ?? row.productoId ?? row.producto?.id ?? "",
+  tipoPagoId: row.tipo_pago_id ?? row.tipoPagoId ?? row.tipo_pago?.id ?? undefined,
+  pantallaId: row.pantalla_id ?? row.pantallaId ?? row.pantalla?.id ?? "",
+  fechaCreacion: row.created_at
+    ? new Date(row.created_at)
+    : row.fecha_creacion
+      ? new Date(row.fecha_creacion)
+      : new Date(),
+});
+
 export function useClientes(profile: any) {
   const [clientes, setClientes] = useState<Colaborador[]>([]);
 
@@ -11,27 +27,7 @@ export function useClientes(profile: any) {
     const cargar = async () => {
       try {
         const data = (await backendApi.get("/api/colaboradores")) as any[];
-        setClientes(
-          data.map((row: any) => ({
-            id: row.id,
-            nombre: row.nombre,
-            contacto: row.contacto ?? undefined,
-            telefono: row.telefono ?? undefined,
-            email: row.email ?? undefined,
-            productoId: row.productoId ?? undefined,
-            tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id ?? undefined,
-            pantallaId: row.pantalla_id ?? undefined,
-            creadoPor: row.creado_por ?? undefined,
-            fechaCreacion: row.fecha_creacion
-              ? new Date(row.fecha_creacion)
-              : new Date(),
-            // color: row.color ?? undefined,
-            // porcentajeSocio: row.porcentaje_socio ?? undefined,
-            // tipoComision: row.tipo_comision ?? "fijo",
-            // tipoPdf: row.tipo_pdf === 2 ? 2 : 1,
-            // activo: row.activo ?? true,
-          })),
-        );
+        setClientes(data.map((row: any) => mapBackendColaborador(row)));
       } catch (e) {
         console.error("Error cargando Colaboradores:", e);
       }
@@ -69,7 +65,7 @@ export function useClientes(profile: any) {
 
     if (extras?.tipo_pago_id && extras?.pantalla_id) {
       try {
-        const data = await backendApi.post("/api/clientes", {
+        const data = await backendApi.post("/api/colaboradores", {
           nombre: cliente.nombre,
           contacto: cliente.alias ?? null,
           telefono: cliente.telefono ?? null,
@@ -82,23 +78,7 @@ export function useClientes(profile: any) {
         });
 
         if (data) {
-          clienteParaEstado = {
-            id: data.id,
-            nombre: data.nombre,
-            alias: data.contacto ?? undefined,
-            telefono: data.telefono ?? undefined,
-            email: data.email ?? undefined,
-            // color: data.color ?? undefined,
-            // porcentajeSocio: data.porcentaje_socio ?? undefined,
-            // tipoComision: data.tipo_comision ?? "fijo",
-            // tipoPdf: data.tipo_pdf === 2 ? 2 : 1,
-            // activo: data.activo ?? true,
-            pantallaId: data.pantallaId ?? undefined,
-            productoId: data.productoId ?? undefined,
-            fechaCreacion: data.created_at
-              ? new Date(data.created_at)
-              : new Date(),
-          };
+          clienteParaEstado = mapBackendColaborador(data);
         }
       } catch (e) {
         console.error("Error guardando cliente en backend:", e);
@@ -106,10 +86,10 @@ export function useClientes(profile: any) {
       }
     }
 
-    setClientes((prev) => {
-      const existe = prev.find((c) => c.id === clienteParaEstado.id);
+    setClientes((prev: Colaborador[]) => {
+      const existe = prev.find((c: Colaborador) => c.id === clienteParaEstado.id);
       return existe
-        ? prev.map((c) =>
+        ? prev.map((c: Colaborador) =>
             c.id === clienteParaEstado.id ? clienteParaEstado : c,
           )
         : [...prev, clienteParaEstado];

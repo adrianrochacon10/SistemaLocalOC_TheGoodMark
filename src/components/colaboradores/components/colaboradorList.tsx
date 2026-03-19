@@ -30,21 +30,33 @@ export const ColaboradorList: React.FC<Props> = ({
   onEditar,
   onEliminar,
 }) => {
-  const activos = clientes.filter((c) => c.activo);
+  const visibles = clientes;
 
-  const getPantallas = (id: string): Pantalla[] =>
-    asignaciones
-      .filter((a) => a.clienteId === id && a.activa)
+  const getPantallas = (colaborador: Colaborador): Pantalla[] => {
+    const porAsignacion = asignaciones
+      .filter((a) => a.clienteId === colaborador.id && a.activa)
       .map((a) => pantallas.find((p) => p.id === a.pantallaId))
       .filter(Boolean) as Pantalla[];
 
-  const getProductos = (id: string): Producto[] =>
-    asignacionesProductos
-      .filter((a) => a.clienteId === id && a.activo)
+    if (porAsignacion.length > 0) return porAsignacion;
+
+    const desdeColaborador = pantallas.find((p) => p.id === colaborador.pantallaId);
+    return desdeColaborador ? [desdeColaborador] : [];
+  };
+
+  const getProductos = (colaborador: Colaborador): Producto[] => {
+    const porAsignacion = asignacionesProductos
+      .filter((a) => a.clienteId === colaborador.id && a.activo)
       .map((a) => productos.find((p) => p.id === a.productoId))
       .filter(Boolean) as Producto[];
 
-  if (activos.length === 0) {
+    if (porAsignacion.length > 0) return porAsignacion;
+
+    const desdeColaborador = productos.find((p) => p.id === colaborador.productoId);
+    return desdeColaborador ? [desdeColaborador] : [];
+  };
+
+  if (visibles.length === 0) {
     return (
       <div className="estado-vacio">
         <div className="estado-vacio-contenido">
@@ -69,12 +81,12 @@ export const ColaboradorList: React.FC<Props> = ({
       </div>
 
       <div className="colaboradores-grid">
-        {activos.map((colaborador) => (
+        {visibles.map((colaborador) => (
           <ColaboradorCard
             key={colaborador.id}
             colaborador={colaborador}
-            pantallas={getPantallas(colaborador.id)}
-            productos={getProductos(colaborador.id)}
+            pantallas={getPantallas(colaborador)}
+            productos={getProductos(colaborador)}
             onEditar={onEditar}
             onEliminar={onEliminar}
           />

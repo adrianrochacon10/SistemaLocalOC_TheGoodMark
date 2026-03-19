@@ -171,16 +171,17 @@ export function useGestorColaboradores(props: Props) {
       precio: number;
     }>;
 
+    const primeraPantallaId = pantallasValidas[0]?.tempId || "";
+    const primerProductoId = productosValidos[0]?.tempId || "";
+
     const colaborador: Colaborador = {
       id: modoEdicion && colaboradorEditando ? colaboradorEditando : genId("c"),
       nombre,
       alias: alias || undefined,
       telefono: telefono || undefined,
       email: email || undefined,
-      color: color || undefined,
-      tipoComision,
-      porcentajeSocio: tipoComision === "porcentaje" ? porcentaje : undefined,
-      activo: true,
+      pantallaId: primeraPantallaId,
+      productoId: primerProductoId,
       fechaCreacion: new Date(),
     };
 
@@ -264,9 +265,9 @@ export function useGestorColaboradores(props: Props) {
     setAlias(colaborador.alias || "");
     setTelefono(colaborador.telefono || "");
     setEmail(colaborador.email || "");
-    setColor(colaborador.color || "");
-    setTipoComision(colaborador.tipoComision ?? "ninguno");
-    setPorcentaje(colaborador.porcentajeSocio ?? 30);
+    setColor("");
+    setTipoComision("ninguno");
+    setPorcentaje(30);
 
     const pantallasAsociadas = asignaciones
       .filter((a) => a.clienteId === colaborador.id && a.activa)
