@@ -10,7 +10,7 @@ export function useClientes(profile: any) {
     if (!profile) return;
     const cargar = async () => {
       try {
-        const data = (await backendApi.get("/api/clientes")) as any[];
+        const data = (await backendApi.get("/api/colaboradores")) as any[];
         setClientes(
           data.map((row: any) => ({
             id: row.id,
@@ -18,19 +18,22 @@ export function useClientes(profile: any) {
             contacto: row.contacto ?? undefined,
             telefono: row.telefono ?? undefined,
             email: row.email ?? undefined,
-            color: row.color ?? undefined,
-            porcentajeSocio: row.porcentaje_socio ?? undefined,
-            tipoComision: row.tipo_comision ?? "fijo",
-            tipoPdf: row.tipo_pdf === 2 ? 2 : 1,
+            productoId: row.productoId ?? undefined,
             tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id ?? undefined,
-            activo: row.activo ?? true,
+            pantallaId: row.pantalla_id ?? undefined,
+            creadoPor: row.creado_por ?? undefined,
             fechaCreacion: row.fecha_creacion
               ? new Date(row.fecha_creacion)
               : new Date(),
+            // color: row.color ?? undefined,
+            // porcentajeSocio: row.porcentaje_socio ?? undefined,
+            // tipoComision: row.tipo_comision ?? "fijo",
+            // tipoPdf: row.tipo_pdf === 2 ? 2 : 1,
+            // activo: row.activo ?? true,
           })),
         );
       } catch (e) {
-        console.error("Error cargando clientes:", e);
+        console.error("Error cargando Colaboradores:", e);
       }
     };
     cargar();
@@ -40,15 +43,15 @@ export function useClientes(profile: any) {
   useEffect(() => {
     if (!profile) return;
     try {
-      localStorage.setItem("clientes", JSON.stringify(clientes));
+      localStorage.setItem("Colaboradores", JSON.stringify(clientes));
     } catch (e) {
-      console.error("Error guardando clientes en localStorage:", e);
+      console.error("Error guardando colaboradores en localStorage:", e);
     }
   }, [clientes, profile]);
 
   // Cargar desde localStorage inicial
   useEffect(() => {
-    const datos = localStorage.getItem("clientes");
+    const datos = localStorage.getItem("Colaboradores");
     if (datos) {
       try {
         setClientes(JSON.parse(datos));
@@ -71,11 +74,11 @@ export function useClientes(profile: any) {
           contacto: cliente.alias ?? null,
           telefono: cliente.telefono ?? null,
           email: cliente.email ?? null,
-          tipo_comision: cliente.tipoComision ?? "fijo",
-          porcentaje_socio: cliente.porcentajeSocio ?? null,
+          // tipo_comision: cliente.tipoComision ?? "fijo",
+          // porcentaje_socio: cliente.porcentajeSocio ?? null,
           tipo_pago_id: extras.tipo_pago_id,
           pantalla_id: extras.pantalla_id,
-          tipo_pdf: cliente.tipoPdf ?? 1,
+          // tipo_pdf: cliente.tipoPdf ?? 1,
         });
 
         if (data) {
@@ -85,11 +88,13 @@ export function useClientes(profile: any) {
             alias: data.contacto ?? undefined,
             telefono: data.telefono ?? undefined,
             email: data.email ?? undefined,
-            color: data.color ?? undefined,
-            porcentajeSocio: data.porcentaje_socio ?? undefined,
-            tipoComision: data.tipo_comision ?? "fijo",
-            tipoPdf: data.tipo_pdf === 2 ? 2 : 1,
-            activo: data.activo ?? true,
+            // color: data.color ?? undefined,
+            // porcentajeSocio: data.porcentaje_socio ?? undefined,
+            // tipoComision: data.tipo_comision ?? "fijo",
+            // tipoPdf: data.tipo_pdf === 2 ? 2 : 1,
+            // activo: data.activo ?? true,
+            pantallaId: data.pantallaId ?? undefined,
+            productoId: data.productoId ?? undefined,
             fechaCreacion: data.created_at
               ? new Date(data.created_at)
               : new Date(),

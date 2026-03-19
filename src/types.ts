@@ -26,20 +26,22 @@ export interface Producto {
   fechaCreacion: Date;
 }
 
-// Colaboradores (antes clientes; tienen tipo_pdf para el PDF)
+// Colaboradores
 export interface Colaborador {
   id: string;
   nombre: string;
   alias?: string;
   telefono?: string;
   email?: string;
-  color?: string;
-  tipoPdf?: 1 | 2;
+  productoId: string;
   tipoPagoId?: string;
-  activo: boolean;
   fechaCreacion: Date;
-  tipoComision?: "porcentaje" | "ninguno" | "consideracion" | "precio_fijo";
-  porcentajeSocio?: number;
+  pantallaId: string,
+  // color?: string;
+  // tipoPdf?: 1 | 2;
+  // activo: boolean;
+  // tipoComision?: "porcentaje" | "ninguno" | "consideracion" | "precio_fijo";
+  // porcentajeSocio?: number;
 }
 
 // Asignación de pantalla a cliente

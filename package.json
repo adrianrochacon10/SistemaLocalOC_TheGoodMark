@@ -1,22 +1,4 @@
 {
-<<<<<<< HEAD
-  "name": "tgm-backend",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "main": "src/index.js",
-  "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.98.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.2",
-    "nodemailer": "^6.10.1",
-    "resend": "^6.9.3"
-=======
   "name": "registro_oc",
   "private": true,
   "version": "0.1.0",
@@ -41,6 +23,5 @@
     "@vitejs/plugin-react": "^4.7.0",
     "typescript": "~5.8.3",
     "vite": "^7.3.1"
->>>>>>> a0e1fbbbc0177a997ad1ba9f306d84ce5e08a437
   }
 }
