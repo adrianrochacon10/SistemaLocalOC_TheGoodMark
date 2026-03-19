@@ -145,11 +145,6 @@ export const ColaboradorForm: React.FC<Props> = ({
             label: "Nombre de Pantalla",
             placeholder: "Ej: Pantalla Principal",
           },
-          {
-            key: "ubicacion",
-            label: "Ubicación",
-            placeholder: "Ej: Centro Comercial",
-          },
         ]}
         filas={pantallasForm.filas}
         onActualizarCampo={pantallasForm.actualizarCampo}

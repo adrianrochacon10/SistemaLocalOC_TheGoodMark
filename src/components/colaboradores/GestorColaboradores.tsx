@@ -288,7 +288,6 @@ export function useGestorColaboradores(props: Props) {
         : [
             {
               nombre: "",
-              ubicacion: "",
               tempId: Math.random().toString(36).substring(2, 15),
             },
           ],
