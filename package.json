@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "name": "tgm-backend",
   "version": "0.1.0",
   "private": true,
@@ -15,5 +16,31 @@
     "express": "^4.21.2",
     "nodemailer": "^6.10.1",
     "resend": "^6.9.3"
+=======
+  "name": "registro_oc",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.98.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.3.1"
+>>>>>>> a0e1fbbbc0177a997ad1ba9f306d84ce5e08a437
   }
 }

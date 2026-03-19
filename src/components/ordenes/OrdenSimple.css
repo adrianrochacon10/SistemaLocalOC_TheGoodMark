@@ -1,0 +1,8 @@
+@import "../styles/forms.css";
+
+/* Estilos para OrdenSimple */
+.orden-simple {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}

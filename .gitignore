@@ -1,3 +1,22 @@
+<<<<<<< HEAD
+=======
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+
+>>>>>>> a0e1fbbbc0177a997ad1ba9f306d84ce5e08a437
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -7,4 +26,8 @@
 *.ntvs*
 *.njsproj
 *.sln
+<<<<<<< HEAD
 *.sw?
+=======
+*.sw?
+>>>>>>> a0e1fbbbc0177a997ad1ba9f306d84ce5e08a437
