@@ -1,18 +1,39 @@
-import { Cliente, AsignacionPantalla } from "../../../types";
+import React from "react";
+import { Colaborador, AsignacionPantalla } from "../../../types";
 
 interface FiltrosVentasProps {
   busquedaVenta: string;
   filtroEstado: string;
   filtroCliente: string;
-  clientes: Cliente[];
+  filtroMes: number;
+  filtroAnio: number;
+  aniosDisponibles: number[];
+  clientes: Colaborador[];
   asignaciones: AsignacionPantalla[];
   onBusqueda: (valor: string) => void;
   onFiltroEstado: (estado: string) => void;
   onFiltroCliente: (clienteId: string) => void;
+  onFiltroMes: (mes: number) => void;
+  onFiltroAnio: (anio: number) => void;
   onNuevaVenta: () => void;
 }
 
 const ESTADOS = ["Todos", "Prospecto", "Aceptado", "Rechazado"];
+
+const MESES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
 
 const colorEstadoActivo = (estado: string): string => {
   if (estado === "Aceptado") return "#22c55e";
@@ -25,11 +46,16 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
   busquedaVenta,
   filtroEstado,
   filtroCliente,
+  filtroMes,
+  filtroAnio,
+  aniosDisponibles,
   clientes,
   asignaciones,
   onBusqueda,
   onFiltroEstado,
   onFiltroCliente,
+  onFiltroMes,
+  onFiltroAnio,
   onNuevaVenta,
 }) => {
   return (
@@ -43,12 +69,11 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
           type="text"
           placeholder="Buscar Colaborador..."
           value={busquedaVenta}
-          onChange={(e) => {
-            onBusqueda(e.target.value);
-          }}
+          onChange={(e) => onBusqueda(e.target.value)}
           className="buscador-ventas"
         />
       </div>
+
       <div className="ventas-filtros">
         {/* Filtro por Estado */}
         <div className="filtro-grupo">
@@ -59,9 +84,7 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
               return (
                 <button
                   key={estado}
-                  onClick={() => {
-                    onFiltroEstado(estado);
-                  }}
+                  onClick={() => onFiltroEstado(estado)}
                   className="filtro-btn"
                   style={{
                     background: activo
@@ -92,9 +115,7 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
           <label>Colaborador:</label>
           <select
             value={filtroCliente}
-            onChange={(e) => {
-              onFiltroCliente(e.target.value);
-            }}
+            onChange={(e) => onFiltroCliente(e.target.value)}
             className="select-filtro"
             style={{
               borderLeft:
@@ -116,6 +137,35 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
                 </option>
               ))}
           </select>
+        </div>
+
+        {/* Filtro por Periodo */}
+        <div className="filtro-grupo">
+          <label>Periodo:</label>
+          <div className="filtro-periodo">
+            <select
+              value={filtroMes}
+              onChange={(e) => onFiltroMes(Number(e.target.value))}
+              className="select-filtro"
+            >
+              {MESES.map((m, i) => (
+                <option key={i} value={i}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <select
+              value={filtroAnio}
+              onChange={(e) => onFiltroAnio(Number(e.target.value))}
+              className="select-filtro"
+            >
+              {aniosDisponibles.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
     </>

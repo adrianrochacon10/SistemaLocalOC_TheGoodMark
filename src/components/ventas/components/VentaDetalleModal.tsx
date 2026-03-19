@@ -38,6 +38,7 @@ export const VentaDetalleModal: React.FC<Props> = ({
 }) => {
   const cliente = clientes.find((c) => c.id === venta.clienteId);
   const vendedor = usuarios.find((u) => u.id === venta.vendedorId);
+
   const pantallasVenta = (venta.pantallasIds ?? [])
     .map((id) => pantallas.find((p) => p.id === id))
     .filter(Boolean) as Pantalla[];
@@ -141,7 +142,6 @@ export const VentaDetalleModal: React.FC<Props> = ({
                 const totalComision = venta.comision ?? 0;
                 const totalPagoCons = venta.pagoConsiderar ?? 0;
 
-                // ✅ importeTotal ya ES el monto socio directamente
                 const totalMontoSocio = venta.importeTotal ?? 0;
                 const montoSocioMes = meses > 0 ? totalMontoSocio / meses : 0;
 
@@ -151,12 +151,14 @@ export const VentaDetalleModal: React.FC<Props> = ({
                     ? Math.round((montoSocioMes / precioMes) * 100)
                     : 0;
 
+                const esPorcentaje = cliente?.tipoComision === "porcentaje";
+
                 const utilidad =
                   totalBruto -
                   totalCostos -
                   totalComision -
                   totalPagoCons -
-                  totalMontoSocio;
+                  (esPorcentaje ? totalMontoSocio : 0);
 
                 return (
                   <>
@@ -224,25 +226,26 @@ export const VentaDetalleModal: React.FC<Props> = ({
                     )}
 
                     {/* ── MONTO SOCIO ── */}
-                    {totalMontoSocio > 0 && (
-                      <div className="resumen-fin-bloque resumen-fin-bloque-morado">
-                        <div className="resumen-fin-row resumen-fin-principal resumen-fin-morado">
-                          <span>
-                            Monto socio ({meses} {meses === 1 ? "mes" : "meses"}
-                            )
-                          </span>
-                          <span>− {fmt(totalMontoSocio)}</span>
+                    {cliente?.tipoComision === "porcentaje" &&
+                      totalMontoSocio > 0 && (
+                        <div className="resumen-fin-bloque resumen-fin-bloque-morado">
+                          <div className="resumen-fin-row resumen-fin-principal resumen-fin-morado">
+                            <span>
+                              Monto socio ({meses}{" "}
+                              {meses === 1 ? "mes" : "meses"})
+                            </span>
+                            <span>− {fmt(totalMontoSocio)}</span>
+                          </div>
+                          <div className="resumen-fin-row resumen-fin-sub">
+                            <span>↳ Porcentaje</span>
+                            <span>{porcentajeSocio}%</span>
+                          </div>
+                          <div className="resumen-fin-row resumen-fin-sub">
+                            <span>↳ Monto socio por mes</span>
+                            <span>− {fmt(montoSocioMes)}</span>
+                          </div>
                         </div>
-                        <div className="resumen-fin-row resumen-fin-sub">
-                          <span>↳ Porcentaje</span>
-                          <span>{porcentajeSocio}%</span>
-                        </div>
-                        <div className="resumen-fin-row resumen-fin-sub">
-                          <span>↳ Monto socio por mes</span>
-                          <span>− {fmt(montoSocioMes)}</span>
-                        </div>
-                      </div>
-                    )}
+                      )}
 
                     {/* ── UTILIDAD NETA ── */}
                     <div

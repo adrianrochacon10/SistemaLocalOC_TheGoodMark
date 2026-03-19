@@ -1,5 +1,4 @@
-// src/components/ventas/RegistroVentasLista.tsx
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   RegistroVenta,
   Pantalla,
@@ -10,50 +9,102 @@ import {
 import { FiltrosVentas } from "./filtrosVentas";
 import { EstadisticasVentas } from "./EstadisticasVenta";
 import { VentaCard } from "./VentaCard";
-import { VentaDetalleModal } from "./VentaDetalleModal"; // ← nuevo
+import { VentaDetalleModal } from "./VentaDetalleModal";
 
 interface RegistroVentasListaProps {
   pantallas: Pantalla[];
   asignaciones: AsignacionPantalla[];
   clientes: Colaborador[];
-  usuarios: Usuario[]; // ← nuevo
+  usuarios: Usuario[];
   ventasRegistradas: RegistroVenta[];
   onEliminarVenta: (ventaId: string) => void;
   onNuevaVenta: () => void;
   onEditarVenta: (venta: RegistroVenta) => void;
 }
 
+const MESES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
 export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   pantallas,
   asignaciones,
   clientes,
-  usuarios = [], // ← nuevo
+  usuarios = [],
   ventasRegistradas,
   onEliminarVenta,
   onNuevaVenta,
   onEditarVenta,
 }) => {
+  const hoy = new Date();
+
   const [busquedaVenta, setBusquedaVenta] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<string>("Todos");
   const [filtroCliente, setFiltroCliente] = useState<string>("Todos");
+  const [filtroMes, setFiltroMes] = useState<number>(hoy.getMonth());
+  const [filtroAnio, setFiltroAnio] = useState<number>(hoy.getFullYear());
   const [paginaActual, setPaginaActual] = useState(1);
-  const [ventaDetalle, setVentaDetalle] = useState<RegistroVenta | null>(null); // ← nuevo
+  const [ventaDetalle, setVentaDetalle] = useState<RegistroVenta | null>(null);
 
   const ventasPorPagina = 20;
 
-  const ventasFiltradas = ventasRegistradas.filter((venta) => {
-    const cliente = clientes.find((c) => c.id === venta.clienteId);
-    const coincideBusqueda =
-      busquedaVenta === "" ||
-      (cliente &&
-        cliente.nombre.toLowerCase().includes(busquedaVenta.toLowerCase())) ||
-      venta.vendidoA.toLowerCase().includes(busquedaVenta.toLowerCase());
-    const coincideEstado =
-      filtroEstado === "Todos" || venta.estadoVenta === filtroEstado;
-    const coincideCliente =
-      filtroCliente === "Todos" || venta.clienteId === filtroCliente;
-    return coincideBusqueda && coincideEstado && coincideCliente;
-  });
+  // Años disponibles derivados de las ventas
+  const aniosDisponibles = useMemo(() => {
+    const set = new Set(
+      ventasRegistradas.map((v) => new Date(v.fechaInicio).getFullYear()),
+    );
+    const arr = Array.from(set).sort((a, b) => b - a);
+    if (!arr.includes(hoy.getFullYear())) arr.unshift(hoy.getFullYear());
+    return arr;
+  }, [ventasRegistradas]);
+
+  const ventasFiltradas = useMemo(() => {
+    return ventasRegistradas.filter((venta) => {
+      const cliente = clientes.find((c) => c.id === venta.clienteId);
+      const fecha = new Date(venta.fechaInicio);
+
+      const coincideBusqueda =
+        busquedaVenta === "" ||
+        cliente?.nombre.toLowerCase().includes(busquedaVenta.toLowerCase()) ||
+        venta.vendidoA.toLowerCase().includes(busquedaVenta.toLowerCase());
+
+      const coincideEstado =
+        filtroEstado === "Todos" ||
+        (venta.estadoVenta ?? "Prospecto") === filtroEstado;
+
+      const coincideCliente =
+        filtroCliente === "Todos" || venta.clienteId === filtroCliente;
+
+      const coincideMes = fecha.getMonth() === filtroMes;
+      const coincideAnio = fecha.getFullYear() === filtroAnio;
+
+      return (
+        coincideBusqueda &&
+        coincideEstado &&
+        coincideCliente &&
+        coincideMes &&
+        coincideAnio
+      );
+    });
+  }, [
+    ventasRegistradas,
+    busquedaVenta,
+    filtroEstado,
+    filtroCliente,
+    filtroMes,
+    filtroAnio,
+  ]);
 
   const totalPaginas = Math.ceil(ventasFiltradas.length / ventasPorPagina);
   const ventasPagina = ventasFiltradas.slice(
@@ -61,9 +112,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
     paginaActual * ventasPorPagina,
   );
 
-  const hoy = new Date();
-  const mesActual = hoy.getMonth();
-  const añoActual = hoy.getFullYear();
+  const resetPagina = () => setPaginaActual(1);
 
   return (
     <>
@@ -71,29 +120,36 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
         busquedaVenta={busquedaVenta}
         filtroEstado={filtroEstado}
         filtroCliente={filtroCliente}
+        filtroMes={filtroMes}
+        filtroAnio={filtroAnio}
+        aniosDisponibles={aniosDisponibles}
         clientes={clientes}
         asignaciones={asignaciones}
         onBusqueda={(v) => {
           setBusquedaVenta(v);
-          setPaginaActual(1);
+          resetPagina();
         }}
         onFiltroEstado={(v) => {
           setFiltroEstado(v);
-          setPaginaActual(1);
+          resetPagina();
         }}
         onFiltroCliente={(v) => {
           setFiltroCliente(v);
-          setPaginaActual(1);
+          resetPagina();
+        }}
+        onFiltroMes={(v) => {
+          setFiltroMes(v);
+          resetPagina();
+        }}
+        onFiltroAnio={(v) => {
+          setFiltroAnio(v);
+          resetPagina();
         }}
         onNuevaVenta={onNuevaVenta}
       />
 
       <h2>
-        📅 Registros de{" "}
-        {new Date(añoActual, mesActual).toLocaleString("es-ES", {
-          month: "long",
-        })}{" "}
-        de {añoActual}
+        📅 Registros de {MESES[filtroMes]} de {filtroAnio}
       </h2>
 
       <EstadisticasVentas ventasFiltradas={ventasFiltradas} />
@@ -107,7 +163,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
             pantallas={pantallas}
             onEditar={onEditarVenta}
             onEliminar={onEliminarVenta}
-            onClick={() => setVentaDetalle(venta)} // ← nuevo
+            onClick={() => setVentaDetalle(venta)}
           />
         ))}
       </div>
@@ -131,7 +187,6 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
         </button>
       </div>
 
-      {/* Modal de detalle ← nuevo */}
       {ventaDetalle && (
         <VentaDetalleModal
           venta={ventaDetalle}

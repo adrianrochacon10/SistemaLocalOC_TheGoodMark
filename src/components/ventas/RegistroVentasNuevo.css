@@ -1096,3 +1096,12 @@
   text-decoration: line-through;
   color: #cbd5e1;
 }
+
+.filtro-periodo {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.filtro-periodo .select-filtro {
+  width: auto;
+}

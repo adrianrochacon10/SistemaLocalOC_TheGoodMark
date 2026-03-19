@@ -357,7 +357,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                     >
                       {pagoConsiderar * mesesRenta > totalVenta
                         ? "⚠️ El pago a considerar supera el total de la venta"
-                        : `Restante para el colaborador: $${(totalVenta - pagoConsiderar * mesesRenta).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`}
+                        : `Restante : $${(totalVenta - pagoConsiderar * mesesRenta).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`}
                     </small>
                   )}
                 </div>

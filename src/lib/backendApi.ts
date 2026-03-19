@@ -1,10 +1,17 @@
-const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+import { supabase } from "./supabaseClient";
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 
 async function request(path: string, options: RequestInit = {}) {
+  // ✅ Obtener token activo de Supabase
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+
   const res = await fetch(`${BACKEND_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      // ✅ Inyectar token si existe
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
     ...options,
@@ -30,5 +37,6 @@ export const backendApi = {
   post: (path: string, body: unknown) =>
     request(path, { method: "POST", body: JSON.stringify(body) }),
   del: (path: string) => request(path, { method: "DELETE" }),
+  put: (path: string, body: unknown) =>
+    request(path, { method: "PUT", body: JSON.stringify(body) }),
 };
-
