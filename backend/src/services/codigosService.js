@@ -70,22 +70,23 @@ export async function validarCodigo(codigo, entidad, entidadId, userId) {
 }
 
 export async function solicitarCodigo(entidad, entidadId, user) {
-  if (!entidad || !entidadId) return { error: "entidad (cliente|orden) y entidad_id son obligatorios" };
-  if (entidad !== "cliente" && entidad !== "orden") return { error: "entidad debe ser cliente u orden" };
+  const entidadClean = entidad;
+  if (!entidadClean || !entidadId) return { error: "entidad (colaborador|orden) y entidad_id son obligatorios" };
+  if (entidadClean !== "colaborador" && entidadClean !== "orden") return { error: "entidad debe ser colaborador u orden" };
 
   const { data: admins } = await supabase.from("perfiles").select("email").eq("rol", "admin");
   const adminEmails = admins?.map((a) => a.email).filter(Boolean) ?? [];
   const destinatarios = new Set(adminEmails);
   if (adminEmails.length === 0) return { error: "No hay administradores registrados en perfiles." };
   if (user.email) destinatarios.add(user.email);
-  if (entidad === "cliente") {
-    const { data: cli } = await supabase.from("clientes").select("email").eq("id", entidadId).single();
+  if (entidadClean === "colaborador") {
+    const { data: cli } = await supabase.from("colaboradores").select("email").eq("id", entidadId).single();
     if (cli?.email?.trim()) destinatarios.add(cli.email.trim());
   }
-  if (entidad === "orden") {
-    const { data: venta } = await supabase.from("ventas").select("cliente_id").eq("id", entidadId).single();
-    if (venta?.cliente_id) {
-      const { data: cli } = await supabase.from("clientes").select("email").eq("id", venta.cliente_id).single();
+  if (entidadClean === "orden") {
+    const { data: venta } = await supabase.from("ventas").select("colaborador_id").eq("id", entidadId).single();
+    if (venta?.colaborador_id) {
+      const { data: cli } = await supabase.from("colaboradores").select("email").eq("id", venta.colaborador_id).single();
       if (cli?.email?.trim()) destinatarios.add(cli.email.trim());
     }
   }
@@ -100,7 +101,7 @@ export async function solicitarCodigo(entidad, entidadId, user) {
     .insert({
       codigo,
       vendedor_id: user.id,
-      entidad,
+      entidad: entidadClean,
       entidad_id: entidadId,
       admin_email: adminEmails[0],
       expira_at: expiraAt.toISOString(),
@@ -109,7 +110,7 @@ export async function solicitarCodigo(entidad, entidadId, user) {
     .single();
   if (error) throw new Error(error.message);
 
-  const tipoEntidad = entidad === "cliente" ? "un cliente" : "una venta/orden";
+  const tipoEntidad = entidadClean === "colaborador" ? "un colaborador" : "una venta/orden";
   const nombreVendedor = user.nombre || user.email || "Un vendedor";
   const texto =
     `El vendedor ${nombreVendedor} (${user.email}) ha solicitado un código para EDITAR o ELIMINAR ${tipoEntidad}.\n\n` +

@@ -4,7 +4,7 @@ import "dotenv/config";
 
 import authRoutes from "./routes/auth.js";
 import tipoPagoRoutes from "./routes/tipoPago.js";
-import clientesRoutes from "./routes/clientes.js";
+import colaboradoresRoutes from "./routes/colaboradores.js";
 import ventasRoutes from "./routes/ventas.js";
 import pantallasRoutes from "./routes/pantallas.js";
 import ordenesRoutes from "./routes/ordenes.js";
@@ -26,8 +26,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/tipo-pago", tipoPagoRoutes);
-app.use("/api/clientes", clientesRoutes);
-app.use("/api/colaboradores", clientesRoutes); 
+app.use("/api/colaboradores", colaboradoresRoutes);
 app.use("/api/ventas", ventasRoutes);
 app.use("/api/pantallas", pantallasRoutes);
 app.use("/api/ordenes", ordenesRoutes);

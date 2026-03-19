@@ -11,7 +11,6 @@ export async function crear(payload, userId) {
     .from("pantallas")
     .insert({
       nombre: payload.nombre.trim(),
-      direccion: payload.direccion ?? null,
       creado_por: userId,
     })
     .select()

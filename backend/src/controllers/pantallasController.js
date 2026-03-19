@@ -26,7 +26,6 @@ export async function actualizar(req, res) {
   const body = req.body || {};
   const payload = {};
   if (body.nombre !== undefined) payload.nombre = body.nombre;
-  if (body.direccion !== undefined) payload.direccion = body.direccion;
   if (Object.keys(payload).length === 0) return res.status(400).json({ error: "Nada que actualizar" });
   try {
     const data = await pantallasService.actualizar(id, payload);

@@ -1,9 +1,10 @@
+//Controlador para codigos de edicion 
 import * as codigosService from "../services/codigosService.js";
 
 export async function solicitar(req, res) {
   if (req.user.rol === "admin") return res.status(400).json({ error: "El admin no necesita codigo para editar" });
   const { entidad, entidad_id } = req.body || {};
-  if (!entidad || !entidad_id) return res.status(400).json({ error: "entidad (cliente|orden) y entidad_id son obligatorios" });
+  if (!entidad || !entidad_id) return res.status(400).json({ error: "entidad (colaborador|orden) y entidad_id son obligatorios" });
   try {
     const result = await codigosService.solicitarCodigo(entidad, entidad_id, req.user);
     if (result.error) return res.status(400).json({ error: result.error });
