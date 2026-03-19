@@ -16,9 +16,6 @@ export function usePantallas(profile: any) {
           data.map((row: any) => ({
             id: row.id,
             nombre: row.nombre ?? row.nombre_pantalla,
-            ubicacion: row.ubicacion ?? row.direccion ?? undefined,
-            plaza: row.plaza ?? undefined,
-            precioUnitario: 0,
             activa: true,
             fechaCreacion: row.fecha_creacion
               ? new Date(row.fecha_creacion)
@@ -64,14 +61,12 @@ export function usePantallas(profile: any) {
     try {
       const data = await backendApi.post("/api/pantallas", {
         nombre: pantalla.nombre,
-        direccion: pantalla.ubicacion ?? null,
       });
 
       if (data) {
         pantallaParaEstado = {
           id: data.id,
           nombre: data.nombre ?? data.nombre_pantalla,
-          ubicacion: data.ubicacion ?? data.direccion ?? undefined,
           activa: true,
           fechaCreacion: data.fecha_creacion
             ? new Date(data.fecha_creacion)
