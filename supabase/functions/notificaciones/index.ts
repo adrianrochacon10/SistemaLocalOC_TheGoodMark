@@ -18,8 +18,10 @@ const transport = nodemailer.createTransport({
 interface VentaRecord {
   id?: string;
   vendedor_id: string;
-  cliente_id: string;
+  colaborador_id?: string;
+  cliente_id?: string;
   precio_total?: number;
+  estado_venta?: string;
   estado?: string;
   fecha_inicio?: string;
   fecha_fin?: string;
@@ -53,7 +55,7 @@ Deno.serve(async (req: Request) => {
       : (raw as VentaRecord);
 
     const vendedorId = venta.vendedor_id;
-    const clienteId = venta.cliente_id;
+    const colaboradorId = venta.colaborador_id ?? venta.cliente_id;
 
     if (!vendedorId) {
       return new Response(
@@ -80,14 +82,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    let nombreCliente = "Cliente";
-    if (clienteId) {
-      const { data: cliente } = await supabase
-        .from("clientes")
+    let nombreCliente = "Colaborador";
+    if (colaboradorId) {
+      const { data: col } = await supabase
+        .from("colaboradores")
         .select("nombre")
-        .eq("id", clienteId)
+        .eq("id", colaboradorId)
         .single();
-      if (cliente?.nombre) nombreCliente = cliente.nombre;
+      if (col?.nombre) nombreCliente = col.nombre;
     }
 
     const monto = venta.precio_total != null ? Number(venta.precio_total) : 0;
@@ -100,9 +102,9 @@ Deno.serve(async (req: Request) => {
     const text = `
 Venta Exitosa
 
-Cliente: ${nombreCliente}
+Colaborador: ${nombreCliente}
 Monto: ${montoFormato}
-${venta.estado ? `Estado: ${venta.estado}` : ""}
+${venta.estado_venta || venta.estado ? `Estado: ${venta.estado_venta ?? venta.estado}` : ""}
 ${venta.fecha_inicio ? `Fecha inicio: ${venta.fecha_inicio}` : ""}
 ${venta.fecha_fin ? `Fecha fin: ${venta.fecha_fin}` : ""}
 `;
@@ -111,7 +113,7 @@ ${venta.fecha_fin ? `Fecha fin: ${venta.fecha_fin}` : ""}
 <ul>
   <li><strong>Colaborador:</strong> ${nombreCliente}</li>
   <li><strong>Monto:</strong> ${montoFormato}</li>
-  ${venta.estado ? `<li><strong>Estado:</strong> ${venta.estado}</li>` : ""}
+  ${venta.estado_venta || venta.estado ? `<li><strong>Estado:</strong> ${venta.estado_venta ?? venta.estado}</li>` : ""}
   ${venta.fecha_inicio ? `<li><strong>Fecha inicio:</strong> ${venta.fecha_inicio}</li>` : ""}
   ${venta.fecha_fin ? `<li><strong>Fecha fin:</strong> ${venta.fecha_fin}</li>` : ""}
 </ul>

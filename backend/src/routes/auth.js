@@ -33,7 +33,7 @@ const router = Router();
  *                 type: string
  *                 format: password
  *                 description: Contraseña del usuario
- *                 example: Thegoodmark22$
+ *                 example: thegoodmark22$
  *     responses:
  *       200:
  *         description: Login exitoso

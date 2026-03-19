@@ -30,14 +30,17 @@ export interface Colaborador {
   color?: string;
   tipoPdf?: 1 | 2;
   tipoPagoId?: string;
+  /** IDs en BD (pantalla/producto del colaborador; la venta ya no los guarda) */
+  pantallaId?: string;
+  productoId?: string;
   activo: boolean;
   fechaCreacion: Date;
   tipoComision?: "porcentaje" | "ninguno" | "consideracion" | "precio_fijo";
   porcentajeSocio?: number;
 }
 
-/** Alias para uso en frontend: BD/backend usa "clientes", UI muestra "Colaborador" */
-export type Colaborador = Cliente;
+/** Alias histórico en componentes (mismo que Colaborador) */
+export type Cliente = Colaborador;
 
 // ✅ Empresa (usada en EmpresaForm, OrdenCompleja, OrdenSimple)
 export interface Empresa {

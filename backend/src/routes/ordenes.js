@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
 import * as ordenesController from "../controllers/ordenesController.js";
+import { streamOrdenCompraPdf } from "../services/ordenCompraPdf.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -9,10 +10,10 @@ router.use(requireAuth);
  * @swagger
  * /ordenes:
  *   get:
- *     summary: Listar órdenes del mes
- *     description: Devuelve las órdenes del mes (resumen por mes/año) con sus ventas incluidas.
+ *     summary: Listar órdenes de compra
+ *     description: Devuelve órdenes de compra (por colaborador y mes/año) con ventas enlazadas.
  *     tags:
- *       - Órdenes del mes
+ *       - Órdenes de compra
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -28,9 +29,15 @@ router.use(requireAuth);
  *         schema:
  *           type: integer
  *         description: Año para filtrar
+ *       - in: query
+ *         name: colaborador_id
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Filtrar por colaborador
  *     responses:
  *       200:
- *         description: Lista de órdenes del mes
+ *         description: Lista de órdenes de compra
  *       500:
  *         description: Error interno del servidor
  */
@@ -41,9 +48,9 @@ router.get("/", ordenesController.listar);
  * /ordenes/ventas:
  *   get:
  *     summary: Listar ventas por mes/año
- *     description: Lista las ventas cuya fecha de inicio/fin cae en el mes y año indicados.
+ *     description: Lista ventas que solapan el mes y año; opcionalmente por colaborador_id.
  *     tags:
- *       - Órdenes del mes
+ *       - Órdenes de compra
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -59,6 +66,12 @@ router.get("/", ordenesController.listar);
  *         required: true
  *         schema:
  *           type: integer
+ *       - in: query
+ *         name: colaborador_id
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Opcional — solo ventas de ese colaborador
  *     responses:
  *       200:
  *         description: Lista de ventas del mes
@@ -73,10 +86,10 @@ router.get("/ventas", ordenesController.listarVentas);
  * @swagger
  * /ordenes/generar:
  *   post:
- *     summary: Generar orden del mes
- *     description: Genera o actualiza la orden del mes para un mes/año y enlaza las ventas correspondientes.
+ *     summary: Generar orden de compra
+ *     description: Crea o actualiza orden_de_compra para un colaborador y mes/año; calcula subtotal, IVA 16% y total; enlaza ventas del periodo.
  *     tags:
- *       - Órdenes del mes
+ *       - Órdenes de compra
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -86,9 +99,13 @@ router.get("/ventas", ordenesController.listarVentas);
  *           schema:
  *             type: object
  *             required:
+ *               - colaborador_id
  *               - mes
  *               - anio
  *             properties:
+ *               colaborador_id:
+ *                 type: string
+ *                 format: uuid
  *               mes:
  *                 type: integer
  *                 minimum: 1
@@ -99,10 +116,40 @@ router.get("/ventas", ordenesController.listarVentas);
  *       200:
  *         description: Orden generada correctamente
  *       400:
- *         description: mes/anio inválidos
+ *         description: Parámetros inválidos
  *       500:
  *         description: Error interno del servidor
  */
 router.post("/generar", ordenesController.generar);
+
+/**
+ * @swagger
+ * /ordenes/{id}/pdf:
+ *   get:
+ *     summary: PDF de la orden de compra
+ *     description: Descarga el PDF generado desde la fila orden_de_compra y sus ventas enlazadas.
+ *     tags:
+ *       - Órdenes de compra
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Archivo PDF
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Orden no encontrada
+ */
+router.get("/:id/pdf", streamOrdenCompraPdf);
 
 export default router;

@@ -35,7 +35,7 @@ El payload que envía Supabase es de la forma:
   "record": {
     "id": "...",
     "vendedor_id": "...",
-    "cliente_id": "...",
+    "colaborador_id": "...",
     "precio_total": 1500.00,
     "estado": "aceptado",
     "fecha_inicio": "2026-03-01",
@@ -44,7 +44,7 @@ El payload que envía Supabase es de la forma:
 }
 ```
 
-La función toma `record` (o el body directo), busca el email del vendedor en `perfiles` por `vendedor_id`, el nombre del cliente en `clientes` por `cliente_id`, y envía el correo con Nodemailer vía Gmail.
+La función toma `record` (o el body directo), busca el email del vendedor en `perfiles` por `vendedor_id`, el nombre del colaborador en `colaboradores` por `colaborador_id` (acepta también `cliente_id` antiguo), y envía el correo con Nodemailer vía Gmail.
 
 ### 3. Despliegue
 
@@ -60,7 +60,7 @@ curl -i -X POST 'https://<PROJECT_REF>.supabase.co/functions/v1/notificaciones' 
   -H 'Content-Type: application/json' \
   -d '{
     "vendedor_id": "uuid-del-vendedor",
-    "cliente_id": "uuid-del-cliente",
+    "colaborador_id": "uuid-del-colaborador",
     "precio_total": 2500.50
   }'
 ```

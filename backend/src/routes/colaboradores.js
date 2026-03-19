@@ -1,36 +1,36 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
-import * as clientesController from "../controllers/clientesController.js";
+import * as colaboradoresController from "../controllers/colaboradoresController.js";
 
 const router = Router();
 router.use(requireAuth);
 
 /**
  * @swagger
- * /clientes:
+ * /colaboradores:
  *   get:
- *     summary: Listar clientes
- *     description: Devuelve todos los clientes (colaboradores) con su tipo de pago y pantalla.
+ *     summary: Listar colaboradores
+ *     description: Colaboradores con tipo de pago, pantalla y producto.
  *     tags:
- *       - Clientes
+ *       - Colaboradores
  *     security:
  *       - BearerAuth: []
  *     responses:
  *       200:
- *         description: Lista de clientes obtenida correctamente
+ *         description: Lista obtenida correctamente
  *       500:
  *         description: Error interno del servidor
  */
-router.get("/", clientesController.listar);
+router.get("/", colaboradoresController.listar);
 
 /**
  * @swagger
- * /clientes:
+ * /colaboradores:
  *   post:
- *     summary: Crear cliente
- *     description: Crea un nuevo cliente asociado a un tipo de pago y una pantalla.
+ *     summary: Crear colaborador
+ *     description: Crea un colaborador (pantalla y producto para ventas).
  *     tags:
- *       - Clientes
+ *       - Colaboradores
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -46,7 +46,6 @@ router.get("/", clientesController.listar);
  *             properties:
  *               nombre:
  *                 type: string
- *                 example: "Cliente Ejemplo"
  *               telefono:
  *                 type: string
  *               email:
@@ -60,24 +59,27 @@ router.get("/", clientesController.listar);
  *               pantalla_id:
  *                 type: string
  *                 format: uuid
+ *               producto_id:
+ *                 type: string
+ *                 format: uuid
  *     responses:
  *       201:
- *         description: Cliente creado correctamente
+ *         description: Creado correctamente
  *       400:
  *         description: Datos inválidos
  *       500:
  *         description: Error interno del servidor
  */
-router.post("/", clientesController.crear);
+router.post("/", colaboradoresController.crear);
 
 /**
  * @swagger
- * /clientes/{id}:
+ * /colaboradores/{id}:
  *   patch:
- *     summary: Actualizar cliente
- *     description: Actualiza los datos de un cliente existente. Los vendedores requieren código de edición.
+ *     summary: Actualizar colaborador
+ *     description: Vendedores requieren codigo_edicion.
  *     tags:
- *       - Clientes
+ *       - Colaboradores
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -87,7 +89,6 @@ router.post("/", clientesController.crear);
  *         schema:
  *           type: string
  *           format: uuid
- *         description: ID del cliente
  *     requestBody:
  *       required: true
  *       content:
@@ -101,7 +102,6 @@ router.post("/", clientesController.crear);
  *                 type: string
  *               email:
  *                 type: string
- *                 format: email
  *               contacto:
  *                 type: string
  *               tipo_pago_id:
@@ -110,28 +110,30 @@ router.post("/", clientesController.crear);
  *               pantalla_id:
  *                 type: string
  *                 format: uuid
+ *               producto_id:
+ *                 type: string
+ *                 format: uuid
  *               codigo_edicion:
  *                 type: string
- *                 description: Código de edición requerido para vendedores
  *     responses:
  *       200:
- *         description: Cliente actualizado correctamente
+ *         description: Actualizado correctamente
  *       400:
  *         description: Código inválido o datos incorrectos
  *       404:
- *         description: Cliente no encontrado
+ *         description: No encontrado
  *       500:
  *         description: Error interno del servidor
  */
-router.patch("/:id", clientesController.actualizar);
+router.patch("/:id", colaboradoresController.actualizar);
 
 /**
  * @swagger
- * /clientes/{id}:
+ * /colaboradores/{id}:
  *   get:
- *     summary: Obtener cliente por ID
+ *     summary: Obtener colaborador por ID
  *     tags:
- *       - Clientes
+ *       - Colaboradores
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -141,15 +143,14 @@ router.patch("/:id", clientesController.actualizar);
  *         schema:
  *           type: string
  *           format: uuid
- *         description: ID del cliente
  *     responses:
  *       200:
- *         description: Cliente encontrado
+ *         description: Encontrado
  *       404:
- *         description: Cliente no encontrado
+ *         description: No encontrado
  *       500:
  *         description: Error interno del servidor
  */
-router.get("/:id", clientesController.obtenerPorId);
+router.get("/:id", colaboradoresController.obtenerPorId);
 
 export default router;

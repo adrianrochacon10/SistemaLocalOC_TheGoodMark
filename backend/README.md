@@ -30,7 +30,7 @@ El backend quedará escuchando en `http://localhost:4000`.
 ### 3. Rutas disponibles
 
 - `GET /api/health` → estado del backend.
-- `GET /api/clientes` → lista de clientes.
+- `GET /api/colaboradores` → lista de colaboradores.
 - `POST /api/colaboradores` → crea/actualiza colaborador.
 - `GET /api/pantallas` → lista de pantallas.
 - `POST /api/pantallas` → crea/actualiza pantalla.

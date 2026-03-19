@@ -1,13 +1,31 @@
 import { supabase } from "../config/supabase.js";
 import { sendEmail } from "../lib/email.js";
 
+/** Pantalla y producto en colaboradores; ventas solo guardan colaborador_id */
 const SELECT_VENTA =
-  "*, cliente:clientes(id, nombre, email, telefono), pantalla:pantallas(id, nombre), producto:productos(id, nombre, precio), tipo_pago(id, nombre), orden_mes:ordenes_mes(id, mes, anio)";
+  "*, colaborador:colaboradores(id, nombre, email, telefono, pantalla_id, producto_id, pantalla:pantallas(id, nombre), producto:productos(id, nombre, precio)), tipo_pago(id, nombre), orden_de_compra:orden_de_compra(id, mes, anio, subtotal, iva, total)";
+
+/** Acepta colaborador_id; cliente_id solo como alias temporal */
+function idColaborador(body) {
+  const id = body.colaborador_id ?? body.cliente_id;
+  return id != null && String(id).trim() ? String(id).trim() : null;
+}
+
+/** Body puede enviar estado_venta o estado (alias) */
+function estadoVentaFromBody(body) {
+  const raw = body.estado_venta ?? body.estado;
+  return raw != null ? String(raw).toLowerCase().trim() : "";
+}
+
+function roundMoney(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
 
 export async function listar(query = {}) {
   let q = supabase.from("ventas").select(SELECT_VENTA).order("created_at", { ascending: false });
-  const { mes, anio, orden_mes_id } = query;
-  if (orden_mes_id) q = q.eq("orden_mes_id", orden_mes_id);
+  const { mes, anio, orden_de_compra_id, orden_mes_id } = query;
+  const ocId = orden_de_compra_id ?? orden_mes_id;
+  if (ocId) q = q.eq("orden_de_compra_id", ocId);
   if (mes != null && anio != null) {
     const m = Number(mes);
     const a = Number(anio);
@@ -23,40 +41,47 @@ export async function listar(query = {}) {
 }
 
 export async function crear(body, vendedorId) {
-  if (!body.cliente_id) return { error: "Cliente es obligatorio" };
-  if (!body.estado) return { error: "Estado de venta es obligatorio" };
-  if (!body.pantalla_id) return { error: "Pantalla es obligatoria" };
+  const colabId = idColaborador(body);
+  if (!colabId) return { error: "colaborador_id es obligatorio" };
+
+  const estadoRaw = estadoVentaFromBody(body);
+  if (!estadoRaw) return { error: "estado_venta es obligatorio (o alias estado)" };
   if (!body.fecha_inicio || !body.fecha_fin) return { error: "Fecha inicio y fin son obligatorias" };
   if (body.duracion_meses == null) return { error: "Duracion meses es obligatoria" };
 
+  const { data: colab, error: errColab } = await supabase
+    .from("colaboradores")
+    .select("nombre, tipo_pago_id, pantalla_id, producto_id")
+    .eq("id", colabId)
+    .single();
+  if (errColab || !colab) return { error: "Colaborador no encontrado" };
+  if (!colab.pantalla_id) return { error: "El colaborador debe tener pantalla asignada" };
+  if (!colab.producto_id) return { error: "El colaborador debe tener producto asignado" };
+
   let tipoPagoId = body.tipo_pago_id;
-  if (!tipoPagoId) {
-    const { data: cliente, error: errCli } = await supabase
-      .from("clientes")
-      .select("tipo_pago_id")
-      .eq("id", body.cliente_id)
-      .single();
-    if (errCli || !cliente) return { error: "Cliente no encontrado" };
-    tipoPagoId = cliente.tipo_pago_id;
+  if (!tipoPagoId) tipoPagoId = colab.tipo_pago_id;
+
+  const estadosPermitidos = ["prospecto", "aceptado", "rechazado"];
+  if (!estadosPermitidos.includes(estadoRaw)) {
+    return { error: "estado_venta debe ser prospecto, aceptado o rechazado" };
   }
 
-  const cantidad = Math.max(1, Number(body.cantidad) || 1);
+  const duracionMeses = Number(body.duracion_meses);
+  if (!Number.isFinite(duracionMeses) || duracionMeses <= 0) {
+    return { error: "Duracion meses debe ser un numero mayor a 0" };
+  }
+
   let precioBase = 0;
   let fuentePrecio = null;
 
-  if (body.precio_unitario_manual != null && body.precio_unitario_manual !== "" && Number(body.precio_unitario_manual) >= 0) {
-    precioBase = cantidad * Number(body.precio_unitario_manual);
-    fuentePrecio = "precio_venta";
-  } else if (body.producto_id) {
-    const { data: producto, error: errProd } = await supabase
-      .from("productos")
-      .select("precio")
-      .eq("id", body.producto_id)
-      .single();
-    if (errProd || !producto) return { error: "Producto no encontrado" };
-    precioBase = cantidad * Number(producto.precio);
-    fuentePrecio = "producto";
-  }
+  const { data: producto, error: errProd } = await supabase
+    .from("productos")
+    .select("precio")
+    .eq("id", colab.producto_id)
+    .single();
+  if (errProd || !producto) return { error: "Producto del colaborador no encontrado" };
+  precioBase = Number(producto.precio);
+  fuentePrecio = "producto";
 
   const { data: tipoPago } = await supabase
     .from("tipo_pago")
@@ -84,20 +109,39 @@ export async function crear(body, vendedorId) {
     tipoPagoAplicado = tipoPago.nombre;
   }
 
+  precioTotal = roundMoney(precioTotal);
+
+  let precioPorMes =
+    body.precio_por_mes != null && body.precio_por_mes !== ""
+      ? roundMoney(Number(body.precio_por_mes))
+      : roundMoney(precioTotal / duracionMeses);
+
+  const costos =
+    body.costos != null && body.costos !== "" ? Math.max(0, roundMoney(Number(body.costos))) : 0;
+
+  let utilidadNeta;
+  if (body.utilidad_neta != null && body.utilidad_neta !== "") {
+    utilidadNeta = roundMoney(Number(body.utilidad_neta));
+  } else {
+    utilidadNeta = roundMoney(precioTotal - costos);
+  }
+
+  const clientName =
+    body.client_name != null && String(body.client_name).trim()
+      ? String(body.client_name).trim()
+      : colab.nombre ?? null;
+
   const insertPayload = {
-    cliente_id: body.cliente_id,
-    producto_id: body.producto_id ?? null,
-    cantidad,
-    precio_unitario_manual:
-      body.precio_unitario_manual != null && body.precio_unitario_manual !== ""
-        ? Number(body.precio_unitario_manual)
-        : null,
-    precio_total: Math.round(precioTotal * 100) / 100,
-    estado: body.estado,
-    pantalla_id: body.pantalla_id,
+    colaborador_id: colabId,
+    client_name: clientName,
+    precio_total: precioTotal,
+    precio_por_mes: precioPorMes,
+    costos,
+    utilidad_neta: utilidadNeta,
+    estado_venta: estadoRaw,
     fecha_inicio: body.fecha_inicio,
     fecha_fin: body.fecha_fin,
-    duracion_meses: Number(body.duracion_meses),
+    duracion_meses: duracionMeses,
     vendedor_id: vendedorId,
     tipo_pago_id: tipoPagoId,
     renovable: body.renovable ?? false,
@@ -116,8 +160,8 @@ export async function crear(body, vendedorId) {
 
   const respuesta = {
     ...data,
-    precio_base: Math.round(precioBase * 100) / 100,
-    precio_total: Math.round(precioTotal * 100) / 100,
+    precio_base: roundMoney(precioBase),
+    precio_total: precioTotal,
     tipo_pago_aplicado: tipoPagoAplicado,
     fuente_precio: fuentePrecio,
   };
@@ -130,30 +174,37 @@ export async function crear(body, vendedorId) {
       if (p.email) destinatarios.add(p.email);
     }
     if (perfilVendedor?.email) destinatarios.add(perfilVendedor.email);
-    if (data?.cliente?.email) destinatarios.add(data.cliente.email);
+    if (data?.colaborador?.email) destinatarios.add(data.colaborador.email);
 
-    const asunto = `Nueva venta registrada - ${data?.cliente?.nombre || "Sin nombre"}`;
+    const ev = data?.estado_venta ?? data?.estado;
+    const asunto = `Nueva venta registrada - ${data?.client_name || data?.colaborador?.nombre || "Sin nombre"}`;
     const texto = [
       "Se ha registrado una nueva venta en The Good Mark.",
       "",
-      `Cliente: ${data?.cliente?.nombre || "N/D"}`,
-      `Pantalla: ${data?.pantalla?.nombre || "N/D"}`,
-      `Producto: ${data?.producto?.nombre || "N/D"}`,
-      `Cantidad: ${data?.cantidad ?? 1}`,
+      `Cliente (nombre): ${data?.client_name || "N/D"}`,
+      `Colaborador: ${data?.colaborador?.nombre || "N/D"}`,
+      `Pantalla: ${data?.colaborador?.pantalla?.nombre || "N/D"}`,
+      `Producto: ${data?.colaborador?.producto?.nombre || "N/D"}`,
       `Precio total: $${(data?.precio_total ?? 0).toFixed(2)}`,
-      `Estado: ${data?.estado}`,
+      `Precio / mes: $${(data?.precio_por_mes ?? 0).toFixed(2)}`,
+      `Costos: $${(data?.costos ?? 0).toFixed(2)}`,
+      `Utilidad neta: $${(data?.utilidad_neta ?? 0).toFixed(2)}`,
+      `Estado: ${ev}`,
       `Fechas: ${data?.fecha_inicio} al ${data?.fecha_fin}`,
       `Meses: ${data?.duracion_meses}`,
     ].join("\n");
     const html = `
       <p>Se ha registrado una nueva venta en <strong>The Good Mark</strong>.</p>
       <ul>
-        <li><strong>Cliente:</strong> ${data?.cliente?.nombre || "N/D"}</li>
-        <li><strong>Pantalla:</strong> ${data?.pantalla?.nombre || "N/D"}</li>
-        <li><strong>Producto:</strong> ${data?.producto?.nombre || "N/D"}</li>
-        <li><strong>Cantidad:</strong> ${data?.cantidad ?? 1}</li>
+        <li><strong>Cliente (nombre):</strong> ${data?.client_name || "N/D"}</li>
+        <li><strong>Colaborador:</strong> ${data?.colaborador?.nombre || "N/D"}</li>
+        <li><strong>Pantalla:</strong> ${data?.colaborador?.pantalla?.nombre || "N/D"}</li>
+        <li><strong>Producto:</strong> ${data?.colaborador?.producto?.nombre || "N/D"}</li>
         <li><strong>Precio total:</strong> $${(data?.precio_total ?? 0).toFixed(2)}</li>
-        <li><strong>Estado:</strong> ${data?.estado}</li>
+        <li><strong>Precio / mes:</strong> $${(data?.precio_por_mes ?? 0).toFixed(2)}</li>
+        <li><strong>Costos:</strong> $${(data?.costos ?? 0).toFixed(2)}</li>
+        <li><strong>Utilidad neta:</strong> $${(data?.utilidad_neta ?? 0).toFixed(2)}</li>
+        <li><strong>Estado:</strong> ${ev}</li>
         <li><strong>Fechas:</strong> ${data?.fecha_inicio} al ${data?.fecha_fin}</li>
         <li><strong>Meses:</strong> ${data?.duracion_meses}</li>
       </ul>
@@ -170,24 +221,39 @@ export async function crear(body, vendedorId) {
 
 export async function actualizar(id, body) {
   const payload = { updated_at: new Date().toISOString() };
-  if (body.estado !== undefined) payload.estado = body.estado;
+  if (body.estado_venta !== undefined || body.estado !== undefined) {
+    const ev = estadoVentaFromBody(body);
+    if (!ev) throw new Error("estado_venta vacío");
+    const estadosPermitidos = ["prospecto", "aceptado", "rechazado"];
+    if (!estadosPermitidos.includes(ev)) {
+      throw new Error("estado_venta debe ser prospecto, aceptado o rechazado");
+    }
+    payload.estado_venta = ev;
+  }
   if (body.fecha_inicio !== undefined) payload.fecha_inicio = body.fecha_inicio;
   if (body.fecha_fin !== undefined) payload.fecha_fin = body.fecha_fin;
   if (body.duracion_meses !== undefined) payload.duracion_meses = body.duracion_meses;
   if (body.tipo_pago_id !== undefined) payload.tipo_pago_id = body.tipo_pago_id;
   if (body.renovable !== undefined) payload.renovable = body.renovable;
-  if (body.producto_id !== undefined) payload.producto_id = body.producto_id || null;
-  if (body.cantidad !== undefined) payload.cantidad = Math.max(1, Number(body.cantidad) || 1);
-  if (body.precio_unitario_manual !== undefined)
-    payload.precio_unitario_manual = body.precio_unitario_manual != null ? Number(body.precio_unitario_manual) : null;
   if (body.precio_total !== undefined) payload.precio_total = Math.max(0, Number(body.precio_total) || 0);
+  if (body.precio_por_mes !== undefined)
+    payload.precio_por_mes =
+      body.precio_por_mes != null && body.precio_por_mes !== ""
+        ? roundMoney(Number(body.precio_por_mes))
+        : null;
+  if (body.costos !== undefined)
+    payload.costos = body.costos != null && body.costos !== "" ? Math.max(0, roundMoney(Number(body.costos))) : 0;
+  if (body.utilidad_neta !== undefined)
+    payload.utilidad_neta =
+      body.utilidad_neta != null && body.utilidad_neta !== "" ? roundMoney(Number(body.utilidad_neta)) : null;
+  if (body.client_name !== undefined) payload.client_name = body.client_name?.trim() || null;
   if (body.comisiones !== undefined)
     payload.comisiones =
       body.comisiones != null && body.comisiones !== ""
         ? Math.max(0, Number(body.comisiones) || 0)
         : null;
 
-  const { data, error } = await supabase.from("ventas").update(payload).eq("id", id).select().single();
+  const { data, error } = await supabase.from("ventas").update(payload).eq("id", id).select(SELECT_VENTA).single();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Venta no encontrada");
   return data;
@@ -201,24 +267,28 @@ export async function renovar(id, body) {
   const duracion = body.duracion_meses ?? venta.duracion_meses;
   if (!nuevaInicio || !nuevaFin) return { error: "fecha_inicio y fecha_fin obligatorios" };
 
+  const colabFk = venta.colaborador_id ?? venta.cliente_id;
+  if (!colabFk) throw new Error("Venta sin colaborador asociado");
+
   const { data, error } = await supabase
     .from("ventas")
     .insert({
-      cliente_id: venta.cliente_id,
-      producto_id: venta.producto_id ?? null,
-      cantidad: venta.cantidad ?? 1,
-      precio_unitario_manual: venta.precio_unitario_manual ?? null,
+      colaborador_id: colabFk,
+      client_name: venta.client_name ?? null,
       precio_total: venta.precio_total ?? 0,
-      estado: "aceptado",
-      pantalla_id: venta.pantalla_id,
+      precio_por_mes: venta.precio_por_mes ?? null,
+      costos: venta.costos ?? 0,
+      utilidad_neta: venta.utilidad_neta ?? null,
+      estado_venta: "aceptado",
       fecha_inicio: nuevaInicio,
       fecha_fin: nuevaFin,
       duracion_meses: duracion,
       vendedor_id: venta.vendedor_id,
       tipo_pago_id: venta.tipo_pago_id,
       renovable: false,
+      comisiones: venta.comisiones ?? null,
     })
-    .select()
+    .select(SELECT_VENTA)
     .single();
   if (error) throw new Error(error.message);
   return { data };

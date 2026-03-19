@@ -11,7 +11,7 @@ router.use(requireAuth);
  *   get:
  *     summary: Listar ventas
  *     description: |
- *       Lista todas las ventas. Permite filtrar por mes/año o por orden del mes.
+ *       Lista todas las ventas. Permite filtrar por mes/año o por orden de compra.
  *     tags:
  *       - Ventas
  *     security:
@@ -30,11 +30,11 @@ router.use(requireAuth);
  *           type: integer
  *         description: Año para filtrar por fecha_inicio/fecha_fin
  *       - in: query
- *         name: orden_mes_id
+ *         name: orden_de_compra_id
  *         schema:
  *           type: string
  *           format: uuid
- *         description: ID de la orden del mes a la que pertenecen las ventas
+ *         description: ID de la orden de compra (alias obsoleto orden_mes_id)
  *     responses:
  *       200:
  *         description: Lista de ventas obtenida correctamente
@@ -48,7 +48,9 @@ router.get("/", ventasController.listar);
  * /ventas:
  *   post:
  *     summary: Crear venta
- *     description: Crea una nueva venta para un cliente en una pantalla, usando producto o precio manual.
+ *     description: |
+ *       Crea una venta para un colaborador (colaborador_id). Pantalla y producto vienen de
+ *       la ficha en public.colaboradores.
  *     tags:
  *       - Ventas
  *     security:
@@ -60,22 +62,31 @@ router.get("/", ventasController.listar);
  *           schema:
  *             type: object
  *             required:
- *               - cliente_id
- *               - estado
- *               - pantalla_id
+ *               - colaborador_id
+ *               - estado_venta
  *               - fecha_inicio
  *               - fecha_fin
  *               - duracion_meses
  *             properties:
- *               cliente_id:
+ *               colaborador_id:
  *                 type: string
  *                 format: uuid
- *               estado:
+ *                 description: ID del colaborador (alias obsoleto cliente_id aún aceptado en el body)
+ *               estado_venta:
  *                 type: string
  *                 enum: [prospecto, aceptado, rechazado]
- *               pantalla_id:
+ *               estado:
  *                 type: string
- *                 format: uuid
+ *                 description: Alias obsoleto de estado_venta
+ *               client_name:
+ *                 type: string
+ *                 description: Nombre del cliente (facturación / documento)
+ *               precio_por_mes:
+ *                 type: number
+ *               costos:
+ *                 type: number
+ *               utilidad_neta:
+ *                 type: number
  *               fecha_inicio:
  *                 type: string
  *                 format: date
@@ -84,14 +95,6 @@ router.get("/", ventasController.listar);
  *                 format: date
  *               duracion_meses:
  *                 type: integer
- *               cantidad:
- *                 type: integer
- *                 default: 1
- *               producto_id:
- *                 type: string
- *                 format: uuid
- *               precio_unitario_manual:
- *                 type: number
  *               tipo_pago_id:
  *                 type: string
  *                 format: uuid
@@ -132,8 +135,18 @@ router.post("/", ventasController.crear);
  *           schema:
  *             type: object
  *             properties:
+ *               estado_venta:
+ *                 type: string
  *               estado:
  *                 type: string
+ *               client_name:
+ *                 type: string
+ *               precio_por_mes:
+ *                 type: number
+ *               costos:
+ *                 type: number
+ *               utilidad_neta:
+ *                 type: number
  *               fecha_inicio:
  *                 type: string
  *                 format: date
@@ -147,13 +160,6 @@ router.post("/", ventasController.crear);
  *                 format: uuid
  *               renovable:
  *                 type: boolean
- *               producto_id:
- *                 type: string
- *                 format: uuid
- *               cantidad:
- *                 type: integer
- *               precio_unitario_manual:
- *                 type: number
  *               precio_total:
  *                 type: number
  *               comisiones:

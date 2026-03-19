@@ -5,21 +5,24 @@ import { backendApi } from "./backendApi";
  * Coincide con el formato esperado por el backend /api/ventas.
  */
 export interface RegistroVentaPayload {
-  cliente_id: string;
-  pantalla_id: string;
-  producto_id?: string | null;
-  cantidad?: number;
-  precio_unitario_manual?: number | null;
-  tipo_pago_id?: string | null;
-  estado: string;
+  colaborador_id: string;
+  /** prospecto | aceptado | rechazado */
+  estado_venta: string;
+  /** alias que el backend aún acepta */
+  estado?: string;
   fecha_inicio: string;
   fecha_fin: string;
   duracion_meses: number;
+  tipo_pago_id?: string | null;
+  client_name?: string | null;
+  precio_por_mes?: number | null;
+  costos?: number | null;
+  utilidad_neta?: number | null;
+  comisiones?: number | null;
 }
 
 /**
- * Registra una venta a través del backend Express (`/api/ventas`),
- * que calcula precio_total según cantidad × precio y tipo de pago.
+ * Registra una venta vía `/api/ventas` (precio_total desde producto del colaborador).
  */
 export async function registrarVenta(payload: RegistroVentaPayload) {
   try {

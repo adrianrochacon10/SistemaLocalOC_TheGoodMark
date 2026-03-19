@@ -10,8 +10,8 @@ const router = Router();
  *   post:
  *     summary: Solicitar código de edición
  *     description: |
- *       Un vendedor solicita un código de edición para un cliente o una venta (orden).
- *       El código se envía por correo a administradores, vendedor y, si aplica, al cliente.
+ *       Un vendedor solicita un código para editar un colaborador o una venta (orden).
+ *       "cliente" se acepta como alias de colaborador.
  *     tags:
  *       - Códigos de edición
  *     security:
@@ -28,7 +28,7 @@ const router = Router();
  *             properties:
  *               entidad:
  *                 type: string
- *                 enum: [cliente, orden]
+ *                 enum: [colaborador, cliente, orden]
  *               entidad_id:
  *                 type: string
  *                 format: uuid
@@ -66,7 +66,7 @@ router.post("/solicitar", requireAuth, codigosController.solicitar);
  *                 type: string
  *               entidad:
  *                 type: string
- *                 enum: [cliente, orden]
+ *                 enum: [colaborador, cliente, orden]
  *               entidad_id:
  *                 type: string
  *                 format: uuid

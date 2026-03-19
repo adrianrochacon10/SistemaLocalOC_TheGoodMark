@@ -25,7 +25,7 @@ interface GestorPantallasClientesProps {
   onEliminarPantalla: (pantallaId: string) => void;
   onAgregarCliente: (
     colaborador: Colaborador,
-    extras?: { tipo_pago_id: string; pantalla_id: string },
+    extras?: { tipo_pago_id: string; pantalla_id: string; producto_id?: string },
   ) => void | Promise<Colaborador | void>;
   onActualizarCliente: (cliente: Colaborador) => void;
   onAsignarPantalla: (asignacion: AsignacionPantalla) => void;

@@ -13,7 +13,7 @@ import { registrarVenta } from "../../lib/ventas";
 import { backendApi } from "../../lib/backendApi";
 import { Login } from "../auth/Login";
 import { GestorPantallasClientes } from "../pantallas/GestorPantallasClientes";
-import { RegistroVentasNuevo } from "../ventas/RegistroVentasNuevo";
+import { RegistroVentas } from "../ventas/RegistroVentas";
 import { OrdenesMensualesNuevo } from "../ordenes/OrdenesMensualesNuevo";
 import { AdminUsuarios } from "../admin/AdminUsuarios";
 import "./Dashboard.css";
@@ -60,8 +60,13 @@ export const Dashboard: React.FC = () => {
   // ─── HELPER: normaliza una fila de venta desde la API ────
   // ✅ itemsVenta se construye desde pantallas_ids
   const mapVentaFromApi = (row: any): RegistroVenta => {
+    const pantallaId =
+      row.colaborador?.pantalla_id ??
+      row.cliente?.pantalla_id ??
+      row.pantalla_id ??
+      row.pantallas_ids?.[0];
     const pantallasIds: string[] =
-      row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []);
+      row.pantallas_ids ?? (pantallaId ? [pantallaId] : []);
 
     return {
       id: row.id,
@@ -72,10 +77,19 @@ export const Dashboard: React.FC = () => {
         sinDescuento: false,
       })),
       clienteId: row.colaborador_id ?? row.cliente_id,
-      productoId: row.producto_id ?? undefined,
-      vendidoA: row.vendido_a ?? row.cliente?.nombre ?? "-",
-      precioGeneral: row.precio_general ?? 0,
-      cantidad: row.cantidad ?? 1,
+      productoId:
+        row.colaborador?.producto_id ??
+        row.cliente?.producto_id ??
+        row.producto_id ??
+        undefined,
+      vendidoA:
+        row.client_name ??
+        row.vendido_a ??
+        row.colaborador?.nombre ??
+        row.cliente?.nombre ??
+        "-",
+      precioGeneral: row.precio_general ?? row.precio_por_mes ?? 0,
+      cantidad: 1,
       precioTotal: row.precio_total ?? row.importe_total ?? 0,
       fechaRegistro: row.created_at
         ? new Date(row.created_at)
@@ -88,12 +102,14 @@ export const Dashboard: React.FC = () => {
       importeTotal: row.precio_total ?? row.importe_total ?? 0,
       activo: row.activo ?? true,
       usuarioRegistroId: row.vendedor_id ?? row.usuario_registro_id ?? "",
-      estadoVenta: row.estado
-        ? ((row.estado.charAt(0).toUpperCase() + row.estado.slice(1)) as
-            | "Aceptado"
-            | "Rechazado"
-            | "Prospecto")
-        : undefined,
+      estadoVenta: (() => {
+        const ev = row.estado_venta ?? row.estado;
+        if (!ev || typeof ev !== "string") return undefined;
+        return (ev.charAt(0).toUpperCase() + ev.slice(1)) as
+          | "Aceptado"
+          | "Rechazado"
+          | "Prospecto";
+      })(),
       tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
     };
   };
@@ -123,21 +139,25 @@ export const Dashboard: React.FC = () => {
     const cargarDatos = async () => {
       try {
         // Clientes
-        const colabsData = (await backendApi.get("/api/clientes")) as any[];
+        const colabsData = (await backendApi.get("/api/colaboradores")) as any[];
         const clientesNormalizados: Colaborador[] = colabsData.map((row: any) => ({
           id: row.id,
           nombre: row.nombre,
-          contacto: row.contacto ?? undefined,
+          alias: row.contacto ?? undefined,
           telefono: row.telefono ?? undefined,
           email: row.email ?? undefined,
           color: row.color ?? undefined,
           porcentajeSocio: row.porcentaje_socio ?? undefined,
           tipoPdf: row.tipo_pdf === 2 ? 2 : 1,
           tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id ?? undefined,
+          pantallaId: row.pantalla_id ?? row.pantalla?.id,
+          productoId: row.producto_id ?? row.producto?.id,
           activo: row.activo ?? true,
-          fechaCreacion: row.fecha_creacion
-            ? new Date(row.fecha_creacion)
-            : new Date(),
+          fechaCreacion: row.created_at
+            ? new Date(row.created_at)
+            : row.fecha_creacion
+              ? new Date(row.fecha_creacion)
+              : new Date(),
         }));
         setClientes(clientesNormalizados);
 
@@ -284,53 +304,40 @@ export const Dashboard: React.FC = () => {
   const handleRegistrarVentaConSupabase = async (venta: RegistroVenta) => {
     setErrorVenta(null);
 
-    const pantallasParaVenta =
-      venta.pantallasIds.length > 0 ? venta.pantallasIds : [];
-    if (pantallasParaVenta.length === 0) {
-      setErrorVenta("Selecciona al menos una pantalla");
+    if (!venta.clienteId?.trim()) {
+      setErrorVenta("Selecciona un colaborador");
       return;
     }
 
     const estadoApi = venta.estadoVenta?.toLowerCase() ?? "prospecto";
-    const payloadBase = {
-      cliente_id: venta.clienteId,
-      producto_id: venta.productoId ?? null,
-      cantidad: venta.cantidad ?? 1,
-      precio_unitario_manual:
-        venta.precioGeneral > 0 && !venta.productoId
-          ? venta.precioGeneral
-          : null,
+    const payload = {
+      colaborador_id: venta.clienteId,
       tipo_pago_id: venta.tipoPagoId ?? null,
-      estado: estadoApi,
+      estado_venta: estadoApi,
+      client_name:
+        venta.vendidoA && venta.vendidoA !== "-"
+          ? venta.vendidoA.trim()
+          : undefined,
       fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
       fecha_fin: venta.fechaFin.toISOString().slice(0, 10),
       duracion_meses: venta.mesesRenta,
     };
 
-    const ventasCreadas: RegistroVenta[] = [];
-
     try {
-      for (const pantallaId of pantallasParaVenta) {
-        const { data, error } = await registrarVenta({
-          ...payloadBase,
-          pantalla_id: pantallaId,
-        });
+      const { data, error } = await registrarVenta(payload);
 
-        if (error) {
-          console.error("Error al guardar venta en Supabase:", error);
-          setErrorVenta(
-            error instanceof Error
-              ? `Error al guardar: ${error.message}`
-              : "Error al guardar en la base de datos.",
-          );
-          setVentasRegistradas((prev) => [...prev, venta]);
-          return;
-        }
-        if (data) ventasCreadas.push(mapVentaFromApi(data));
+      if (error) {
+        console.error("Error al guardar venta en Supabase:", error);
+        setErrorVenta(
+          error instanceof Error
+            ? `Error al guardar: ${error.message}`
+            : "Error al guardar en la base de datos.",
+        );
+        setVentasRegistradas((prev) => [...prev, venta]);
+        return;
       }
-
-      if (ventasCreadas.length > 0) {
-        setVentasRegistradas((prev) => [...prev, ...ventasCreadas]);
+      if (data) {
+        setVentasRegistradas((prev) => [...prev, mapVentaFromApi(data)]);
       }
     } catch (e) {
       console.error("Excepción al guardar venta en Supabase:", e);
@@ -387,19 +394,20 @@ export const Dashboard: React.FC = () => {
   // ─── HANDLERS DE CLIENTE ─────────────────────────────────
   const handleAgregarCliente = async (
     cliente: Colaborador,
-    extras?: { tipo_pago_id: string; pantalla_id: string },
+    extras?: { tipo_pago_id: string; pantalla_id: string; producto_id?: string },
   ) => {
     let clienteParaEstado: Colaborador = cliente;
 
     if (extras?.tipo_pago_id && extras?.pantalla_id) {
       try {
-        const data = await backendApi.post("/api/clientes", {
+        const data = await backendApi.post("/api/colaboradores", {
           nombre: cliente.nombre,
           contacto: cliente.alias ?? null,
           telefono: cliente.telefono ?? null,
           email: cliente.email ?? null,
           tipo_pago_id: extras.tipo_pago_id,
           pantalla_id: extras.pantalla_id,
+          producto_id: extras.producto_id ?? cliente.productoId ?? undefined,
           tipo_pdf: cliente.tipoPdf ?? 1,
         });
 
@@ -597,17 +605,13 @@ export const Dashboard: React.FC = () => {
         )}
 
         {vistaActual === "ventas" && (
-          <RegistroVentasNuevo
+          <RegistroVentas
             pantallas={pantallas}
             asignaciones={asignaciones}
             clientes={clientes}
-            productos={productos}
-            tiposPago={tiposPago}
             ventasRegistradas={ventasRegistradas}
             usuarioActual={usuarioActual}
             onRegistrarVenta={handleRegistrarVentaConSupabase}
-            onEliminarVenta={handleEliminarVenta}
-            errorExterno={errorVenta}
           />
         )}
 

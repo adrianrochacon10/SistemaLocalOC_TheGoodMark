@@ -84,46 +84,46 @@ Content-Type: application/json
 
 ---
 
-## 5. Clientes (o Colaboradores)
+## 5. Colaboradores
 
 ### Listar
 ```http
-GET http://localhost:4000/api/clientes
+GET http://localhost:4000/api/colaboradores
 Authorization: Bearer <TU_ACCESS_TOKEN>
 ```
-(Misma base: `/api/colaboradores` si usas esa ruta.)
 
 ### Crear
 ```http
-POST http://localhost:4000/api/clientes
+POST http://localhost:4000/api/colaboradores
 Authorization: Bearer <TU_ACCESS_TOKEN>
 Content-Type: application/json
 
 {
-  "nombre": "Cliente Ejemplo",
+  "nombre": "Colaborador Ejemplo",
   "telefono": "5551234567",
   "email": "cliente@ejemplo.com",
   "contacto": "Juan Pérez",
   "tipo_pago_id": "<UUID_TIPO_PAGO>",
-  "pantalla_id": "<UUID_PANTALLA>"
+  "pantalla_id": "<UUID_PANTALLA>",
+  "producto_id": "<UUID_PRODUCTO>"
 }
 ```
-`tipo_pago_id` y `pantalla_id` son obligatorios (usa UUIDs de GET tipo-pago y GET pantallas).
+`tipo_pago_id` y `pantalla_id` son obligatorios. `producto_id` es opcional al crear, pero **debe existir en el colaborador** para poder registrar ventas (también se puede asignar con PATCH).
 
 ### Obtener uno
 ```http
-GET http://localhost:4000/api/clientes/<CLIENTE_UUID>
+GET http://localhost:4000/api/colaboradores/<COLABORADOR_UUID>
 Authorization: Bearer <TU_ACCESS_TOKEN>
 ```
 
 ### Actualizar (admin sin código; vendedor con código)
 ```http
-PATCH http://localhost:4000/api/clientes/<CLIENTE_UUID>
+PATCH http://localhost:4000/api/colaboradores/<COLABORADOR_UUID>
 Authorization: Bearer <TU_ACCESS_TOKEN>
 Content-Type: application/json
 
 {
-  "nombre": "Cliente Actualizado",
+  "nombre": "Colaborador actualizado",
   "codigo_edicion": "ABC123"
 }
 ```
@@ -175,16 +175,16 @@ Content-Type: application/json
 
 ---
 
-## 8. Ventas (unidas con Ordenes del mes)
+## 8. Ventas (unidas con orden de compra)
 
-Cada venta puede pertenecer a una **orden del mes** (`orden_mes_id`). Al generar una orden (POST `/api/ordenes/generar`), las ventas del mes quedan enlazadas a esa orden.
+Cada venta puede pertenecer a una **orden de compra** (`orden_de_compra_id`). Al generar (POST `/api/ordenes/generar` con `colaborador_id`, `mes`, `anio`), las ventas de ese colaborador en el periodo quedan enlazadas a esa orden.
 
 ### Listar todas
 ```http
 GET http://localhost:4000/api/ventas
 Authorization: Bearer <TU_ACCESS_TOKEN>
 ```
-Cada ítem incluye `orden_mes: { id, mes, anio }` si la venta está asignada a una orden del mes.
+Cada ítem incluye `orden_de_compra: { id, mes, anio, subtotal, iva, total }` si la venta está asignada.
 
 ### Listar ventas por mes (desde Ventas)
 ```http
@@ -193,45 +193,36 @@ Authorization: Bearer <TU_ACCESS_TOKEN>
 ```
 Filtra por ventas cuya `fecha_inicio`/`fecha_fin` caen en ese mes.
 
-### Listar ventas de una orden del mes
+### Listar ventas de una orden de compra
 ```http
-GET http://localhost:4000/api/ventas?orden_mes_id=<ORDEN_MES_UUID>
+GET http://localhost:4000/api/ventas?orden_de_compra_id=<ORDEN_DE_COMPRA_UUID>
 Authorization: Bearer <TU_ACCESS_TOKEN>
 ```
-Devuelve solo las ventas asignadas a esa orden (la misma lista que al generar la orden).
+También acepta el alias `orden_mes_id` por compatibilidad. Devuelve solo las ventas enlazadas a esa orden.
 
 ### Crear
+La **pantalla** y el **producto** salen del colaborador (`colaborador_id`); no van en el body de la venta.
+
 ```http
 POST http://localhost:4000/api/ventas
 Authorization: Bearer <TU_ACCESS_TOKEN>
 Content-Type: application/json
 
 {
-  "cliente_id": "<CLIENTE_UUID>",
-  "estado": "pendiente",
-  "pantalla_id": "<PANTALLA_UUID>",
+  "colaborador_id": "<COLABORADOR_UUID>",
+  "estado_venta": "prospecto",
+  "client_name": "Nombre del cliente en documento",
   "fecha_inicio": "2025-03-01",
   "fecha_fin": "2025-03-31",
   "duracion_meses": 1,
-  "cantidad": 2,
-  "producto_id": "<PRODUCTO_UUID>",
+  "tipo_pago_id": "<UUID_OPCIONAL>",
+  "precio_por_mes": 5000,
+  "costos": 1000,
+  "utilidad_neta": 4000,
   "comisiones": 250.00
 }
 ```
-O con precio manual (sin producto):
-```json
-{
-  "cliente_id": "<CLIENTE_UUID>",
-  "estado": "pendiente",
-  "pantalla_id": "<PANTALLA_UUID>",
-  "fecha_inicio": "2025-03-01",
-  "fecha_fin": "2025-03-31",
-  "duracion_meses": 1,
-  "cantidad": 1,
-  "precio_unitario_manual": 500,
-  "comisiones": 250.00
-}
-```
+`precio_por_mes`, `costos` y `utilidad_neta` son opcionales (el backend calcula si no vienen).  
 La respuesta incluye `precio_base`, `precio_total`, `tipo_pago_aplicado`, `fuente_precio`.
 
 ### Actualizar (admin sin código; vendedor con código)
@@ -241,7 +232,7 @@ Authorization: Bearer <TU_ACCESS_TOKEN>
 Content-Type: application/json
 
 {
-  "estado": "aceptado",
+  "estado_venta": "aceptado",
   "codigo_edicion": "ABC123"
 }
 ```
@@ -297,35 +288,44 @@ Authorization: Bearer <TU_ACCESS_TOKEN>
 
 ---
 
-## 10. Órdenes del mes (datos guardados en Ventas)
+## 10. Órdenes de compra (`orden_de_compra`)
 
-Las órdenes del mes agrupan ventas por mes/año. Al **generar** una orden, se crea/actualiza el registro en `ordenes_mes` y se asigna `orden_mes_id` a todas las ventas de ese mes (para verlas desde **Ventas** con `?orden_mes_id=` o `?mes=&anio=`).
+Tabla **`orden_de_compra`**: un registro por **colaborador + mes + año**, con **subtotal**, **IVA (16%)**, **total** y `ventas_ids`. Las filas de **ventas** usan **`orden_de_compra_id`**.
 
-### Listar órdenes (resumen mes/año + ventas embebidas)
+### Listar órdenes (colaborador + mes/año + ventas embebidas)
 ```http
 GET http://localhost:4000/api/ordenes
 Authorization: Bearer <TU_ACCESS_TOKEN>
 ```
-Opcional: `?mes=3&anio=2025`
+Opcional: `?mes=3&anio=2025&colaborador_id=<UUID>`
 
-### Ventas por mes (mismo filtro que GET /api/ventas?mes=&anio=)
+### Ventas por mes (opcional por colaborador)
 ```http
 GET http://localhost:4000/api/ordenes/ventas?mes=3&anio=2025
 Authorization: Bearer <TU_ACCESS_TOKEN>
 ```
+Opcional: `&colaborador_id=<UUID>`
 
-### Generar orden del mes
+### Generar orden de compra
 ```http
 POST http://localhost:4000/api/ordenes/generar
 Authorization: Bearer <TU_ACCESS_TOKEN>
 Content-Type: application/json
 
 {
+  "colaborador_id": "<COLABORADOR_UUID>",
   "mes": 3,
   "anio": 2025
 }
 ```
-Crea o actualiza la orden para ese mes, guarda los IDs de ventas en `ordenes_mes.ventas_ids` y asigna `ventas.orden_mes_id` a cada venta del mes. Respuesta: `{ orden, ventas_ids }`.
+Crea o actualiza la fila en `orden_de_compra`, recalcula totales y asigna `ventas.orden_de_compra_id` a las ventas del colaborador que solapan ese mes. Respuesta: `{ orden, ventas_ids }`.
+
+### PDF de la orden de compra
+```http
+GET http://localhost:4000/api/ordenes/<ORDEN_DE_COMPRA_UUID>/pdf
+Authorization: Bearer <TU_ACCESS_TOKEN>
+```
+Devuelve un PDF con el detalle de ventas y subtotal / IVA / total.
 
 ---
 
@@ -372,17 +372,18 @@ No requiere auth. Envía un correo de prueba (Resend/SMTP configurado en `.env`)
 | GET | `/api/auth/me` | Sí | Perfil del token |
 | GET | `/api/tipo-pago` | Sí | Lista tipos de pago |
 | GET/POST | `/api/pantallas` | Sí | CRUD pantallas |
-| GET/POST/PATCH | `/api/clientes` | Sí | CRUD; vendedor usa código para PATCH |
-| GET/POST/PATCH | `/api/ventas` | Sí | Listar: opcional ?mes=&anio= o ?orden_mes_id=; crear con cliente_id, pantalla_id, fechas |
+| GET/POST/PATCH | `/api/colaboradores` | Sí | CRUD; vendedor usa código para PATCH |
+| GET/POST/PATCH | `/api/ventas` | Sí | Listar: ?mes=&anio= o ?orden_de_compra_id=; crear con colaborador_id + fechas |
 | POST | `/api/ventas/:id/renovar` | Sí Admin | Renovar venta |
 | GET/POST | `/api/productos` | Sí; POST admin | Lista y crear producto |
 | GET/POST | `/api/porcentajes` | Sí; POST admin | Lista y crear porcentaje |
 | POST | `/api/codigos/solicitar` | Sí | Vendedor pide código |
 | POST | `/api/codigos/validar` | Sí | Validar código |
 | GET | `/api/codigos` | Sí Admin | Códigos vigentes |
-| GET | `/api/ordenes` | Sí | Órdenes (opcional ?mes=&anio=) |
-| GET | `/api/ordenes/ventas` | Sí | Query: mes, anio |
-| POST | `/api/ordenes/generar` | Sí | Body: mes, anio |
+| GET | `/api/ordenes` | Sí | Órdenes (opcional ?mes=&anio=&colaborador_id=) |
+| GET | `/api/ordenes/ventas` | Sí | Query: mes, anio; opcional colaborador_id |
+| POST | `/api/ordenes/generar` | Sí | Body: colaborador_id, mes, anio |
+| GET | `/api/ordenes/:id/pdf` | Sí | PDF orden de compra |
 | GET/POST | `/api/vendedores` | Sí Admin | Lista y crear vendedor |
 | GET | `/api/diagnostico/email?to=` | No | Prueba de correo |
 

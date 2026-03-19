@@ -61,7 +61,7 @@ const specs = swaggerJsdoc(options);
 
 const swaggerUrl = `http://localhost:${PORT}/api-docs`;
 console.log("\n" + "=".repeat(60));
-console.log("📚 DOCUMENTACIÓN API (Swagger UI)");
+console.log("DOCUMENTACIÓN API (Swagger UI)");
 console.log("=".repeat(60));
 console.log(`🔗 Swagger UI: ${swaggerUrl}`);
 console.log("=".repeat(60) + "\n");
