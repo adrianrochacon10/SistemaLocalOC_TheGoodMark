@@ -1,3 +1,5 @@
+import { supabase } from "../config/supabase.js"; // ← esta línea falta
+
 export const obtener = async () => {
   const { data, error } = await supabase
     .from("configuracion")
@@ -20,7 +22,6 @@ export const guardar = async (body) => {
     activo: body.activo ?? true,
   };
 
-  // Intentar actualizar el registro existente primero
   const { data: existing } = await supabase
     .from("configuracion")
     .select("id")
@@ -38,7 +39,6 @@ export const guardar = async (body) => {
     return data;
   }
 
-  // Si no existe, insertar
   const { data, error } = await supabase
     .from("configuracion")
     .insert(payload)
