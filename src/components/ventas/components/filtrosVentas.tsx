@@ -8,7 +8,7 @@ interface FiltrosVentasProps {
   filtroMes: number;
   filtroAnio: number;
   aniosDisponibles: number[];
-  clientes: Colaborador[];
+  colaboradores: Colaborador[];
   asignaciones: AsignacionPantalla[];
   onBusqueda: (valor: string) => void;
   onFiltroEstado: (estado: string) => void;
@@ -49,7 +49,7 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
   filtroMes,
   filtroAnio,
   aniosDisponibles,
-  clientes,
+  colaboradores,
   asignaciones,
   onBusqueda,
   onFiltroEstado,
@@ -120,16 +120,14 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
             style={{
               borderLeft:
                 filtroCliente !== "Todos"
-                  ? `5px solid ${clientes.find((c) => c.id === filtroCliente)?.color || "#1461a1"}`
+                  ? `5px solid ${colaboradores.find((c) => c.id === filtroCliente)?.color || "#1461a1"}`
                   : undefined,
             }}
           >
             <option value="Todos">— Todos los colaboradores —</option>
-            {clientes
-              .filter(
-                (c) =>
-                  c.activo &&
-                  asignaciones.some((a) => a.clienteId === c.id && a.activa),
+            {colaboradores
+              .filter((c) =>
+                asignaciones.some((a) => a.clienteId === c.id && a.activa),
               )
               .map((c) => (
                 <option key={c.id} value={c.id}>

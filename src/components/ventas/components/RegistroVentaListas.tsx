@@ -14,7 +14,7 @@ import { VentaDetalleModal } from "./VentaDetalleModal";
 interface RegistroVentasListaProps {
   pantallas: Pantalla[];
   asignaciones: AsignacionPantalla[];
-  clientes: Colaborador[];
+  colaboradores: Colaborador[];
   usuarios: Usuario[];
   ventasRegistradas: RegistroVenta[];
   onEliminarVenta: (ventaId: string) => void;
@@ -40,7 +40,7 @@ const MESES = [
 export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   pantallas,
   asignaciones,
-  clientes,
+  colaboradores,
   usuarios = [],
   ventasRegistradas,
   onEliminarVenta,
@@ -71,12 +71,12 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
 
   const ventasFiltradas = useMemo(() => {
     return ventasRegistradas.filter((venta) => {
-      const cliente = clientes.find((c) => c.id === venta.clienteId);
+      const colaborador = colaboradores.find((c) => c.id === venta.colaboradorId);
       const fecha = new Date(venta.fechaInicio);
 
       const coincideBusqueda =
         busquedaVenta === "" ||
-        cliente?.nombre.toLowerCase().includes(busquedaVenta.toLowerCase()) ||
+        colaborador?.nombre.toLowerCase().includes(busquedaVenta.toLowerCase()) ||
         venta.vendidoA.toLowerCase().includes(busquedaVenta.toLowerCase());
 
       const coincideEstado =
@@ -84,7 +84,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
         (venta.estadoVenta ?? "Prospecto") === filtroEstado;
 
       const coincideCliente =
-        filtroCliente === "Todos" || venta.clienteId === filtroCliente;
+        filtroCliente === "Todos" || venta.colaboradorId === filtroCliente;
 
       const coincideMes = fecha.getMonth() === filtroMes;
       const coincideAnio = fecha.getFullYear() === filtroAnio;
@@ -123,7 +123,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
         filtroMes={filtroMes}
         filtroAnio={filtroAnio}
         aniosDisponibles={aniosDisponibles}
-        clientes={clientes}
+        colaboradores={colaboradores}
         asignaciones={asignaciones}
         onBusqueda={(v) => {
           setBusquedaVenta(v);
@@ -159,7 +159,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
           <VentaCard
             key={venta.id}
             venta={venta}
-            clientes={clientes}
+            colaboradores={colaboradores}
             pantallas={pantallas}
             onEditar={onEditarVenta}
             onEliminar={onEliminarVenta}
@@ -190,7 +190,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
       {ventaDetalle && (
         <VentaDetalleModal
           venta={ventaDetalle}
-          clientes={clientes}
+          colaboradores={colaboradores}
           pantallas={pantallas}
           usuarios={usuarios}
           onCerrar={() => setVentaDetalle(null)}

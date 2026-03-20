@@ -42,7 +42,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
 }) => {
   // ── Estados ───────────────────────────────────────────────────────────
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>(
-    ventaInicial?.clienteId ?? "",
+    ventaInicial?.colaboradorId ?? "",
   );
   const [itemsVenta, setItemsVenta] = useState<ItemVenta[]>(
     ventaInicial?.itemsVenta ?? [],
@@ -89,19 +89,16 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId);
 
   const opcionesClientes = clientes
-    .filter(
-      (c) =>
-        c.activo && asignaciones.some((a) => a.clienteId === c.id && a.activa),
-    )
     .map((c) => {
-      const num = asignaciones.filter(
+      const numPantallas = asignaciones.filter(
         (a) => a.clienteId === c.id && a.activa,
       ).length;
       return {
         value: c.id,
-        label: `${c.nombre} (${num} pantalla${num !== 1 ? "s" : ""})`,
+        label: `${c.nombre} (${numPantallas} pantalla${numPantallas !== 1 ? "s" : ""})`,
       };
-    });
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const opcionesVendedores = (usuarios ?? [])
     .filter((u) => u.rol === "usuario")
@@ -197,7 +194,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       id: ventaInicial?.id ?? "v" + Date.now(),
       pantallasIds: itemsVenta.map((i) => i.pantallaId),
       itemsVenta,
-      clienteId: clienteSeleccionado,
+      colaboradorId: clienteSeleccionado,
       vendidoA: vendidoA.trim(),
       precioGeneral: precioGeneral,
       cantidad: 1,

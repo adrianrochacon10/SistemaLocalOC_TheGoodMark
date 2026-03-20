@@ -1,12 +1,11 @@
-import React from "react";
-import { Colaborador, Pantalla, RegistroVenta } from "../../../types";
 import { colorPorEstado } from "../../../utils/colores";
 import { formatearFecha } from "../../../utils/formateoFecha";
 import { formatearMoneda } from "../../../utils/formateoMoneda";
+import { Colaborador, Pantalla, RegistroVenta } from "../../../types";
 
 interface VentaCardProps {
   venta: RegistroVenta;
-  clientes: Colaborador[];
+  colaboradores: Colaborador[];
   pantallas: Pantalla[];
   onEditar: (venta: RegistroVenta) => void;
   onEliminar: (id: string) => void;
@@ -15,28 +14,39 @@ interface VentaCardProps {
 
 export const VentaCard: React.FC<VentaCardProps> = ({
   venta,
-  clientes,
+  colaboradores,
   pantallas,
   onEditar,
   onEliminar,
   onClick,
 }) => {
-  const cliente = clientes.find((c) => c.id === venta.clienteId);
+  const colaborador = colaboradores.find((c) => c.id === venta.colaboradorId);
   const pantallasNombres = venta.pantallasIds
     .map((id) => pantallas.find((p) => p.id === id)?.nombre)
     .filter(Boolean)
     .join(", ");
 
   const colores = colorPorEstado(venta.estadoVenta);
-  const colorCliente = cliente?.color || "#1461a1";
+  const colorColaborador = colaborador?.color || "#1461a1";
+
+  // ✅ Precio por mes calculado
+  const precioMes =
+    venta.precioGeneral > 0
+      ? venta.precioGeneral
+      : venta.mesesRenta > 0
+        ? (venta.precioTotal ?? 0) / venta.mesesRenta
+        : (venta.precioTotal ?? 0);
+
+  // ✅ Total del contrato
+  const precioTotalContrato = venta.precioTotal ?? precioMes * venta.mesesRenta;
 
   return (
     <div
       key={venta.id}
       className="venta-item venta-reducida cursor-pointer"
-      onClick={onClick} // ← abre el detalle
+      onClick={onClick}
       style={{
-        borderLeft: `10px solid ${colorCliente}`,
+        borderLeft: `10px solid ${colorColaborador}`,
         borderRadius: "8px",
         position: "relative",
         paddingRight: "90px",
@@ -65,7 +75,7 @@ export const VentaCard: React.FC<VentaCardProps> = ({
       >
         <button
           onClick={(e) => {
-            e.stopPropagation(); // ← evita abrir el detalle
+            e.stopPropagation();
             onEditar(venta);
           }}
           title="Editar"
@@ -84,7 +94,7 @@ export const VentaCard: React.FC<VentaCardProps> = ({
         </button>
         <button
           onClick={(e) => {
-            e.stopPropagation(); // ← evita abrir el detalle
+            e.stopPropagation();
             if (confirm("¿Eliminar esta venta?")) onEliminar(venta.id);
           }}
           title="Eliminar"
@@ -114,20 +124,19 @@ export const VentaCard: React.FC<VentaCardProps> = ({
       >
         <span
           style={{
-            background: colorCliente,
+            background: colorColaborador,
             color: "#fff",
             borderRadius: "6px",
             padding: "2px 10px",
             fontWeight: 700,
             fontSize: "0.85em",
-            letterSpacing: "0.3px",
             whiteSpace: "nowrap",
           }}
         >
-          {cliente?.nombre}
+          {colaborador?.nombre ?? "Sin colaborador"}
         </span>
         <span style={{ fontWeight: 600, color: "#334155", fontSize: "0.9em" }}>
-          {pantallasNombres}
+          {pantallasNombres || "Sin pantallas"}
         </span>
       </div>
 
@@ -140,6 +149,7 @@ export const VentaCard: React.FC<VentaCardProps> = ({
           marginBottom: 6,
         }}
       >
+        {/* ✅ Precio por mes */}
         <span
           style={{
             background: colores.badge,
@@ -150,10 +160,19 @@ export const VentaCard: React.FC<VentaCardProps> = ({
             fontSize: "1em",
           }}
         >
-          {formatearMoneda(venta.precioGeneral ?? venta.precioTotal ?? 0)}
+          {formatearMoneda(precioMes)}
         </span>
 
-        {/* ← Tachado del precio original si hay descuento */}
+        {/* ✅ Total del contrato si es más de 1 mes */}
+        {venta.mesesRenta > 1 && (
+          <span
+            style={{ color: "#64748b", fontSize: "0.82em", fontWeight: 500 }}
+          >
+            Total: {formatearMoneda(precioTotalContrato)}
+          </span>
+        )}
+
+        {/* Tachado si hay descuento */}
         {venta.importeTotal !== venta.precioTotal && venta.precioTotal && (
           <span
             style={{
@@ -191,7 +210,7 @@ export const VentaCard: React.FC<VentaCardProps> = ({
           gap: 6,
         }}
       >
-        <span>👤 {venta.vendidoA}</span>
+        <span>👤 {venta.vendidoA || "-"}</span>
         <span style={{ color: "#aaa" }}>•</span>
         <span>📅 {formatearFecha(venta.fechaInicio)}</span>
         <span style={{ color: "#aaa" }}>→</span>

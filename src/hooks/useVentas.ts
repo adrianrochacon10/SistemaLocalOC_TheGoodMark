@@ -1,13 +1,10 @@
+// src/hooks/useVentas.ts
 import { useState, useEffect } from "react";
-import { RegistroVenta, Colaborador, AsignacionPantalla } from "../types";
+import { RegistroVenta } from "../types";
 import { backendApi } from "../lib/backendApi";
 import { registrarVenta } from "../lib/ventas";
 
-export function useVentas(
-  profile: any,
-  clientes: Colaborador[],
-  asignaciones: AsignacionPantalla[],
-) {
+export function useVentas(profile: any) {
   const [ventasRegistradas, setVentasRegistradas] = useState<RegistroVenta[]>(
     [],
   );
@@ -24,7 +21,7 @@ export function useVentas(
         pantallaId,
         sinDescuento: false,
       })),
-      clienteId: row.colaborador_id ?? row.cliente_id,
+      colaboradorId: row.colaborador_id ?? row.cliente_id,
       productoId: row.producto_id ?? undefined,
       vendidoA: row.vendido_a ?? row.cliente?.nombre ?? "-",
       precioGeneral: row.precio_general ?? 0,
@@ -38,20 +35,30 @@ export function useVentas(
       fechaInicio: new Date(row.fecha_inicio),
       fechaFin: new Date(row.fecha_fin),
       mesesRenta: row.duracion_meses ?? row.meses_renta ?? 1,
-      importeTotal: row.precio_total ?? row.importe_total ?? 0,
+      importeTotal: row.importe_total ?? row.precio_total ?? 0,
       activo: row.activo ?? true,
-      usuarioRegistroId: row.vendedor_id ?? row.usuario_registro_id ?? "",
+
+      // ✅ vendedorId separado de usuarioRegistroId
+      vendedorId: row.vendedor_id ?? undefined,
+      usuarioRegistroId: row.usuario_registro_id ?? row.vendedor_id ?? "",
+
       estadoVenta: row.estado
         ? ((row.estado.charAt(0).toUpperCase() + row.estado.slice(1)) as
             | "Aceptado"
             | "Rechazado"
             | "Prospecto")
         : undefined,
+
       tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
+
+      // ✅ Campos financieros que faltaban
+      costos: row.costos ?? 0,
+      comision: row.comision ?? 0,
+      pagoConsiderar: row.pago_considerar ?? undefined,
     };
   };
 
-  // Cargar desde backend
+  // ── Cargar desde backend ──────────────────────────────────────────────
   useEffect(() => {
     if (!profile) return;
     const cargar = async () => {
@@ -65,17 +72,17 @@ export function useVentas(
     cargar();
   }, [profile]);
 
-  // Persistir
+  // ── Persistir en localStorage ─────────────────────────────────────────
   useEffect(() => {
     if (!profile) return;
     try {
       localStorage.setItem("ventas", JSON.stringify(ventasRegistradas));
     } catch (e) {
-      console.error("Error guardando ventas:", e);
+      console.error("Error guardando ventas en localStorage:", e);
     }
   }, [ventasRegistradas, profile]);
 
-  // Cargar inicial
+  // ── Cargar desde localStorage (inicial) ──────────────────────────────
   useEffect(() => {
     const datos = localStorage.getItem("ventas");
     if (datos) {
@@ -87,10 +94,13 @@ export function useVentas(
     }
   }, []);
 
+  // ── Registrar venta ───────────────────────────────────────────────────
   const handleRegistrarVentaConSupabase = async (venta: RegistroVenta) => {
     setErrorVenta(null);
+
     const pantallasParaVenta =
       venta.pantallasIds.length > 0 ? venta.pantallasIds : [];
+
     if (pantallasParaVenta.length === 0) {
       setErrorVenta("Selecciona al menos una pantalla");
       return;
@@ -98,7 +108,7 @@ export function useVentas(
 
     const estadoApi = venta.estadoVenta?.toLowerCase() ?? "prospecto";
     const payloadBase = {
-      cliente_id: venta.clienteId,
+      colaborador_id: venta.colaboradorId,
       producto_id: venta.productoId ?? null,
       cantidad: venta.cantidad ?? 1,
       precio_unitario_manual:
@@ -110,6 +120,16 @@ export function useVentas(
       fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
       fecha_fin: venta.fechaFin.toISOString().slice(0, 10),
       duracion_meses: venta.mesesRenta,
+      vendido_a: venta.vendidoA,
+      vendedor_id: venta.vendedorId ?? null,
+      importe_total: venta.importeTotal ?? venta.precioTotal,
+      pago_considerar: venta.pagoConsiderar ?? 0,
+      costos: venta.costos ?? 0,
+      comision: venta.comision ?? 0,
+      costos_mes: venta.costos ?? 0,
+      costos_total: (venta.costos ?? 0) * venta.mesesRenta,
+      comision_mes: venta.comision ?? 0,
+      comision_total: (venta.comision ?? 0) * venta.mesesRenta,
     };
 
     const ventasCreadas: RegistroVenta[] = [];
@@ -131,6 +151,7 @@ export function useVentas(
           setVentasRegistradas((prev) => [...prev, venta]);
           return;
         }
+
         if (data) ventasCreadas.push(mapVentaFromApi(data));
       }
 
@@ -146,6 +167,7 @@ export function useVentas(
     }
   };
 
+  // ── Eliminar venta ────────────────────────────────────────────────────
   const handleEliminarVenta = (ventaId: string) => {
     setVentasRegistradas((prev) => prev.filter((v) => v.id !== ventaId));
   };
