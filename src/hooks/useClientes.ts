@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { Colaborador } from "../types";
 import { backendApi } from "../lib/backendApi";
 
@@ -71,12 +72,12 @@ const mapBackendColaborador = (row: any): Colaborador & ExtrasColaborador => {
   };
 };
 
-export function useClientes(profile: any) {
+export function useClientes(profile: any, session: Session | null) {
   const [clientes, setClientes] = useState<Colaborador[]>([]);
 
-  // Cargar desde backend
+  // Cargar desde backend (solo con sesión lista — evita 401 por token aún no persistido)
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || !session?.access_token) return;
     const cargar = async () => {
       try {
         const data = (await backendApi.get("/api/colaboradores")) as any[];
@@ -86,7 +87,7 @@ export function useClientes(profile: any) {
       }
     };
     cargar();
-  }, [profile]);
+  }, [profile?.id, session?.access_token]);
 
   // Persistir en localStorage
   useEffect(() => {

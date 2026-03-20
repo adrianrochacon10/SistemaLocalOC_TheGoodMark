@@ -1,10 +1,11 @@
 // src/hooks/useVentas.ts
 import { useState, useEffect } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { RegistroVenta } from "../types";
 import { backendApi } from "../lib/backendApi";
 import { registrarVenta } from "../lib/ventas";
 
-export function useVentas(profile: any) {
+export function useVentas(profile: any, session: Session | null) {
   const [ventasRegistradas, setVentasRegistradas] = useState<RegistroVenta[]>(
     [],
   );
@@ -23,8 +24,9 @@ export function useVentas(profile: any) {
       })),
       colaboradorId: row.colaborador_id ?? row.cliente_id,
       productoId: row.producto_id ?? undefined,
-      vendidoA: row.vendido_a ?? row.cliente?.nombre ?? "-",
-      precioGeneral: row.precio_general ?? 0,
+      vendidoA: row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
+      precioGeneral:
+        Number(row.precio_por_mes ?? row.precio_general ?? 0) || 0,
       cantidad: row.cantidad ?? 1,
       precioTotal: row.precio_total ?? row.importe_total ?? 0,
       fechaRegistro: row.created_at
@@ -42,25 +44,27 @@ export function useVentas(profile: any) {
       vendedorId: row.vendedor_id ?? undefined,
       usuarioRegistroId: row.usuario_registro_id ?? row.vendedor_id ?? "",
 
-      estadoVenta: row.estado
-        ? ((row.estado.charAt(0).toUpperCase() + row.estado.slice(1)) as
-            | "Aceptado"
-            | "Rechazado"
-            | "Prospecto")
-        : undefined,
+      estadoVenta: (() => {
+        const raw = row.estado_venta ?? row.estado;
+        if (!raw || typeof raw !== "string") return "Prospecto" as const;
+        const e = raw.toLowerCase();
+        if (e === "aceptado") return "Aceptado" as const;
+        if (e === "rechazado") return "Rechazado" as const;
+        return "Prospecto" as const;
+      })(),
 
       tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
 
       // ✅ Campos financieros que faltaban
       costos: row.costos ?? 0,
-      comision: row.comision ?? 0,
+      comision: row.comisiones ?? row.comision ?? 0,
       pagoConsiderar: row.pago_considerar ?? undefined,
     };
   };
 
   // ── Cargar desde backend ──────────────────────────────────────────────
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || !session?.access_token) return;
     const cargar = async () => {
       try {
         const data = (await backendApi.get("/api/ventas")) as any[];
@@ -70,7 +74,7 @@ export function useVentas(profile: any) {
       }
     };
     cargar();
-  }, [profile]);
+  }, [profile?.id, session?.access_token]);
 
   // ── Persistir en localStorage ─────────────────────────────────────────
   useEffect(() => {
@@ -81,18 +85,6 @@ export function useVentas(profile: any) {
       console.error("Error guardando ventas en localStorage:", e);
     }
   }, [ventasRegistradas, profile]);
-
-  // ── Cargar desde localStorage (inicial) ──────────────────────────────
-  useEffect(() => {
-    const datos = localStorage.getItem("ventas");
-    if (datos) {
-      try {
-        setVentasRegistradas(JSON.parse(datos));
-      } catch (e) {
-        console.error("Error cargando ventas desde localStorage:", e);
-      }
-    }
-  }, []);
 
   // ── Registrar venta ───────────────────────────────────────────────────
   const handleRegistrarVentaConSupabase = async (venta: RegistroVenta) => {
@@ -121,7 +113,7 @@ export function useVentas(profile: any) {
       fecha_fin: venta.fechaFin.toISOString().slice(0, 10),
       duracion_meses: venta.mesesRenta,
       vendido_a: venta.vendidoA,
-      vendedor_id: venta.vendedorId ?? null,
+      vendedor_id: venta.vendedorId ?? venta.usuarioRegistroId ?? null,
       importe_total: venta.importeTotal ?? venta.precioTotal,
       pago_considerar: venta.pagoConsiderar ?? 0,
       costos: venta.costos ?? 0,

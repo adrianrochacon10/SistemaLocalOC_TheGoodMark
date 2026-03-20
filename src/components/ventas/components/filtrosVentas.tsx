@@ -146,6 +146,7 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
               onChange={(e) => onFiltroMes(Number(e.target.value))}
               className="select-filtro"
             >
+              <option value={-1}>Todos los meses</option>
               {MESES.map((m, i) => (
                 <option key={i} value={i}>
                   {m}
@@ -157,6 +158,7 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
               onChange={(e) => onFiltroAnio(Number(e.target.value))}
               className="select-filtro"
             >
+              <option value={-1}>Todos los años</option>
               {aniosDisponibles.map((a) => (
                 <option key={a} value={a}>
                   {a}

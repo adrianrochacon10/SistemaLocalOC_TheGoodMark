@@ -52,8 +52,9 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   const [busquedaVenta, setBusquedaVenta] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<string>("Todos");
   const [filtroCliente, setFiltroCliente] = useState<string>("Todos");
-  const [filtroMes, setFiltroMes] = useState<number>(hoy.getMonth());
-  const [filtroAnio, setFiltroAnio] = useState<number>(hoy.getFullYear());
+  /** -1 = mostrar todos los meses / todos los años */
+  const [filtroMes, setFiltroMes] = useState<number>(-1);
+  const [filtroAnio, setFiltroAnio] = useState<number>(-1);
   const [paginaActual, setPaginaActual] = useState(1);
   const [ventaDetalle, setVentaDetalle] = useState<RegistroVenta | null>(null);
 
@@ -74,10 +75,13 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
       const colaborador = colaboradores.find((c) => c.id === venta.colaboradorId);
       const fecha = new Date(venta.fechaInicio);
 
+      const vendido = (venta.vendidoA ?? "").toLowerCase();
       const coincideBusqueda =
         busquedaVenta === "" ||
-        colaborador?.nombre.toLowerCase().includes(busquedaVenta.toLowerCase()) ||
-        venta.vendidoA.toLowerCase().includes(busquedaVenta.toLowerCase());
+        (colaborador?.nombre ?? "")
+          .toLowerCase()
+          .includes(busquedaVenta.toLowerCase()) ||
+        vendido.includes(busquedaVenta.toLowerCase());
 
       const coincideEstado =
         filtroEstado === "Todos" ||
@@ -86,8 +90,8 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
       const coincideCliente =
         filtroCliente === "Todos" || venta.colaboradorId === filtroCliente;
 
-      const coincideMes = fecha.getMonth() === filtroMes;
-      const coincideAnio = fecha.getFullYear() === filtroAnio;
+      const coincideMes = filtroMes < 0 || fecha.getMonth() === filtroMes;
+      const coincideAnio = filtroAnio < 0 || fecha.getFullYear() === filtroAnio;
 
       return (
         coincideBusqueda &&
@@ -149,7 +153,14 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
       />
 
       <h2>
-        📅 Registros de {MESES[filtroMes]} de {filtroAnio}
+        📅{" "}
+        {filtroMes < 0 && filtroAnio < 0
+          ? "Todas las ventas guardadas"
+          : filtroMes < 0
+            ? `Ventas de ${filtroAnio}`
+            : filtroAnio < 0
+              ? `Ventas de ${MESES[filtroMes]} (todos los años)`
+              : `Registros de ${MESES[filtroMes]} de ${filtroAnio}`}
       </h2>
 
       <EstadisticasVentas ventasFiltradas={ventasFiltradas} />

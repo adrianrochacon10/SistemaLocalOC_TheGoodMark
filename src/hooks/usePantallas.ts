@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { Pantalla, AsignacionPantalla } from "../types";
 import { backendApi } from "../lib/backendApi";
 
-export function usePantallas(profile: any) {
+export function usePantallas(profile: any, session: Session | null) {
   const [pantallas, setPantallas] = useState<Pantalla[]>([]);
   const [asignaciones, setAsignaciones] = useState<AsignacionPantalla[]>([]);
 
@@ -41,7 +42,7 @@ export function usePantallas(profile: any) {
       }
     };
     cargar();
-  }, [profile]);
+  }, [profile?.id, session?.access_token]);
 
   // Persistir
   useEffect(() => {

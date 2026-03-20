@@ -1,5 +1,5 @@
 // src/components/ventas/RegistroVentaModal.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   RegistroVenta,
   Pantalla,
@@ -68,7 +68,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     "Aceptado" | "Rechazado" | "Prospecto"
   >(ventaInicial?.estadoVenta ?? "Prospecto");
   const [vendedorId, setVendedorId] = useState<string>(
-    ventaInicial?.vendedorId ?? "",
+    ventaInicial?.vendedorId ?? usuarioActual?.id ?? "",
   );
   const mesesIniciales = ventaInicial?.mesesRenta ?? 1;
 
@@ -100,13 +100,63 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     })
     .sort((a, b) => a.label.localeCompare(b.label));
 
-  const opcionesVendedores = (usuarios ?? [])
-    .filter((u) => u.rol === "usuario")
-    .map((u) => ({ value: u.id, label: u.nombre }));
+  const opcionesVendedores = useMemo(() => {
+    const map = new Map<string, { value: string; label: string }>();
+    for (const u of usuarios ?? []) {
+      if (u.rol === "vendedor" || u.rol === "usuario" || u.rol === "admin") {
+        map.set(u.id, { value: u.id, label: u.nombre });
+      }
+    }
+    if (usuarioActual?.id && !map.has(usuarioActual.id)) {
+      map.set(usuarioActual.id, {
+        value: usuarioActual.id,
+        label: usuarioActual.nombre,
+      });
+    }
+    return Array.from(map.values());
+  }, [usuarios, usuarioActual]);
 
-  const pantallasDelCliente = asignaciones.filter(
-    (a) => a.clienteId === clienteSeleccionado && a.activa,
-  );
+  useEffect(() => {
+    if (ventaInicial) {
+      setVendedorId(ventaInicial.vendedorId ?? usuarioActual.id ?? "");
+    } else {
+      setVendedorId(usuarioActual.id ?? "");
+    }
+  }, [ventaInicial?.id, ventaInicial?.vendedorId, usuarioActual.id]);
+
+  /** Asignaciones en BD + pantallas del colaborador vía API (pantalla_ids / pantallas) */
+  const pantallasDelCliente = useMemo((): AsignacionPantalla[] => {
+    const fromAsignaciones = asignaciones.filter(
+      (a) => a.clienteId === clienteSeleccionado && a.activa,
+    );
+    if (fromAsignaciones.length > 0) return fromAsignaciones;
+
+    const c = clientes.find((x) => x.id === clienteSeleccionado) as
+      | (Colaborador & {
+          pantalla_ids?: string[];
+          pantallas?: Array<{ id: string }>;
+        })
+      | undefined;
+    if (!c) return [];
+
+    let ids: string[] = [];
+    if (Array.isArray(c.pantalla_ids) && c.pantalla_ids.length > 0) {
+      ids = c.pantalla_ids.filter(Boolean) as string[];
+    } else if (Array.isArray(c.pantallas) && c.pantallas.length > 0) {
+      ids = c.pantallas.map((p) => p.id).filter(Boolean);
+    }
+    if (ids.length === 0) return [];
+
+    const now = new Date();
+    return ids.map((pantallaId, i) => ({
+      id: `colab-${clienteSeleccionado}-${pantallaId}-${i}`,
+      pantallaId,
+      clienteId: clienteSeleccionado,
+      activa: true,
+      fechaAsignacion: now,
+    }));
+  }, [clienteSeleccionado, asignaciones, clientes]);
+
   const clienteActual = clientes.find((c) => c.id === clienteSeleccionado);
   const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
   const tieneConsideracion = clienteActual?.tipoComision === "consideracion";
@@ -152,7 +202,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setPrecioGeneral(0);
     setEstadoVenta("Prospecto");
     setAplicarDescuento(false);
-    setVendedorId("");
+    setVendedorId(usuarioActual.id ?? "");
     setCostos(0);
     setError("");
     setExito("");
@@ -222,12 +272,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     resetFormularioVenta();
     setTimeout(() => setExito(""), 2000);
     onCerrar();
-    console.log(nuevaVenta);
   };
-
-  console.log("asignaciones:", asignaciones);
-  console.log("clienteSeleccionado:", clienteSeleccionado);
-  console.log("pantallasDelCliente:", pantallasDelCliente);
 
   // ── JSX ───────────────────────────────────────────────────────────────
   return (

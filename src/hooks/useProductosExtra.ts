@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { Producto, AsignacionProductoExtra } from "../types";
 import { backendApi } from "../lib/backendApi";
 
-export function useProductosExtra(profile: any) {
+export function useProductosExtra(profile: any, session: Session | null) {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [asignacionesProductos, setAsignacionesProductos] = useState<
     AsignacionProductoExtra[]
@@ -51,7 +52,7 @@ export function useProductosExtra(profile: any) {
       }
     };
     cargar();
-  }, [profile]);
+  }, [profile?.id, session?.access_token]);
 
   // Persistir en localStorage
   useEffect(() => {

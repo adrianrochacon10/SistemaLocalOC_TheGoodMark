@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
+import { invalidateBackendAuthCache } from "../lib/backendApi";
 
 export type Rol = "admin" | "usuario";
 
@@ -100,6 +101,7 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     setError(null);
+    invalidateBackendAuthCache();
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);

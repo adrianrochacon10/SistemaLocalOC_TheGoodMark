@@ -34,8 +34,9 @@ export async function crear(body, vendedorId) {
   precioPorMes = precioPorMes != null && precioPorMes !== "" ? Number(precioPorMes) : null;
   if (precioPorMes != null && (!Number.isFinite(precioPorMes) || precioPorMes < 0)) return { error: "precio_por_mes (ventas) debe ser un numero >= 0" };
 
-  const comisiones = body.comisiones != null ? Number(body.comisiones) : 0;
-  const descuento = body.descuento != null ? Number(body.descuento) : 0;
+  const comisiones = Number(body.comisiones ?? body.comision ?? body.comision_total ?? 0);
+  const descuento = Number(body.descuento ?? 0);
+
   const renovable = body.renovable ?? false;
 
   const { data: colaborador, error: errColab } = await supabase
@@ -72,8 +73,8 @@ export async function crear(body, vendedorId) {
     costos: Math.round(Number(costos) * 100) / 100,
     utilidad_neta: utilidadNeta,
     precio_total: precioTotal,
-    comisiones: Number.isFinite(comisiones) ? comisiones : 0,
-    descuento: Number.isFinite(descuento) ? descuento : 0,
+    comisiones: Number.isFinite(comisiones) && comisiones >= 0 ? Math.round(comisiones * 100) / 100 : 0,
+    descuento: Number.isFinite(descuento) && descuento >= 0 ? Math.round(descuento * 100) / 100 : 0,
   };
 
   const { data, error } = await supabase.from("ventas").insert(insertPayload).select(SELECT_VENTAS).single();
@@ -100,6 +101,8 @@ export async function crear(body, vendedorId) {
       `Costos: $${n(data?.costos).toFixed(2)}`,
       `Utilidad neta: $${n(data?.utilidad_neta).toFixed(2)}`,
       `Precio total: $${n(data?.precio_total).toFixed(2)}`,
+      `Comisiones: $${n(data?.comisiones).toFixed(2)}`,
+      `Descuento: $${n(data?.descuento).toFixed(2)}`,
       `Estado: ${data?.estado_venta}`,
       `Fechas: ${data?.fecha_inicio} al ${data?.fecha_fin}`,
       `Meses: ${data?.duracion_meses}`,
@@ -115,6 +118,8 @@ export async function crear(body, vendedorId) {
         <li><strong>Costos:</strong> $${n(data?.costos).toFixed(2)}</li>
         <li><strong>Utilidad neta:</strong> $${n(data?.utilidad_neta).toFixed(2)}</li>
         <li><strong>Precio total:</strong> $${n(data?.precio_total).toFixed(2)}</li>
+        <li><strong>Comisiones:</strong> $${n(data?.comisiones).toFixed(2)}</li>
+        <li><strong>Descuento:</strong> $${n(data?.descuento).toFixed(2)}</li>
         <li><strong>Estado:</strong> ${data?.estado_venta}</li>
         <li><strong>Fechas:</strong> ${data?.fecha_inicio} al ${data?.fecha_fin}</li>
         <li><strong>Meses:</strong> ${data?.duracion_meses}</li>
@@ -195,8 +200,16 @@ export async function actualizar(id, body) {
     payload.precio_total = Math.round(precioPorMes * duracionMeses * 100) / 100;
   }
 
-  if (body.comisiones !== undefined) payload.comisiones = Number(body.comisiones);
-  if (body.descuento !== undefined) payload.descuento = Number(body.descuento);
+  if (body.comisiones !== undefined || body.comision !== undefined || body.comision_total !== undefined) {
+    const c = Number(body.comisiones ?? body.comision ?? body.comision_total);
+    if (!Number.isFinite(c) || c < 0) throw new Error("comisiones debe ser un numero >= 0");
+    payload.comisiones = Math.round(c * 100) / 100;
+  }
+  if (body.descuento !== undefined) {
+    const d = Number(body.descuento);
+    if (!Number.isFinite(d) || d < 0) throw new Error("descuento debe ser un numero >= 0");
+    payload.descuento = Math.round(d * 100) / 100;
+  }
 
   const { data, error } = await supabase.from("ventas").update(payload).eq("id", id).select(SELECT_VENTAS).single();
   if (error) throw new Error(error.message);
@@ -231,6 +244,13 @@ export async function renovar(id, body) {
   const utilidadNeta = Math.round((Number(precioPorMes) - Number(costos)) * 100) / 100;
   const precioTotal = Math.round(Number(precioPorMes) * Number(duracion) * 100) / 100;
 
+  const comisionesRen =
+    body.comisiones != null || body.comision != null || body.comision_total != null
+      ? Number(body.comisiones ?? body.comision ?? body.comision_total)
+      : Number(venta.comisiones ?? 0);
+  const descuentoRen =
+    body.descuento != null ? Number(body.descuento) : Number(venta.descuento ?? 0);
+
   const insertPayload = {
     colaborador_id: venta.colaborador_id,
     client_name: colaborador.nombre,
@@ -245,8 +265,8 @@ export async function renovar(id, body) {
     costos: Math.round(Number(costos) * 100) / 100,
     utilidad_neta: utilidadNeta,
     precio_total: precioTotal,
-    comisiones: venta.comisiones ?? 0,
-    descuento: venta.descuento ?? 0,
+    comisiones: Number.isFinite(comisionesRen) && comisionesRen >= 0 ? Math.round(comisionesRen * 100) / 100 : 0,
+    descuento: Number.isFinite(descuentoRen) && descuentoRen >= 0 ? Math.round(descuentoRen * 100) / 100 : 0,
   };
 
   const { data, error } = await supabase.from("ventas").insert(insertPayload).select(SELECT_VENTAS).single();

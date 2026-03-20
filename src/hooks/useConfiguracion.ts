@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { ConfiguracionEmpresa, OrdenDeCompra } from "../types";
 import { backendApi } from "../lib/backendApi";
 
-export function useConfiguracion(profile: any) {
+export function useConfiguracion(profile: any, session: Session | null) {
   const [config, setConfig] = useState<ConfiguracionEmpresa>({
     id: "cfg1",
     nombreEmpresa: "Mi Empresa de Pantallas",
@@ -38,7 +39,7 @@ export function useConfiguracion(profile: any) {
       }
     };
     cargar();
-  }, [profile]);
+  }, [profile?.id, session?.access_token]);
 
   // Persistir
   useEffect(() => {
