@@ -1,5 +1,3 @@
-import { supabase } from "../lib/supabaseClient.js";
-
 export const obtener = async () => {
   const { data, error } = await supabase
     .from("configuracion")
