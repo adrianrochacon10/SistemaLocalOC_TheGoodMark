@@ -40,8 +40,8 @@ export interface Colaborador {
   // color?: string;
   // tipoPdf?: 1 | 2;
   // activo: boolean;
-  // tipoComision?: "porcentaje" | "ninguno" | "consideracion" | "precio_fijo";
-  // porcentajeSocio?: number;
+  tipoComision?: "porcentaje" | "ninguno" | "consideracion" | "precio_fijo";
+  porcentajeSocio?: number;
 }
 
 // Asignación de pantalla a cliente
@@ -73,7 +73,7 @@ export interface RegistroVenta {
   id: string;
   pantallasIds: string[];
   itemsVenta: ItemVenta[];
-  clienteId: string;
+  colaboradorId: string;
   productoId?: string | null;
   vendidoA: string;
   precioGeneral: number;

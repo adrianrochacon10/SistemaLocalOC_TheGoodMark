@@ -5,7 +5,7 @@ import { RegistroVenta, Colaborador, Pantalla, Usuario } from "../../../types";
 
 interface Props {
   venta: RegistroVenta;
-  clientes: Colaborador[];
+  colaboradores: Colaborador[];
   pantallas: Pantalla[];
   usuarios: Usuario[];
   onCerrar: () => void;
@@ -30,13 +30,13 @@ const ESTADO_COLOR: Record<string, string> = {
 
 export const VentaDetalleModal: React.FC<Props> = ({
   venta,
-  clientes,
+  colaboradores,
   pantallas,
   usuarios,
   onCerrar,
   onEditar,
 }) => {
-  const cliente = clientes.find((c) => c.id === venta.clienteId);
+  const colaborador = colaboradores.find((c) => c.id === venta.colaboradorId);
   const vendedor = usuarios.find((u) => u.id === venta.vendedorId);
 
   const pantallasVenta = (venta.pantallasIds ?? [])
@@ -68,7 +68,7 @@ export const VentaDetalleModal: React.FC<Props> = ({
             <div className="vd-row-grid">
               <div className="vd-dato">
                 <span className="vd-dato-label">Colaborador</span>
-                <span className="vd-dato-valor">{cliente?.nombre ?? "—"}</span>
+                <span className="vd-dato-valor">{colaborador?.nombre ?? "—"}</span>
               </div>
               <div className="vd-dato">
                 <span className="vd-dato-label">Vendedor asignado</span>
@@ -151,7 +151,7 @@ export const VentaDetalleModal: React.FC<Props> = ({
                     ? Math.round((montoSocioMes / precioMes) * 100)
                     : 0;
 
-                const esPorcentaje = cliente?.tipoComision === "porcentaje";
+                const esPorcentaje = colaborador?.tipoComision === "porcentaje";
 
                 const utilidad =
                   totalBruto -
@@ -226,7 +226,7 @@ export const VentaDetalleModal: React.FC<Props> = ({
                     )}
 
                     {/* ── MONTO SOCIO ── */}
-                    {cliente?.tipoComision === "porcentaje" &&
+                    {colaborador?.tipoComision === "porcentaje" &&
                       totalMontoSocio > 0 && (
                         <div className="resumen-fin-bloque resumen-fin-bloque-morado">
                           <div className="resumen-fin-row resumen-fin-principal resumen-fin-morado">

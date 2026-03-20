@@ -21,7 +21,7 @@ interface RegistroVentasNuevoProps {
   asignacionProductos: AsignacionProductoExtra[];
   clientes: Colaborador[];
   ventasRegistradas: RegistroVenta[];
-  usuarios: Usuario[]; // ← era Usuario (sin [])
+  usuarios: Usuario[];
   usuarioActual: Usuario;
   onRegistrarVenta: (venta: RegistroVenta) => void;
   onEliminarVenta: (ventaId: string) => void;
@@ -63,7 +63,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
       <RegistroVentasLista
         pantallas={pantallas}
         asignaciones={asignaciones}
-        clientes={clientes}
+        colaboradores={clientes}
         usuarios={usuarios}
         ventasRegistradas={ventasRegistradas}
         onEliminarVenta={onEliminarVenta}
