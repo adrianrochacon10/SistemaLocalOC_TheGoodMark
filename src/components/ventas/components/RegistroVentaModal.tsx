@@ -154,7 +154,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setAplicarDescuento(false);
     setVendedorId("");
     setCostos(0);
-    setComision(0); // ✅ reset
     setError("");
     setExito("");
     setComision(0);
@@ -225,6 +224,10 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     onCerrar();
     console.log(nuevaVenta);
   };
+
+  console.log("asignaciones:", asignaciones);
+  console.log("clienteSeleccionado:", clienteSeleccionado);
+  console.log("pantallasDelCliente:", pantallasDelCliente);
 
   // ── JSX ───────────────────────────────────────────────────────────────
   return (

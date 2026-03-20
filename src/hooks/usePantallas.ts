@@ -11,15 +11,29 @@ export function usePantallas(profile: any) {
     if (!profile) return;
     const cargar = async () => {
       try {
-        const data = (await backendApi.get("/api/pantallas")) as any[];
+        const [dataPantallas, dataAsignaciones] = await Promise.all([
+          backendApi.get("/api/pantallas"),
+          backendApi.get("/api/asignaciones"),
+        ]);
+
         setPantallas(
-          data.map((row: any) => ({
+          (dataPantallas as any[]).map((row: any) => ({
             id: row.id,
             nombre: row.nombre ?? row.nombre_pantalla,
             activa: true,
             fechaCreacion: row.fecha_creacion
               ? new Date(row.fecha_creacion)
               : new Date(),
+          })),
+        );
+
+        setAsignaciones(
+          (dataAsignaciones as any[]).map((a: any) => ({
+            id: a.id,
+            clienteId: a.cliente_id,
+            pantallaId: a.pantalla_id,
+            activa: a.activa,
+            fechaAsignacion: a.fecha_asignacion,
           })),
         );
       } catch (e) {
@@ -41,20 +55,6 @@ export function usePantallas(profile: any) {
       console.error("Error guardando pantallas:", e);
     }
   }, [pantallas, asignaciones, profile]);
-
-  // Cargar inicial
-  useEffect(() => {
-    const datos = localStorage.getItem("pantallas");
-    if (datos) {
-      try {
-        const parsed = JSON.parse(datos);
-        setPantallas(parsed.pantallas || []);
-        setAsignaciones(parsed.asignaciones || []);
-      } catch (e) {
-        console.error("Error cargando pantallas desde localStorage:", e);
-      }
-    }
-  }, []);
 
   const handleAgregarPantalla = async (pantalla: Pantalla) => {
     let pantallaParaEstado: Pantalla = pantalla;

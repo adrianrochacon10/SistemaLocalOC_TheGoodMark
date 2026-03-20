@@ -14,6 +14,7 @@ import productosRoutes from "./routes/productos.js";
 import porcentajesRoutes from "./routes/porcentajes.js";
 import diagnosticoRoutes from "./routes/diagnostico.js";
 import configuracionRoutes from "./routes/configuracion.js";
+import asignacionesRoutes from "./routes/asignaciones.js";
 
 const PORT = Number(process.env.PORT) || 4000;
 const app = express();
@@ -37,6 +38,7 @@ app.use("/api/productos", productosRoutes);
 app.use("/api/porcentajes", porcentajesRoutes);
 app.use("/api/diagnostico", diagnosticoRoutes);
 app.use("/api/configuracion", configuracionRoutes);
+app.use("/api/asignaciones", asignacionesRoutes);
 
 app.listen(PORT, () => {
   console.log("The Good Mark (BACKEND) en http://localhost:" + PORT);
