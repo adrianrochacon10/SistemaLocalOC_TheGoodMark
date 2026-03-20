@@ -18,6 +18,8 @@ interface Props {
   onAbrirModal: () => void;
   onEditar: (colaborador: Colaborador) => void;
   onEliminar: (id: string) => void;
+  canEliminar: boolean;
+  canCrear: boolean;
 }
 
 export const ColaboradorList: React.FC<Props> = ({
@@ -29,10 +31,32 @@ export const ColaboradorList: React.FC<Props> = ({
   onAbrirModal,
   onEditar,
   onEliminar,
+  canEliminar,
+  canCrear,
 }) => {
   const visibles = clientes;
+  const getArrayIds = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.map((v) => String(v));
+    if (typeof value === "string") return value.split(",").map((v) => v.trim()).filter(Boolean);
+    return [];
+  };
 
   const getPantallas = (colaborador: Colaborador): Pantalla[] => {
+    const colabAny = colaborador as Colaborador & {
+      pantallas?: Pantalla[];
+      pantalla_ids?: string[] | string;
+    };
+    if (Array.isArray(colabAny.pantallas) && colabAny.pantallas.length > 0) {
+      return colabAny.pantallas;
+    }
+
+    const ids = getArrayIds(colabAny.pantalla_ids);
+    if (ids.length > 0) {
+      return ids
+        .map((id) => pantallas.find((p) => p.id === id))
+        .filter(Boolean) as Pantalla[];
+    }
+
     const porAsignacion = asignaciones
       .filter((a) => a.clienteId === colaborador.id && a.activa)
       .map((a) => pantallas.find((p) => p.id === a.pantallaId))
@@ -45,6 +69,21 @@ export const ColaboradorList: React.FC<Props> = ({
   };
 
   const getProductos = (colaborador: Colaborador): Producto[] => {
+    const colabAny = colaborador as Colaborador & {
+      productos?: Producto[];
+      producto_ids?: string[] | string;
+    };
+    if (Array.isArray(colabAny.productos) && colabAny.productos.length > 0) {
+      return colabAny.productos;
+    }
+
+    const ids = getArrayIds(colabAny.producto_ids);
+    if (ids.length > 0) {
+      return ids
+        .map((id) => productos.find((p) => p.id === id))
+        .filter(Boolean) as Producto[];
+    }
+
     const porAsignacion = asignacionesProductos
       .filter((a) => a.clienteId === colaborador.id && a.activo)
       .map((a) => productos.find((p) => p.id === a.productoId))
@@ -62,10 +101,16 @@ export const ColaboradorList: React.FC<Props> = ({
         <div className="estado-vacio-contenido">
           <div className="icono-grande">👥</div>
           <h3>No hay colaboradores registrados</h3>
-          <p>Comienza agregando tu primer colaborador</p>
-          <button className="btn btn-primary btn-lg" onClick={onAbrirModal}>
-            ➕ Agregar Colaborador
-          </button>
+          <p>
+            {canCrear
+              ? "Comienza agregando tu primer colaborador"
+              : "No tienes permisos para crear colaboradores"}
+          </p>
+          {canCrear && (
+            <button className="btn btn-primary btn-lg" onClick={onAbrirModal}>
+              ➕ Agregar Colaborador
+            </button>
+          )}
         </div>
       </div>
     );
@@ -73,12 +118,14 @@ export const ColaboradorList: React.FC<Props> = ({
 
   return (
     <>
-      <div className="header-colaboradores">
-        <button className="btn btn-flotante-mini" onClick={onAbrirModal}>
-          <span style={{ fontSize: "1.1em", marginRight: 6 }}>＋</span>
-          Agregar Colaborador
-        </button>
-      </div>
+      {canCrear && (
+        <div className="header-colaboradores">
+          <button className="btn btn-flotante-mini" onClick={onAbrirModal}>
+            <span style={{ fontSize: "1.1em", marginRight: 6 }}>＋</span>
+            Agregar Colaborador
+          </button>
+        </div>
+      )}
 
       <div className="colaboradores-grid">
         {visibles.map((colaborador) => (
@@ -89,6 +136,7 @@ export const ColaboradorList: React.FC<Props> = ({
             productos={getProductos(colaborador)}
             onEditar={onEditar}
             onEliminar={onEliminar}
+            canEliminar={canEliminar}
           />
         ))}
       </div>

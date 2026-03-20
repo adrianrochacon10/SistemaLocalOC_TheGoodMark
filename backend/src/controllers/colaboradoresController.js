@@ -48,3 +48,15 @@ export async function obtenerPorId(req, res) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
   }
 }
+
+export async function eliminar(req, res) {
+  try {
+    await colaboradoresService.eliminar(req.params.id);
+    res.status(204).send();
+  } catch (e) {
+    if (e.message === "Colaborador no encontrado") {
+      return res.status(404).json({ error: e.message });
+    }
+    res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
+  }
+}

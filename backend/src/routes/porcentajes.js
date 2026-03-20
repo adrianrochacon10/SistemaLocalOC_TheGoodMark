@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth.js";
 import * as porcentajesController from "../controllers/porcentajesController.js";
 
 const router = Router();
 router.get("/", requireAuth, porcentajesController.listar);
-router.post("/", requireAuth, requireAdmin, porcentajesController.crear);
+router.post("/", requireAuth, porcentajesController.crear);
 
 export default router;

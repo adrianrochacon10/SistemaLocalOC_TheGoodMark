@@ -4,7 +4,8 @@ export interface CampoConfig {
   key: string;
   label: string;
   placeholder?: string;
-  tipo?: "text" | "number";
+  tipo?: "text" | "number" | "select";
+  opciones?: Array<{ value: string; label: string }>;
 }
 
 export interface FilaItem {
@@ -42,14 +43,30 @@ export const FilasFormulario: React.FC<FilasFormularioProps> = ({
             {campos.map((campo) => (
               <div className="form-group" key={campo.key}>
                 <label>{campo.label}</label>
-                <input
-                  type={campo.tipo ?? "text"}
-                  value={fila[campo.key] ?? ""}
-                  onChange={(e) =>
-                    onActualizarCampo(idx, campo.key, e.target.value)
-                  }
-                  placeholder={campo.placeholder}
-                />
+                {campo.tipo === "select" ? (
+                  <select
+                    value={String(fila[campo.key] ?? "")}
+                    onChange={(e) =>
+                      onActualizarCampo(idx, campo.key, e.target.value)
+                    }
+                  >
+                    <option value="">{campo.placeholder ?? "Seleccionar"}</option>
+                    {(campo.opciones ?? []).map((op) => (
+                      <option key={op.value} value={op.value}>
+                        {op.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type={campo.tipo ?? "text"}
+                    value={fila[campo.key] ?? ""}
+                    onChange={(e) =>
+                      onActualizarCampo(idx, campo.key, e.target.value)
+                    }
+                    placeholder={campo.placeholder}
+                  />
+                )}
               </div>
             ))}
             {filas.length > 1 && (
