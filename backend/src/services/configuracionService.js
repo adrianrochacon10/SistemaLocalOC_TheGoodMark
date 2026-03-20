@@ -1,14 +1,22 @@
-import { supabase } from "../config/supabase.js"; // ← esta línea falta
+import { supabase } from "../config/supabase.js";
 
 export const obtener = async () => {
   const { data, error } = await supabase
     .from("configuracion")
     .select("*")
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return data;
+  return data ?? {
+    nombre_empresa: "",
+    rfc: null,
+    direccion: null,
+    telefono: null,
+    email: null,
+    iva_percentaje: 16,
+    activo: true,
+  };
 };
 
 export const guardar = async (body) => {
@@ -26,7 +34,7 @@ export const guardar = async (body) => {
     .from("configuracion")
     .select("id")
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (existing?.id) {
     const { data, error } = await supabase

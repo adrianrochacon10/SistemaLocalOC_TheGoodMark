@@ -4,6 +4,7 @@ import { GestorPantallasClientes } from "../pantallas/GestorPantallasClientes";
 import { RegistroVentasNuevo } from "../ventas/RegistroVentasNuevo";
 import { OrdenesMensualesNuevo } from "../ordenes/OrdenesMensualesNuevo";
 import { AdminUsuarios } from "../admin/AdminUsuarios";
+import { EmpresaForm } from "../empresa/EmpresaForm";
 import "./Dashboard.css";
 import { useDashboardData } from "../../hooks/useDashboardData";
 
@@ -79,12 +80,14 @@ export const Dashboard: React.FC = () => {
         >
           📋 Órdenes Mensuales
         </button>
-        <button
-          className={`nav-btn-nuevo ${vistaActual === "config" ? "active" : ""}`}
-          onClick={() => setVistaActual("config")}
-        >
-          ⚙️ Configuración
-        </button>
+        {esAdmin && (
+          <button
+            className={`nav-btn-nuevo ${vistaActual === "config" ? "active" : ""}`}
+            onClick={() => setVistaActual("config")}
+          >
+            ⚙️ Configuración
+          </button>
+        )}
         {esAdmin && (
           <button
             className={`nav-btn-nuevo ${vistaActual === "admin" ? "active" : ""}`}
@@ -126,6 +129,7 @@ export const Dashboard: React.FC = () => {
             clientes={datos.clientes}
             productos={datos.productos}
             ventasRegistradas={datos.ventasRegistradas}
+            usuarios={datos.usuarios}
             usuarioActual={usuarioActual}
             onRegistrarVenta={acciones.handleRegistrarVentaConSupabase}
             onEliminarVenta={acciones.handleEliminarVenta}
@@ -145,9 +149,9 @@ export const Dashboard: React.FC = () => {
           />
         )}
 
-        {vistaActual === "config" && (
+        {vistaActual === "config" && esAdmin && (
           <div className="config-panel">
-            {/* igual que antes pero usando datos.config y acciones.handleGuardarConfiguracion */}
+            <EmpresaForm onCancel={() => setVistaActual("ordenes")} />
           </div>
         )}
 
