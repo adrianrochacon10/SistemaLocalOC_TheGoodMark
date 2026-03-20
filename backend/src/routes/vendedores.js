@@ -8,5 +8,7 @@ router.use(requireAdmin);
 
 router.get("/", vendedoresController.listar);
 router.post("/", vendedoresController.crear);
+router.patch("/:id", vendedoresController.actualizar);
+router.delete("/:id", vendedoresController.eliminar);
 
 export default router;

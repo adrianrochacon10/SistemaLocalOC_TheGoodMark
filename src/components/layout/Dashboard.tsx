@@ -154,8 +154,6 @@ export const Dashboard: React.FC = () => {
         {vistaActual === "admin" && esAdmin && (
           <AdminUsuarios
             usuarioActualId={usuarioActual.id}
-            usuarios={datos.usuarios}
-            onCrearUsuario={acciones.handleCrearUsuario}
           />
         )}
       </main>
