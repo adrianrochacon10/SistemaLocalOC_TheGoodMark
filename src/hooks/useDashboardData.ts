@@ -21,7 +21,7 @@ export function useDashboardData() {
   const clientes = useClientes(profile);
   const pantallas = usePantallas(profile);
   const productosExtra = useProductosExtra(profile);
-  const ventas = useVentas(profile, clientes.clientes, pantallas.asignaciones);
+  const ventas = useVentas(profile);
   const configuracion = useConfiguracion(profile);
 
   // Cargar tipos de pago
@@ -80,6 +80,7 @@ export function useDashboardData() {
     auth: { profile, loading, authError, signIn, signOut },
     estadoBD,
     mensajeBD,
+    errorVenta: ventas.errorVenta,
     datos: {
       usuarios,
       tiposPago,

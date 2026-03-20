@@ -19,3 +19,26 @@ export async function crear(req, res) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error al agregar vendedor" });
   }
 }
+
+export async function actualizar(req, res) {
+  const { id } = req.params;
+  const { nombre, email, rol } = req.body || {};
+  const result = await vendedoresService.actualizar(id, nombre, email, rol);
+  if (result.error) return res.status(400).json({ error: result.error });
+  try {
+    res.json(result.data);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : "Error al actualizar vendedor" });
+  }
+}
+
+export async function eliminar(req, res) {
+  const { id } = req.params;
+  const result = await vendedoresService.eliminar(id);
+  if (result.error) return res.status(400).json({ error: result.error });
+  try {
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : "Error al eliminar vendedor" });
+  }
+}

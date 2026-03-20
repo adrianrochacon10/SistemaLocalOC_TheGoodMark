@@ -18,17 +18,19 @@ async function request(path: string, options: RequestInit = {}) {
   });
 
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  const contentType = res.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+  const data = text && isJson ? JSON.parse(text) : null;
 
   if (!res.ok) {
-    const message =
-      data && typeof data.error === "string"
-        ? data.error
-        : `Error HTTP ${res.status}`;
+    const messageFromJson = data && typeof data.error === "string" ? data.error : null;
+    const messageFromText = !isJson && text ? text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : null;
+    const message = messageFromJson || messageFromText || `Error HTTP ${res.status}`;
     throw new Error(message);
   }
 
-  return data;
+  if (isJson) return data;
+  return text || null;
 }
 
 export const backendApi = {

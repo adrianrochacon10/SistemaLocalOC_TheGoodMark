@@ -164,9 +164,9 @@
 
 // ;
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { backendApi } from "../../lib/backendApi";
 import { InputField } from "../ui/InputField";
-import { SelectField } from "../ui/SelectField";
 import { BotonAccion } from "../ui/BotonAccion";
 import "./AdminUsuarios.css";
 
@@ -179,34 +179,45 @@ interface UsuarioRow {
 
 interface AdminUsuariosProps {
   usuarioActualId: string;
-  usuarios: UsuarioRow[];
-  onCrearUsuario: (usuario: UsuarioRow) => void;
 }
 
 const labelRol = (rol: string) => {
   if (rol === "admin") return "Administrador";
-  if (rol === "usuario") return "Gerente de Ventas";
+  if (rol === "usuario" || rol === "vendedor") return "Vendedor";
   return rol;
 };
 
-const OPCIONES_ROL = [
-  { value: "usuario", label: "Gerente de Ventas" },
-  { value: "admin", label: "Administrador" },
-];
-
 export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
   usuarioActualId,
-  usuarios,
-  onCrearUsuario,
 }) => {
+  const [usuarios, setUsuarios] = useState<UsuarioRow[]>([]);
+  const [cargando, setCargando] = useState(false);
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rol, setRol] = useState("usuario");
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [rolEdicion, setRolEdicion] = useState("vendedor");
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
 
-  const handleCrearUsuario = () => {
+  const cargarUsuarios = async () => {
+    setCargando(true);
+    setError(null);
+    try {
+      const data = (await backendApi.get("/api/vendedores")) as UsuarioRow[];
+      setUsuarios(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al cargar usuarios");
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    void cargarUsuarios();
+  }, []);
+
+  const handleCrearUsuario = async () => {
     setError(null);
     setExito(null);
 
@@ -215,28 +226,95 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
       return;
     }
 
-    // Validar email duplicado
     if (usuarios.some((u) => u.email === email.trim())) {
       setError("Ya existe un usuario con ese email");
       return;
     }
 
-    const nuevoUsuario: UsuarioRow = {
-      id: "u" + Date.now(),
-      nombre: nombre.trim(),
-      email: email.trim(),
-      rol,
-    };
+    try {
+      const nuevo = (await backendApi.post("/api/vendedores", {
+        nombre: nombre.trim(),
+        email: email.trim(),
+        password: password.trim(),
+        rol: "vendedor",
+        creado_por: usuarioActualId,
+      })) as UsuarioRow;
 
-    onCrearUsuario(nuevoUsuario);
+      setUsuarios((prev) => [...prev, nuevo]);
+      setNombre("");
+      setEmail("");
+      setPassword("");
+      setExito("Usuario creado correctamente");
+      setTimeout(() => setExito(null), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al crear usuario");
+    }
+  };
 
-    // Reset form
+  const handleIniciarEdicion = (usuario: UsuarioRow) => {
+    setEditandoId(usuario.id);
+    setNombre(usuario.nombre);
+    setEmail(usuario.email);
+    setPassword("");
+    setRolEdicion(usuario.rol || "vendedor");
+    setError(null);
+    setExito(null);
+  };
+
+  const handleCancelarEdicion = () => {
+    setEditandoId(null);
     setNombre("");
     setEmail("");
     setPassword("");
-    setRol("usuario");
-    setExito("Usuario creado correctamente");
-    setTimeout(() => setExito(null), 3000);
+    setRolEdicion("vendedor");
+    setError(null);
+  };
+
+  const handleGuardarEdicion = async () => {
+    if (!editandoId) return;
+    setError(null);
+    setExito(null);
+
+    if (!nombre.trim() || !email.trim()) {
+      setError("Nombre y email son obligatorios");
+      return;
+    }
+
+    try {
+      const actualizado = (await backendApi.patch(`/api/vendedores/${editandoId}`, {
+        nombre: nombre.trim(),
+        email: email.trim(),
+        rol: rolEdicion,
+      })) as UsuarioRow;
+
+      setUsuarios((prev) => prev.map((u) => (u.id === editandoId ? actualizado : u)));
+      setExito("Usuario actualizado correctamente");
+      handleCancelarEdicion();
+      setTimeout(() => setExito(null), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al actualizar usuario");
+    }
+  };
+
+  const handleEliminarUsuario = async (usuario: UsuarioRow) => {
+    if (usuario.id === usuarioActualId) {
+      setError("No puedes eliminar tu propio usuario");
+      return;
+    }
+
+    const ok = window.confirm(`¿Eliminar a ${usuario.nombre}? Esta acción no se puede deshacer.`);
+    if (!ok) return;
+
+    setError(null);
+    setExito(null);
+    try {
+      await backendApi.del(`/api/vendedores/${usuario.id}`);
+      setUsuarios((prev) => prev.filter((u) => u.id !== usuario.id));
+      setExito("Usuario eliminado correctamente");
+      setTimeout(() => setExito(null), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al eliminar usuario");
+    }
   };
 
   return (
@@ -246,7 +324,9 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
       <div className="admin-usuarios-grid">
         {/* FORMULARIO */}
         <div className="admin-card">
-          <h3 className="admin-card-titulo">Crear nuevo usuario</h3>
+          <h3 className="admin-card-titulo">
+            {editandoId ? "Editar usuario" : "Crear nuevo usuario"}
+          </h3>
 
           <InputField
             label="Nombre"
@@ -260,36 +340,46 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
             onChange={setEmail}
             placeholder="correo@empresa.com"
           />
-          <InputField
-            label="Contraseña"
-            value={password}
-            onChange={setPassword}
-            placeholder="Contraseña inicial"
-          />
-          <SelectField
-            label="Rol"
-            value={rol}
-            onChange={setRol}
-            options={OPCIONES_ROL}
-          />
+          {!editandoId && (
+            <InputField
+              label="Contraseña"
+              value={password}
+              onChange={setPassword}
+              placeholder="Contraseña inicial"
+            />
+          )}
+          <InputField label="Rol" value="Vendedor" readOnly />
 
           {error && <div className="error-message">{error}</div>}
           {exito && <div className="success-message">{exito}</div>}
 
-          <BotonAccion
-            onClick={handleCrearUsuario}
-            variante="primario"
-            fullWidth
-          >
-            ➕ Crear Usuario
-          </BotonAccion>
+          {editandoId ? (
+            <div className="admin-acciones-form">
+              <BotonAccion onClick={handleGuardarEdicion} variante="primario" fullWidth>
+                Guardar cambios
+              </BotonAccion>
+              <BotonAccion onClick={handleCancelarEdicion} variante="secundario" fullWidth>
+                Cancelar
+              </BotonAccion>
+            </div>
+          ) : (
+            <BotonAccion
+              onClick={handleCrearUsuario}
+              variante="primario"
+              fullWidth
+            >
+              ➕ Crear Usuario
+            </BotonAccion>
+          )}
         </div>
 
         {/* LISTA */}
         <div className="admin-card">
           <h3 className="admin-card-titulo">Usuarios registrados</h3>
 
-          {usuarios.length === 0 ? (
+          {cargando ? (
+            <p className="admin-estado-texto">Cargando usuarios…</p>
+          ) : usuarios.length === 0 ? (
             <p className="admin-estado-texto">
               No hay usuarios registrados aún.
             </p>
@@ -300,6 +390,7 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
                   <th>Nombre</th>
                   <th>Email</th>
                   <th>Rol</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -311,6 +402,26 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
                       <span className={`badge-rol badge-rol--${u.rol}`}>
                         {labelRol(u.rol)}
                       </span>
+                    </td>
+                    <td>
+                      <div className="acciones-fila">
+                        <button
+                          type="button"
+                          className="btn-tabla btn-tabla--editar"
+                          onClick={() => handleIniciarEdicion(u)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-tabla btn-tabla--eliminar"
+                          onClick={() => handleEliminarUsuario(u)}
+                          disabled={u.id === usuarioActualId}
+                          title={u.id === usuarioActualId ? "No puedes eliminar tu usuario actual" : ""}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
