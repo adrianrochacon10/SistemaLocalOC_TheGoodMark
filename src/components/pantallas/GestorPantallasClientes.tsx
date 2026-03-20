@@ -7,6 +7,7 @@ import { ColaboradorList } from "../colaboradores/components/colaboradorList";
 import { ColaboradorModal } from "../colaboradores/components/ColaboradorModal";
 
 interface GestorPantallasClientesProps {
+  profile: { id: string; rol: string } | null;
   tiposPago: { id: string; nombre: string }[];
   pantallas: Pantalla[];
   clientes: Colaborador[];
@@ -16,8 +17,26 @@ interface GestorPantallasClientesProps {
   onAgregarPantalla: (p: Pantalla) => void;
   onActualizarPantalla: (p: Pantalla) => void;
   onEliminarPantalla: (id: string) => void;
-  onAgregarCliente: (c: Colaborador, extras?: { tipo_pago_id: string; pantalla_id: string }) => void | Promise<Colaborador | void>;
-  onActualizarCliente: (c: Colaborador) => void;
+  onAgregarCliente: (
+    c: Colaborador,
+    extras?: {
+      tipo_pago_id: string;
+      pantalla_ids: string[];
+      producto_ids: string[];
+      es_porcentaje?: boolean;
+      porcentaje?: number;
+    },
+  ) => void | Promise<Colaborador | void>;
+  onActualizarCliente: (
+    c: Colaborador,
+    extras?: {
+      tipo_pago_id?: string;
+      pantalla_ids?: string[];
+      producto_ids?: string[];
+      es_porcentaje?: boolean;
+      porcentaje?: number;
+    },
+  ) => void | Promise<Colaborador | void>;
   onAsignarPantalla: (a: AsignacionPantalla) => void;
   onEliminarPantallasYAsignaciones: (id: string) => void;
   onDesasignarPantalla: (clienteId: string, pantallaId: string) => void;
@@ -28,7 +47,7 @@ interface GestorPantallasClientesProps {
 }
 
 export const GestorPantallasClientes: React.FC<GestorPantallasClientesProps> = ({
-  pantallas, clientes, asignaciones,
+  profile, tiposPago, pantallas, clientes, asignaciones,
   productos = [], asignacionesProductos = [],
   onAgregarPantalla, onActualizarPantalla, onEliminarPantalla,
   onAgregarCliente, onActualizarCliente, onAsignarPantalla,
@@ -36,7 +55,7 @@ export const GestorPantallasClientes: React.FC<GestorPantallasClientesProps> = (
   onAgregarProducto, onActualizarProducto, onEliminarProducto, onAsignarProducto,
 }) => {
   const gestor = useGestorColaboradores({
-    pantallas, asignaciones, productos, asignacionesProductos,
+    profile, tiposPago, pantallas, asignaciones, productos, asignacionesProductos,
     onAgregarPantalla, onActualizarPantalla, onEliminarPantalla,
     onAgregarCliente, onActualizarCliente, onAsignarPantalla,
     onEliminarPantallasYAsignaciones,
@@ -56,6 +75,8 @@ export const GestorPantallasClientes: React.FC<GestorPantallasClientesProps> = (
         onAbrirModal={() => gestor.setMostrarModal(true)}
         onEditar={gestor.handleEditar}
         onEliminar={gestor.handleEliminar}
+        canEliminar={profile?.rol === "admin"}
+        canCrear={true}
       />
 
       {gestor.mostrarModal && (
@@ -65,11 +86,59 @@ export const GestorPantallasClientes: React.FC<GestorPantallasClientesProps> = (
           formSetters={gestor.formSetters}
           pantallasForm={gestor.pantallasForm}
           productosForm={gestor.productosForm}
+          tiposPago={gestor.tiposPago}
+          pantallas={gestor.pantallas}
+          productos={gestor.productos}
+          canEditarTipoPago={gestor.canEditarTipoPago}
           errorColaborador={gestor.errorColaborador}
           errorPantalla={gestor.errorPantalla}
+          mensajeGuardado={gestor.mensajeGuardado}
+          guardando={gestor.guardando}
           onGuardar={gestor.handleGuardar}
           onCerrar={gestor.resetFormulario}
         />
+      )}
+
+      {gestor.mostrarModalCodigo && (
+        <div
+          className="modal-overlay"
+          onClick={() => gestor.setMostrarModalCodigo(false)}
+        >
+          <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Código requerido para editar</h3>
+              <button
+                className="modal-close"
+                onClick={() => gestor.setMostrarModalCodigo(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>{gestor.mensajeCodigo}</p>
+              <div className="form-group">
+                <label>Código de edición</label>
+                <input
+                  type="text"
+                  value={gestor.codigoEdicion}
+                  onChange={(e) => gestor.setCodigoEdicion(e.target.value)}
+                  placeholder="Ingresa el código"
+                />
+              </div>
+              {gestor.errorCodigo && (
+                <div className="error-message">{gestor.errorCodigo}</div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={gestor.solicitarCodigoEdicion}>
+                Solicitar código
+              </button>
+              <button className="btn btn-primary" onClick={gestor.validarCodigoEdicion}>
+                Validar código
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

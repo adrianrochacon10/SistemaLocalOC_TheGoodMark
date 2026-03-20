@@ -98,19 +98,22 @@ export const Dashboard: React.FC = () => {
       <main className="dashboard-content-nuevo">
         {vistaActual === "gestor" && (
           <GestorPantallasClientes
+            profile={profile ? { id: profile.id, rol: profile.rol } : null}
             tiposPago={datos.tiposPago}
             pantallas={datos.pantallas}
             clientes={datos.clientes}
             asignaciones={datos.asignaciones}
+            productos={datos.productos}
+            asignacionesProductos={datos.asignacionesProductos}
             onAgregarPantalla={acciones.handleAgregarPantalla}
             onActualizarPantalla={acciones.handleAgregarPantalla}
             onEliminarPantalla={acciones.handleEliminarPantalla}
             onAgregarCliente={acciones.handleAgregarCliente}
-            onActualizarCliente={acciones.handleAgregarCliente}
+            onActualizarCliente={acciones.handleActualizarCliente}
             onAsignarPantalla={acciones.handleAsignarPantalla}
             onDesasignarPantalla={acciones.handleDesasignarPantalla}
             onEliminarPantallasYAsignaciones={
-              acciones.eliminarPantallasYAsignacionesDeColaborador
+              acciones.handleEliminarCliente
             }
           />
         )}

@@ -1,14 +1,6 @@
 // src/components/pantallas/ColaboradorCard.tsx
-import React from "react";
-import { TipoComision } from "../GestorColaboradores";
+import React, { useState } from "react";
 import { Colaborador, Pantalla, Producto } from "../../../types";
-
-const etiquetaTipoComision: Record<TipoComision, string> = {
-  porcentaje: "Porcentaje",
-  ninguno: "Ninguno",
-  consideracion: "Consideración",
-  precio_fijo: "Precio fijo",
-};
   
 interface Props {
   colaborador: Colaborador;
@@ -16,6 +8,7 @@ interface Props {
   productos: Producto[];
   onEditar: (c: Colaborador) => void;
   onEliminar: (id: string) => void;
+  canEliminar: boolean;
 }
 
 export const ColaboradorCard: React.FC<Props> = ({
@@ -24,87 +17,111 @@ export const ColaboradorCard: React.FC<Props> = ({
   productos,
   onEditar,
   onEliminar,
-}) => (
-  <div className="colaborador-card">
-    <div className="colaborador-header">
-      <h4>{colaborador.nombre}</h4>
-      <span className="badge-pantallas">
-        {pantallas.length} pantalla{pantallas.length !== 1 ? "s" : ""}
-      </span>
-    </div>
-
-    {colaborador.alias && (
-      <p>
-        <strong>Alias:</strong> {colaborador.alias}
-      </p>
-    )}
-    {colaborador.telefono && (
-      <p>
-        <strong>Teléfono:</strong> {colaborador.telefono}
-      </p>
-    )}
-    {colaborador.email && (
-      <p>
-        <strong>Email:</strong> {colaborador.email}
-      </p>
-    )}
-    {colaborador.tipoComision && (
-      <p>
-        <strong>Comisión:</strong>{" "}
-        {etiquetaTipoComision[colaborador.tipoComision]}
-        {colaborador.tipoComision === "porcentaje" &&
-        colaborador.porcentajeSocio !== undefined
-          ? ` — ${colaborador.porcentajeSocio}%`
-          : ""}
-      </p>
-    )}
-
-    {pantallas.length > 0 && (
-      <div className="pantallas-asociadas">
-        <h5>Pantallas Asociadas</h5>
-        <ul className="pantallas-list">
-          {pantallas.map((p) => (
-            <li key={p.id}>
-              <span className="pantalla-nombre">{p.nombre}</span>
-              {p.ubicacion && (
-                <span className="pantalla-ubicacion">{p.ubicacion}</span>
-              )}
-            </li>
-          ))}
-        </ul>
+  canEliminar,
+}) => {
+  const [mostrarDetalle, setMostrarDetalle] = useState(false);
+  const colorColaborador = (colaborador as Colaborador & { color?: string }).color;
+  return (
+    <div className="colaborador-card">
+      <div className="colaborador-header">
+        <h4 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {colorColaborador ? (
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                backgroundColor: colorColaborador,
+                display: "inline-block",
+              }}
+            />
+          ) : null}
+          {colaborador.nombre}
+        </h4>
       </div>
-    )}
 
-    {productos.length > 0 && (
-      <div className="pantallas-asociadas">
-        <h5>Otros Productos</h5>
-        <ul className="pantallas-list">
-          {productos.map((p) => (
-            <li key={p.id}>
-              <span className="pantalla-nombre">{p.nombre}</span>
-              <span className="pantalla-ubicacion">
-                $
-                {p.precio.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-              </span>
-            </li>
-          ))}
-        </ul>
+      {colaborador.alias && (
+        <p>
+          <strong>Alias:</strong> {colaborador.alias}
+        </p>
+      )}
+      {colaborador.telefono && (
+        <p>
+          <strong>Teléfono:</strong> {colaborador.telefono}
+        </p>
+      )}
+      {colaborador.email && (
+        <p>
+          <strong>Email:</strong> {colaborador.email}
+        </p>
+      )}
+
+      <div className="colaborador-acciones" style={{ marginBottom: 8 }}>
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => setMostrarDetalle((v) => !v)}
+          type="button"
+          style={{ padding: "4px 10px", fontSize: "0.8rem" }}
+        >
+          {mostrarDetalle ? "Ver menos" : "Ver más"}
+        </button>
       </div>
-    )}
 
-    <div className="colaborador-acciones">
-      <button
-        className="btn btn-accion btn-editar"
-        onClick={() => onEditar(colaborador)}
-      >
-        ✏️ Editar
-      </button>
-      <button
-        className="btn btn-accion btn-eliminar"
-        onClick={() => onEliminar(colaborador.id)}
-      >
-        🗑️ Eliminar
-      </button>
+      {mostrarDetalle && (
+        <>
+          {pantallas.length > 0 && (
+            <div className="pantallas-asociadas">
+              <h5>Pantallas Asociadas</h5>
+              <ul className="pantallas-list">
+                {pantallas.map((p) => (
+                  <li key={p.id}>
+                    <span className="pantalla-nombre">{p.nombre}</span>
+                    {p.ubicacion && (
+                      <span className="pantalla-ubicacion">{p.ubicacion}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {productos.length > 0 && (
+            <div className="pantallas-asociadas">
+              <h5>Otros Productos</h5>
+              <ul className="pantallas-list">
+                {productos.map((p) => (
+                  <li key={p.id}>
+                    <span className="pantalla-nombre">{p.nombre}</span>
+                    <span className="pantalla-ubicacion">
+                      $
+                      {(p.precio ?? 0).toLocaleString("es-MX", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="colaborador-acciones">
+        <button
+          className="btn btn-accion btn-editar"
+          onClick={() => onEditar(colaborador)}
+        >
+          ✏️ Editar
+        </button>
+        <button
+          className="btn btn-accion btn-eliminar"
+          onClick={() => onEliminar(colaborador.id)}
+          disabled={!canEliminar}
+          title={canEliminar ? "Eliminar colaborador" : "Solo admin puede eliminar"}
+        >
+          🗑️ Eliminar
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};

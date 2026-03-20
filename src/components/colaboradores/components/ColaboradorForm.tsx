@@ -1,8 +1,7 @@
 // src/components/pantallas/ColaboradorForm.tsx
 import React from "react";
-import { TipoComision } from "../GestorColaboradores";
 import { ColorPicker } from "../../ui/ColorPicker";
-import { FilasFormulario } from "../../pantallas/components/FilasFormulario";
+import { FilasFormulario } from "./FilaFormulario";
 
 interface Props {
   formData: {
@@ -11,8 +10,9 @@ interface Props {
     telefono: string;
     email: string;
     color: string;
-    tipoComision: TipoComision;
     porcentaje: number;
+    tipoPagoId: string;
+    esTipoPagoPorcentaje: boolean;
   };
   formSetters: {
     setNombre: (v: string) => void;
@@ -20,11 +20,13 @@ interface Props {
     setTelefono: (v: string) => void;
     setEmail: (v: string) => void;
     setColor: (v: string) => void;
-    setTipoComision: (v: TipoComision) => void;
     setPorcentaje: (v: number) => void;
+    setTipoPagoId: (v: string) => void;
   };
   pantallasForm: any;
   productosForm: any;
+  tiposPago: Array<{ id: string; nombre: string }>;
+  canEditarTipoPago?: boolean;
   errorColaborador: string;
   errorPantalla: string;
 }
@@ -34,10 +36,21 @@ export const ColaboradorForm: React.FC<Props> = ({
   formSetters,
   pantallasForm,
   productosForm,
+  tiposPago,
+  canEditarTipoPago = true,
   errorColaborador,
   errorPantalla,
 }) => {
-  const { nombre, alias, telefono, email, color, tipoComision, porcentaje } =
+  const {
+    nombre,
+    alias,
+    telefono,
+    email,
+    color,
+    porcentaje,
+    tipoPagoId,
+    esTipoPagoPorcentaje,
+  } =
     formData;
   const {
     setNombre,
@@ -45,8 +58,8 @@ export const ColaboradorForm: React.FC<Props> = ({
     setTelefono,
     setEmail,
     setColor,
-    setTipoComision,
     setPorcentaje,
+    setTipoPagoId,
   } = formSetters;
 
   return (
@@ -100,21 +113,7 @@ export const ColaboradorForm: React.FC<Props> = ({
           <ColorPicker value={color} onChange={setColor} />
         </div>
 
-        <div className="form-group">
-          <label>Tipo de comisión *</label>
-          <select
-            value={tipoComision}
-            onChange={(e) => setTipoComision(e.target.value as TipoComision)}
-            className="form-select"
-          >
-            <option value="ninguno">Ninguno</option>
-            <option value="porcentaje">Porcentaje</option>
-            <option value="consideracion">Consideración</option>
-            <option value="precio_fijo">Precio fijo</option>
-          </select>
-        </div>
-
-        {tipoComision === "porcentaje" && (
+        {esTipoPagoPorcentaje && (
           <div className="form-group" style={{ marginTop: "-8px" }}>
             <label>Porcentaje (%)</label>
             <input
@@ -132,6 +131,23 @@ export const ColaboradorForm: React.FC<Props> = ({
           </div>
         )}
 
+        <div className="form-group">
+          <label>Tipo de pago</label>
+          <select
+            value={tipoPagoId}
+            onChange={(e) => setTipoPagoId(e.target.value)}
+            className="form-select"
+            disabled={!canEditarTipoPago}
+          >
+            <option value="">Selecciona tipo de pago</option>
+            {tiposPago.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {errorColaborador && (
           <div className="error-message">{errorColaborador}</div>
         )}
@@ -143,7 +159,7 @@ export const ColaboradorForm: React.FC<Props> = ({
           {
             key: "nombre",
             label: "Nombre de Pantalla",
-            placeholder: "Ej: Pantalla Principal",
+            placeholder: "Ej: Cantarranas",
           },
         ]}
         filas={pantallasForm.filas}
@@ -160,12 +176,12 @@ export const ColaboradorForm: React.FC<Props> = ({
           {
             key: "nombre",
             label: "Nombre de Producto",
-            placeholder: "Ej: Valla Principal",
+            placeholder: "Ej: Espectacular",
           },
           {
             key: "precio",
             label: "Precio",
-            placeholder: "Ej: 5000",
+            placeholder: "Ej: 123.45",
             tipo: "number",
           },
         ]}
