@@ -16,6 +16,7 @@
   background: #f0f2f5;
   display: flex;
   flex-direction: column;
+  --header-sticky-offset: 96px;
 }
 
 /* HEADER */
@@ -102,8 +103,9 @@
   border-bottom: 2px solid #e0e0e0;
   padding: 0;
   position: sticky;
-  top: 60px;
+  top: var(--header-sticky-offset);
   z-index: 999;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   flex-wrap: wrap;
 }
 
@@ -214,6 +216,10 @@
 
 /* RESPONSIVE */
 @media (max-width: 768px) {
+  .dashboard-nuevo {
+    --header-sticky-offset: 132px;
+  }
+
   .dashboard-header-nuevo {
     flex-direction: column;
     align-items: flex-start;
