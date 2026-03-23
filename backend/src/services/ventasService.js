@@ -12,9 +12,11 @@ export async function listar() {
 
 export async function crear(body, vendedorId) {
   const colaboradorId = body.colaborador_id;
+  const pantallaId = body.pantalla_id;
   const estadoVenta = body.estado_venta ?? body.estado;
 
   if (!colaboradorId) return { error: "Colaborador es obligatorio" };
+  if (!pantallaId) return { error: "Pantalla es obligatoria" };
   if (!estadoVenta) return { error: "Estado de venta es obligatorio" };
   if (!body.fecha_inicio || !body.fecha_fin) return { error: "Fecha inicio y fin son obligatorias" };
   if (body.duracion_meses == null) return { error: "Duracion meses es obligatoria" };
@@ -61,6 +63,7 @@ export async function crear(body, vendedorId) {
 
   const insertPayload = {
     colaborador_id: colaboradorId,
+    pantalla_id: pantallaId,
     client_name: colaborador.nombre, // snapshot del nombre al crear
     estado_venta: estadoVenta,
     fecha_inicio: body.fecha_inicio,

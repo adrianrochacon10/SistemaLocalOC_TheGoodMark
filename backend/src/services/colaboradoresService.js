@@ -155,6 +155,8 @@ export async function actualizar(id, body, userId) {
     updated_at: new Date().toISOString(),
     actualizado_por: userId,
   };
+  let pantallaIdsForSync = null;
+  let productoIdsForSync = null;
   if (body.nombre !== undefined) payload.nombre = body.nombre;
   if (body.telefono !== undefined) payload.telefono = body.telefono;
   if (body.email !== undefined) payload.email = body.email;
@@ -169,11 +171,13 @@ export async function actualizar(id, body, userId) {
     ) {
       pantallaIds.push(String(body.pantalla_id).trim());
     }
+    pantallaIdsForSync = pantallaIds;
     payload.pantalla_ids = pantallaIds;
     payload.pantalla_id = pantallaIds[0] ?? null;
   }
   if (body.producto_ids !== undefined || body.producto_id !== undefined) {
     const productoIds = toIdArray(body.producto_ids ?? body.producto_id);
+    productoIdsForSync = productoIds;
     payload.producto_ids = productoIds;
     payload.producto_id = productoIds[0] ?? null;
   }
@@ -186,6 +190,13 @@ export async function actualizar(id, body, userId) {
     .single();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Colaborador no encontrado");
+  if (pantallaIdsForSync !== null || productoIdsForSync !== null) {
+    await sincronizarAsignaciones(
+      id,
+      pantallaIdsForSync ?? [],
+      productoIdsForSync ?? [],
+    );
+  }
   return enrichRelaciones(data);
 }
 
@@ -244,17 +255,6 @@ export async function eliminar(id) {
     .delete({ count: "exact" })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("Colaborador no encontrado");
-  const enriquecido = await enrichRelaciones(data);
-
-  // ← Agregar estas líneas
-  const pIds = Array.isArray(payload.pantalla_ids) ? payload.pantalla_ids : [];
-  const prodIds = Array.isArray(payload.producto_ids)
-    ? payload.producto_ids
-    : [];
-  if (pIds.length > 0 || prodIds.length > 0) {
-    await sincronizarAsignaciones(id, pIds, prodIds);
-  }
-
-  return enriquecido;
+  if (!count) throw new Error("Colaborador no encontrado");
+  return { ok: true };
 }
