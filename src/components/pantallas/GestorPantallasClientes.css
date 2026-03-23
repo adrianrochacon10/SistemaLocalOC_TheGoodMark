@@ -7,8 +7,16 @@
 
 .gestor-pantallas-clientes h2 {
   color: #1461a1;
-  margin-bottom: 20px;
+  margin-bottom: 0;
   font-size: 24px;
+}
+
+.encabezado-colaboradores {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
 .gestor-pantallas-clientes h3 {

@@ -64,7 +64,16 @@ export const GestorPantallasClientes: React.FC<GestorPantallasClientesProps> = (
 
   return (
     <div className="gestor-pantallas-clientes">
-      <h2>Gestión de Colaboradores</h2>
+      <div className="encabezado-colaboradores">
+        <h2>Gestión de Colaboradores</h2>
+        <button
+          className="btn btn-flotante-mini"
+          onClick={() => gestor.setMostrarModal(true)}
+        >
+          <span style={{ fontSize: "1.1em", marginRight: 6 }}>＋</span>
+          Agregar Colaborador
+        </button>
+      </div>
 
       <ColaboradorList
         clientes={clientes}
@@ -77,6 +86,7 @@ export const GestorPantallasClientes: React.FC<GestorPantallasClientesProps> = (
         onEliminar={gestor.handleEliminar}
         canEliminar={profile?.rol === "admin"}
         canCrear={true}
+        mostrarBotonHeader={false}
       />
 
       {gestor.mostrarModal && (
