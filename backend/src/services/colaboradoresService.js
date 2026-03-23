@@ -1,9 +1,11 @@
 import { supabase } from "../config/supabase.js";
 
-const SELECT_COLABORADOR = "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre), producto:productos(id, nombre, precio)";
+const SELECT_COLABORADOR =
+  "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre), producto:productos(id, nombre, precio)";
 
 const toIdArray = (value) => {
-  if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
+  if (Array.isArray(value))
+    return value.map((v) => String(v).trim()).filter(Boolean);
   if (typeof value === "string") {
     return value
       .split(",")
@@ -29,10 +31,19 @@ async function enrichRelaciones(colaborador) {
   const [pantallasRes, productosRes] = await Promise.all([
     pantallaIds.length
       ? supabase.from("pantallas").select("id,nombre").in("id", pantallaIds)
-      : Promise.resolve({ data: colaborador?.pantalla ? [colaborador.pantalla] : [], error: null }),
+      : Promise.resolve({
+          data: colaborador?.pantalla ? [colaborador.pantalla] : [],
+          error: null,
+        }),
     productoIds.length
-      ? supabase.from("productos").select("id,nombre,precio").in("id", productoIds)
-      : Promise.resolve({ data: colaborador?.producto ? [colaborador.producto] : [], error: null }),
+      ? supabase
+          .from("productos")
+          .select("id,nombre,precio")
+          .in("id", productoIds)
+      : Promise.resolve({
+          data: colaborador?.producto ? [colaborador.producto] : [],
+          error: null,
+        }),
   ]);
 
   if (pantallasRes.error) throw new Error(pantallasRes.error.message);
@@ -47,6 +58,39 @@ async function enrichRelaciones(colaborador) {
   };
 }
 
+async function sincronizarAsignaciones(
+  colaboradorId,
+  pantallaIds = [],
+  productoIds = [],
+) {
+  // Borrar asignaciones anteriores de este colaborador
+  await supabase.from("asignaciones").delete().eq("cliente_id", colaboradorId);
+  await supabase
+    .from("asignaciones_productos")
+    .delete()
+    .eq("cliente_id", colaboradorId);
+
+  // Insertar nuevas asignaciones de pantallas
+  if (pantallaIds.length > 0) {
+    const rows = pantallaIds.map((pid) => ({
+      cliente_id: colaboradorId,
+      pantalla_id: pid,
+      activa: true,
+    }));
+    await supabase.from("asignaciones").insert(rows);
+  }
+
+  // Insertar nuevas asignaciones de productos
+  if (productoIds.length > 0) {
+    const rows = productoIds.map((pid) => ({
+      cliente_id: colaboradorId,
+      producto_id: pid,
+      activa: true,
+    }));
+    await supabase.from("asignaciones_productos").insert(rows);
+  }
+}
+
 export async function listar() {
   const { data, error } = await supabase
     .from("colaboradores")
@@ -57,17 +101,28 @@ export async function listar() {
 }
 
 export async function crear(body, userId) {
-  const tipoPagoId = body.tipo_pago_id != null && String(body.tipo_pago_id).trim() ? String(body.tipo_pago_id).trim() : null;
+  const tipoPagoId =
+    body.tipo_pago_id != null && String(body.tipo_pago_id).trim()
+      ? String(body.tipo_pago_id).trim()
+      : null;
   const pantallaIds = toIdArray(body.pantalla_ids);
-  if (!pantallaIds.length && body.pantalla_id != null && String(body.pantalla_id).trim()) {
+  if (
+    !pantallaIds.length &&
+    body.pantalla_id != null &&
+    String(body.pantalla_id).trim()
+  ) {
     pantallaIds.push(String(body.pantalla_id).trim());
   }
   const pantallaId = pantallaIds[0] ?? null;
   const productoIds = toIdArray(body.producto_ids ?? body.producto_id);
   const productoId = productoIds[0] ?? null;
   if (!body.nombre?.trim()) return { error: "Nombre es obligatorio" };
-  if (!tipoPagoId) return { error: "Tipo de pago es obligatorio (tipo_pago_id en el body)" };
-  if (!pantallaId) return { error: "Debes enviar al menos una pantalla (pantalla_ids o pantalla_id)." };
+  if (!tipoPagoId)
+    return { error: "Tipo de pago es obligatorio (tipo_pago_id en el body)" };
+  if (!pantallaId)
+    return {
+      error: "Debes enviar al menos una pantalla (pantalla_ids o pantalla_id).",
+    };
 
   const { data, error } = await supabase
     .from("colaboradores")
@@ -87,11 +142,19 @@ export async function crear(body, userId) {
     .select(SELECT_COLABORADOR)
     .single();
   if (error) throw new Error(error.message);
-  return { data: await enrichRelaciones(data) };
+
+  const enriquecido = await enrichRelaciones(data);
+
+  await sincronizarAsignaciones(data.id, pantallaIds, productoIds);
+
+  return { data: enriquecido };
 }
 
 export async function actualizar(id, body, userId) {
-  const payload = { updated_at: new Date().toISOString(), actualizado_por: userId };
+  const payload = {
+    updated_at: new Date().toISOString(),
+    actualizado_por: userId,
+  };
   if (body.nombre !== undefined) payload.nombre = body.nombre;
   if (body.telefono !== undefined) payload.telefono = body.telefono;
   if (body.email !== undefined) payload.email = body.email;
@@ -99,7 +162,11 @@ export async function actualizar(id, body, userId) {
   if (body.tipo_pago_id !== undefined) payload.tipo_pago_id = body.tipo_pago_id;
   if (body.pantalla_ids !== undefined || body.pantalla_id !== undefined) {
     const pantallaIds = toIdArray(body.pantalla_ids);
-    if (!pantallaIds.length && body.pantalla_id != null && String(body.pantalla_id).trim()) {
+    if (
+      !pantallaIds.length &&
+      body.pantalla_id != null &&
+      String(body.pantalla_id).trim()
+    ) {
       pantallaIds.push(String(body.pantalla_id).trim());
     }
     payload.pantalla_ids = pantallaIds;
@@ -177,5 +244,17 @@ export async function eliminar(id) {
     .delete({ count: "exact" })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  if (!count) throw new Error("Colaborador no encontrado");
+  if (!data) throw new Error("Colaborador no encontrado");
+  const enriquecido = await enrichRelaciones(data);
+
+  // ← Agregar estas líneas
+  const pIds = Array.isArray(payload.pantalla_ids) ? payload.pantalla_ids : [];
+  const prodIds = Array.isArray(payload.producto_ids)
+    ? payload.producto_ids
+    : [];
+  if (pIds.length > 0 || prodIds.length > 0) {
+    await sincronizarAsignaciones(id, pIds, prodIds);
+  }
+
+  return enriquecido;
 }

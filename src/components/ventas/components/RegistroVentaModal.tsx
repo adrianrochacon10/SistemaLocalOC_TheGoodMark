@@ -21,7 +21,7 @@ interface RegistroVentaModalProps {
   pantallas: Pantalla[];
   productos: Producto[];
   asignaciones: AsignacionPantalla[];
-  asignacionesProductos: AsignacionProductoExtra[];
+  Productos: AsignacionProductoExtra[];
   clientes: Colaborador[];
   usuarios: Usuario[];
   usuarioActual: Usuario;
