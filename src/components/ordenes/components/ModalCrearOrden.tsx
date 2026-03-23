@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import ReactDOM from "react-dom";
+import { toast } from "react-toastify";
 import {
   RegistroVenta,
   Colaborador,
@@ -68,11 +69,11 @@ export const ModalCrearOrden: React.FC<Props> = ({
 
   const handleConfirmar = () => {
     if (!colaboradorId) {
-      alert("Selecciona un colaborador");
+      toast.error("Selecciona un colaborador");
       return;
     }
     if (ventasDelMes.length === 0) {
-      alert("No hay ventas para ese período");
+      toast.error("No hay ventas para ese período");
       return;
     }
     onConfirmar(colaboradorId, mes, año);

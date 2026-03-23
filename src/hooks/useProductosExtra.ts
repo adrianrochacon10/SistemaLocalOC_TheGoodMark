@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Producto, AsignacionProductoExtra } from "../types";
 import { backendApi } from "../lib/backendApi";
+import { toast } from "react-toastify";
 
 export function useProductosExtra(profile: any, session: Session | null) {
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -49,6 +50,7 @@ export function useProductosExtra(profile: any, session: Session | null) {
         );
       } catch (e) {
         console.error("Error cargando productos/asignaciones:", e);
+        toast.error("Error cargando productos/asignaciones");
       }
     };
     cargar();
@@ -105,14 +107,16 @@ export function useProductosExtra(profile: any, session: Session | null) {
       if (asignacion?.id) {
         await backendApi.del(`/api/asignaciones/productos/${asignacion.id}`);
       }
+      setAsignacionesProductos((prev) =>
+        prev.filter(
+          (a) => !(a.clienteId === clienteId && a.productoId === productoId),
+        ),
+      );
+      toast.success("Producto desasignado correctamente");
     } catch (e) {
       console.error("Error desasignando producto:", e);
+      toast.error("No se pudo desasignar el producto");
     }
-    setAsignacionesProductos((prev) =>
-      prev.filter(
-        (a) => !(a.clienteId === clienteId && a.productoId === productoId),
-      ),
-    );
   };
 
   return {

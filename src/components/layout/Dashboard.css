@@ -46,6 +46,14 @@
   font-weight: bold;
 }
 
+.brand-infinito {
+  display: inline-block;
+  font-size: 1.45em;
+  line-height: 0.8;
+  margin-left: 0.18em;
+  vertical-align: -0.07em;
+}
+
 .header-right {
   display: flex;
   align-items: center;

@@ -1,4 +1,5 @@
   import React, { useState } from "react";
+  import { toast } from "react-toastify";
   import {
     RegistroVenta,
     OrdenDeCompra,
@@ -55,11 +56,15 @@
       setError("");
       setExito("");
       if (registrosDelMes.length === 0) {
-        setError("No hay ventas registradas para este mes");
+        const msg = "No hay ventas registradas para este mes";
+        setError(msg);
+        toast.error(msg);
         return;
       }
       if (ordenExistente) {
-        setError("Ya existe una orden para este mes");
+        const msg = "Ya existe una orden para este mes";
+        setError(msg);
+        toast.error(msg);
         return;
       }
       const nueva = generarOrdenDelMes(
@@ -71,6 +76,7 @@
       );
       onGenerarOrden(nueva);
       setExito("✅ Orden generada exitosamente");
+      toast.success("Orden generada exitosamente");
       setTimeout(() => setExito(""), 3000);
     };
 
@@ -90,6 +96,7 @@
       onGenerarOrden(nueva);
       setModal(false);
       setExito("✅ Orden generada exitosamente");
+      toast.success("Orden generada exitosamente");
       setTimeout(() => setExito(""), 3000);
     };
 

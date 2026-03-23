@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { ConfiguracionEmpresa, OrdenDeCompra } from "../types";
 import { backendApi } from "../lib/backendApi";
+import { toast } from "react-toastify";
 
 export function useConfiguracion(profile: any, session: Session | null) {
   const [config, setConfig] = useState<ConfiguracionEmpresa>({
@@ -36,6 +37,7 @@ export function useConfiguracion(profile: any, session: Session | null) {
         }
       } catch (e) {
         console.error("Error cargando configuración:", e);
+        toast.error("Error cargando configuración");
       }
     };
     cargar();
@@ -79,7 +81,7 @@ export function useConfiguracion(profile: any, session: Session | null) {
       if (data?.id) setConfig((prev) => ({ ...prev, id: data.id }));
     } catch (e) {
       console.error("Error guardando configuración:", e);
-      alert(
+      toast.error(
         e instanceof Error
           ? `Error: ${e.message}`
           : "Error al guardar configuración.",

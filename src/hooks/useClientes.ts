@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Colaborador } from "../types";
 import { backendApi } from "../lib/backendApi";
+import { toast } from "react-toastify";
 
 type ExtrasColaborador = {
   pantalla_ids?: string[];
@@ -84,6 +85,7 @@ export function useClientes(profile: any, session: Session | null) {
         setClientes(data.map((row: any) => mapBackendColaborador(row)));
       } catch (e) {
         console.error("Error cargando Colaboradores:", e);
+        toast.error("Error cargando colaboradores");
       }
     };
     cargar();
@@ -202,10 +204,17 @@ export function useClientes(profile: any, session: Session | null) {
   };
 
   const handleEliminarCliente = async (colaboradorId: string) => {
-    await backendApi.del(`/api/colaboradores/${colaboradorId}`);
-    setClientes((prev: Colaborador[]) =>
-      prev.filter((c: Colaborador) => c.id !== colaboradorId),
-    );
+    try {
+      await backendApi.del(`/api/colaboradores/${colaboradorId}`);
+      setClientes((prev: Colaborador[]) =>
+        prev.filter((c: Colaborador) => c.id !== colaboradorId),
+      );
+      toast.warn("Colaborador eliminado correctamente");
+    } catch (e) {
+      console.error("Error eliminando colaborador:", e);
+      toast.error("No se pudo eliminar el colaborador");
+      throw e;
+    }
   };
 
   return {

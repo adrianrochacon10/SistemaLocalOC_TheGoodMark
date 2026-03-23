@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { backendApi } from "../../lib/backendApi";
+import { toast } from "react-toastify";
 import "./EmpresaForm.css";
 
 interface EmpresaFormProps {
@@ -73,7 +74,7 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
     setMensaje(null);
 
     if (!formData.nombre_empresa.trim()) {
-      alert("El nombre de la empresa es obligatorio");
+      toast.error("El nombre de la empresa es obligatorio");
       return;
     }
 
@@ -89,10 +90,12 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
         activo: formData.activo,
       });
       setMensaje("Configuración guardada correctamente");
+      toast.success("Configuración guardada correctamente");
       setEditando(false);
       await cargarConfiguracion(true);
     } catch (e) {
       setMensaje(e instanceof Error ? e.message : "Error al guardar configuración");
+      toast.error(e instanceof Error ? e.message : "Error al guardar configuración");
     } finally {
       setGuardando(false);
     }

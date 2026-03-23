@@ -1,352 +1,375 @@
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 import { OrdenDeCompra, ConfiguracionEmpresa } from "../types";
 
-/**
- * Genera un PDF de la orden de compra en HTML imprimible
- * Crea un diseño personalizado profesional
- */
-export const generarPDFOrden = (
+const esc = (v: unknown) =>
+  String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const money = (n: number) =>
+  n.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+const buildCotizacionHTML = (
   orden: OrdenDeCompra,
   config: ConfiguracionEmpresa,
-  nombreUsuario: string
-): void => {
+  _nombreUsuario: string,
+): string => {
   const mesFormato = new Date(orden.año ?? 0, orden.mes ?? 0).toLocaleDateString("es-MX", {
     month: "long",
     year: "numeric",
   });
-
   const fechaFormato = new Date(orden.fecha).toLocaleDateString("es-MX");
+  const registros = orden.registrosVenta ?? [];
+  const subtotal = Number(orden.subtotal ?? 0);
+  const ivaPct = Number(orden.ivaPercentaje ?? config.ivaPercentaje ?? 0);
+  const ivaTotal = Number(orden.ivaTotal ?? 0);
+  const total = Number(orden.total ?? 0);
+  const granTotal = subtotal + ivaTotal;
+  const descuento = Math.max(0, granTotal - total);
+  const vigenciaDias = 30;
+  const duracionMeses =
+    registros.length > 0
+      ? Math.max(...registros.map((r) => Number(r.mesesRenta || 1)))
+      : 1;
 
-  const html = `
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-      <meta charset="UTF-8">
-      <title>Orden de Compra - ${orden.numeroOrden}</title>
+  return `
+    <div class="container">
       <style>
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
-        
-        body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          color: #333;
-          background: white;
-          padding: 20px;
-        }
-        
+        * { box-sizing: border-box; }
         .container {
-          max-width: 850px;
+          width: 960px;
           margin: 0 auto;
-          background: white;
-          padding: 40px;
+          background: #f7f9fc;
+          border: 1px solid #dbe5f2;
+          border-radius: 14px;
+          padding: 28px 30px 22px;
+          font-family: Arial, Helvetica, sans-serif;
+          color: #1f2937;
         }
-        
-        .header {
-          background: linear-gradient(135deg, #1461a1 0%, #0e4a7a 100%);
-          color: white;
-          padding: 30px;
-          border-radius: 8px;
-          margin-bottom: 30px;
-          box-shadow: 0 2px 10px rgba(20, 97, 161, 0.2);
-        }
-        
-        .header-content {
+        .top {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
+          background: linear-gradient(120deg, #ffffff 0%, #f0f5ff 100%);
+          border: 1px solid #d9e4ff;
+          border-left: 6px solid #0d3488;
+          border-radius: 12px;
+          padding: 16px 18px;
+          box-shadow: 0 2px 8px rgba(13, 52, 136, 0.06);
         }
-        
-        .header h1 {
-          font-size: 36px;
-          margin-bottom: 5px;
-          font-weight: 700;
+        .brand h1 {
+          color: #0d3488;
+          font-size: 34px;
+          margin: 0;
+          font-weight: 900;
+          letter-spacing: 0.3px;
         }
-        
-        .header p {
+        .brand .email {
+          margin-top: 7px;
+          color: #475569;
           font-size: 13px;
-          opacity: 0.95;
-          margin: 3px 0;
         }
-        
-        .numero-orden {
+        .quote {
           text-align: right;
+          background: #ffffff;
+          border: 1px solid #dbe5f2;
+          border-radius: 10px;
+          padding: 8px 12px;
+          min-width: 230px;
         }
-        
-        .numero-orden .label {
-          font-size: 11px;
-          opacity: 0.9;
+        .quote h2 {
+          color: #0d3488;
+          margin: 0 0 2px;
+          font-size: 34px;
+          line-height: 1;
+          letter-spacing: 1px;
         }
-        
-        .numero-orden .valor {
-          font-size: 24px;
-          font-weight: 700;
-          margin-top: 5px;
-        }
-        
-        .company-section {
-          margin-bottom: 30px;
-        }
-        
-        .company-info {
+        .quote p { margin: 4px 0 0; color: #64748b; font-size: 12px; }
+        .row {
+          margin-top: 16px;
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 40px;
-          margin-bottom: 30px;
-          padding-bottom: 20px;
-          border-bottom: 2px solid #e0e0e0;
+          gap: 14px;
         }
-        
-        .info-block h3 {
-          color: #1461a1;
-          font-size: 12px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          margin-bottom: 10px;
+        .card {
+          border: 1px solid #dbe5f2;
+          border-radius: 12px;
+          padding: 12px 14px;
+          background: #ffffff;
+          box-shadow: 0 1px 6px rgba(15, 23, 42, 0.04);
         }
-        
-        .info-block p {
-          font-size: 13px;
-          line-height: 1.6;
-          color: #555;
-        }
-        
-        .info-block strong {
-          color: #333;
-          display: block;
+        .card h3 {
+          margin: 0 0 10px;
+          color: #0d3488;
+          border-bottom: 1px solid #d9e4ff;
           font-size: 14px;
-          margin-bottom: 5px;
+          letter-spacing: 0.4px;
+          padding-bottom: 7px;
         }
-        
-        .table-section {
-          margin: 30px 0;
+        .kv { display: flex; justify-content: space-between; margin: 6px 0; font-size: 14px; }
+        .kv span:first-child { color: #334155; }
+        .kv .val { font-weight: 800; color: #0f172a; }
+        .green { color: #1a8f36; }
+        .section-title {
+          margin: 18px 0 8px;
+          color: #0d3488;
+          font-size: 14px;
+          font-weight: 900;
+          letter-spacing: 0.35px;
+          text-transform: uppercase;
+          border-bottom: 2px solid #0d3488;
+          padding-bottom: 6px;
         }
-        
         table {
           width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 20px;
-        }
-        
-        thead {
-          background: #0e4a7a;
-          color: white;
-        }
-        
-        th {
-          padding: 12px;
-          text-align: left;
+          border-collapse: separate;
+          border-spacing: 0;
           font-size: 12px;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+          overflow: hidden;
+          border: 1px solid #dbe5f2;
+          border-radius: 10px;
+          background: #fff;
         }
-        
-        td {
-          padding: 12px;
-          font-size: 12px;
-          border-bottom: 1px solid #e0e0e0;
+        thead tr { background: #0d3488; color: #fff; }
+        th { text-align: left; padding: 9px 8px; font-size: 12px; letter-spacing: 0.2px; }
+        td { padding: 9px 8px; border-bottom: 1px solid #e5eaf4; vertical-align: top; font-size: 13px; }
+        tbody tr:nth-child(even) td { background: #fafcff; }
+        .muted { font-size: 11px; color: #475569; margin-top: 2px; }
+        .right { text-align: right; }
+        .subtotal td {
+          background: #f0f5ff !important;
+          font-weight: 800;
+          border-bottom: none;
         }
-        
-        tbody tr:nth-child(even) {
-          background: #f8f9fa;
+        .footer-row {
+          margin-top: 16px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
         }
-        
-        tbody tr:hover {
-          background: #f0f5f9;
-        }
-        
-        .text-right {
-          text-align: right;
-        }
-        
-        .text-center {
-          text-align: center;
-        }
-        
-        .totales-section {
-          display: flex;
-          justify-content: flex-end;
-          margin-top: 30px;
-          gap: 40px;
-        }
-        
-        .totales-column {
-          min-width: 250px;
-        }
-        
-        .total-row {
+        .fin .line {
           display: flex;
           justify-content: space-between;
-          padding: 12px 0;
-          border-bottom: 1px solid #e0e0e0;
+          padding: 6px 0;
+          border-bottom: 1px dashed #d1d5db;
           font-size: 13px;
         }
-        
-        .total-row.subtotal .label {
-          font-weight: 600;
-          color: #333;
-        }
-        
-        .total-row.iva .label {
-          font-weight: 600;
-          color: #333;
-        }
-        
-        .total-row.total {
-          background: #1461a1;
-          color: white;
-          padding: 15px;
-          border-radius: 6px;
+        .fin .line.total {
           border-bottom: none;
-          font-weight: 700;
-          font-size: 16px;
-          margin-top: 10px;
+          margin-top: 6px;
+          padding-top: 8px;
+          font-size: 28px;
+          font-weight: 900;
+          color: #0d3488;
         }
-        
-        .total-row .label {
-          flex: 1;
+        .terms {
+          margin-top: 14px;
+          border: 1px solid #dbe5f2;
+          border-radius: 12px;
+          padding: 10px 12px;
+          background: #fff;
         }
-        
-        .total-row .valor {
-          text-align: right;
-          min-width: 80px;
-          font-weight: 600;
+        .terms h4 {
+          margin: 0 0 6px;
+          color: #0d3488;
+          border-bottom: 1px solid #d9e4ff;
+          font-size: 13px;
+          letter-spacing: 0.3px;
+          padding-bottom: 5px;
         }
-        
-        .footer {
-          margin-top: 40px;
-          padding-top: 20px;
-          border-top: 2px solid #e0e0e0;
+        .terms ul {
+          margin: 0;
+          padding-left: 16px;
+          columns: 2;
+          color: #334155;
+          font-size: 12px;
+          line-height: 1.35;
+        }
+        .foot {
+          margin-top: 14px;
+          border-top: 2px solid #0d3488;
+          padding-top: 8px;
           display: flex;
           justify-content: space-between;
           font-size: 11px;
-          color: #666;
+          color: #475569;
         }
-        
-        .footer-item {
-          text-align: center;
-          flex: 1;
-        }
-        
-        @media print {
-          body {
-            padding: 0;
-          }
-          .container {
-            padding: 0;
-            box-shadow: none;
-          }
-        }
+        .foot .title { color: #0d3488; font-weight: 800; margin-bottom: 2px; font-size: 11px; }
+        .legal { margin-top: 10px; text-align: center; font-size: 10px; color: #94a3b8; }
       </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <div class="header-content">
-            <div>
-              <h1>ORDEN DE COMPRA</h1>
-              <p>en línea</p>
-            </div>
-            <div class="numero-orden">
-              <div class="label">Número de Orden</div>
-              <div class="valor">${orden.numeroOrden}</div>
-            </div>
-          </div>
+
+      <div class="top">
+        <div class="brand">
+          <h1>${esc(config.nombreEmpresa || "THE GOOD MARK").toUpperCase()}</h1>
+          <div class="email">${esc(config.email || "administracion@thegoodmark.com.mx")}</div>
         </div>
-        
-        <div class="company-section">
-          <div class="company-info">
-            <div class="info-block">
-              <h3>Empresa</h3>
-              <strong>${config.nombreEmpresa}</strong>
-              ${config.rfc ? `<p><strong>RFC:</strong> ${config.rfc}</p>` : ""}
-              ${config.direccion ? `<p>${config.direccion}</p>` : ""}
-              ${config.telefono ? `<p>${config.telefono}</p>` : ""}
-              ${config.email ? `<p>${config.email}</p>` : ""}
-            </div>
-            <div class="info-block">
-              <h3>Información de la Orden</h3>
-              <p><strong>Fecha de Emisión:</strong> ${fechaFormato}</p>
-              <p><strong>Período:</strong> ${mesFormato}</p>
-              <p><strong>Exportado por:</strong> ${nombreUsuario}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div class="table-section">
-          <table>
-            <thead>
-              <tr>
-                <th>Cliente</th>
-                <th>Vendido a</th>
-                <th class="text-center">Pantallas</th>
-                <th class="text-center">Período</th>
-                <th class="text-right">Importe</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(orden.registrosVenta ?? []).map(venta => `
-                <tr>
-                  <td>${venta.clienteId.substring(0, 20)}</td>
-                  <td>${venta.vendidoA.substring(0, 25)}</td>
-                  <td class="text-center">${venta.pantallasIds.length}</td>
-                  <td class="text-center">${new Date(venta.fechaInicio).toLocaleDateString("es-MX")} - ${new Date(venta.fechaFin).toLocaleDateString("es-MX")}</td>
-                  <td class="text-right"><strong>$${venta.precioGeneral.toFixed(2)}</strong></td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-        </div>
-        
-        <div class="totales-section">
-          <div class="totales-column">
-            <div class="total-row subtotal">
-              <span class="label">Subtotal</span>
-              <span class="valor">$${(orden.subtotal ?? 0).toFixed(2)}</span>
-            </div>
-            <div class="total-row iva">
-              <span class="label">I.V.A. (${orden.ivaPercentaje ?? 0}%)</span>
-              <span class="valor">$${(orden.ivaTotal ?? 0).toFixed(2)}</span>
-            </div>
-            <div class="total-row total">
-              <span class="label">TOTAL</span>
-              <span class="valor">$${(orden.total ?? 0).toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="footer">
-          <div class="footer-item">
-            <p>Documento generado automáticamente</p>
-          </div>
-          <div class="footer-item">
-            <p>${new Date().toLocaleDateString("es-MX")}</p>
-          </div>
+        <div class="quote">
+          <h2>ORDEN DE VENTA</h2>
+          <p>Folio: ${esc(orden.numeroOrden)}</p>
+          <p>Fecha: ${esc(fechaFormato)}</p>
+          <p>Periodo: ${esc(mesFormato)}</p>
         </div>
       </div>
-      
-      <script>
-        window.addEventListener('load', function() {
-          setTimeout(function() {
-            window.print();
-          }, 500);
-        });
-      </script>
-    </body>
-    </html>
-  `;
 
-  // Crear un blob y descargar
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `OrdendeCompra-${orden.numeroOrden}.html`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+      <div class="row">
+        <div class="card">
+          <h3>INFORMACION DEL SERVICIO</h3>
+          <div class="kv"><span>Duracion:</span><span class="val">${duracionMeses} Mes${duracionMeses === 1 ? "" : "es"}</span></div>
+          <div class="kv"><span>Inicio:</span><span class="val">${esc(fechaFormato)}</span></div>
+          <div class="kv"><span>Periodo:</span><span class="val">${esc(mesFormato)}</span></div>
+          <div class="kv"><span>Descuento:</span><span class="val green">${descuento > 0 ? Math.round((descuento / (granTotal || 1)) * 100) : 0}%</span></div>
+        </div>
+        <div class="card">
+          <h3>PRODUCTOS</h3>
+          <div class="kv"><span>Productos:</span><span class="val">${registros.length}</span></div>
+          <div class="kv"><span>Pantallas:</span><span class="val">${registros.reduce((acc, r) => acc + (r.pantallasIds?.length || 0), 0)}</span></div>
+          <div class="kv"><span>Documento:</span><span class="val">Orden de venta</span></div>
+        </div>
+      </div>
+
+      <div class="section-title">DETALLE DE PRODUCTOS Y SERVICIOS</div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>DESCRIPCION</th>
+            <th>PAQUETE</th>
+            <th class="right">PRECIO</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${registros
+            .map(
+              (venta, idx) => `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>
+                <div><strong>${esc((venta.vendidoA || "SERVICIO").toUpperCase())}</strong></div>
+                <div class="muted">Periodo: ${esc(new Date(venta.fechaInicio).toLocaleDateString("es-MX"))} - ${esc(new Date(venta.fechaFin).toLocaleDateString("es-MX"))}</div>
+                <div class="muted">Pantallas: ${venta.pantallasIds?.length || 0}</div>
+              </td>
+              <td>${Number(venta.mesesRenta || 1)} Mes${Number(venta.mesesRenta || 1) === 1 ? "" : "es"}</td>
+              <td class="right"><strong>$${money(Number(venta.importeTotal ?? venta.precioGeneral ?? 0))}</strong></td>
+            </tr>`,
+            )
+            .join("")}
+          <tr class="subtotal">
+            <td colspan="3" class="right">SUBTOTAL:</td>
+            <td class="right">$${money(subtotal)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="footer-row">
+        <div class="card">
+          <h3>INFORMACION DE PAGO</h3>
+          <div style="font-weight:700; margin:6px 0 4px;">${esc(config.nombreEmpresa || "The Good Mark")}</div>
+          ${config.rfc ? `<div>RFC: ${esc(config.rfc)}</div>` : ""}
+          ${config.telefono ? `<div>Tel: ${esc(config.telefono)}</div>` : ""}
+          ${config.email ? `<div>Email: ${esc(config.email)}</div>` : ""}
+          ${config.direccion ? `<div>Direccion: ${esc(config.direccion)}</div>` : ""}
+        </div>
+        <div class="card fin">
+          <h3>RESUMEN FINANCIERO</h3>
+          <div class="line"><span>Gran Total:</span><strong>$${money(granTotal)}</strong></div>
+          <div class="line"><span>Descuento:</span><strong style="color:#1a8f36;">-$${money(descuento)}</strong></div>
+          <div class="line"><span>Subtotal:</span><strong>$${money(subtotal)}</strong></div>
+          <div class="line"><span>I.V.A. (${ivaPct}%):</span><strong>$${money(ivaTotal)}</strong></div>
+          <div class="line total"><span>TOTAL:</span><span>$${money(total)}</span></div>
+        </div>
+      </div>
+
+      <div class="terms">
+        <h4>TERMINOS Y CONDICIONES</h4>
+        <ul>
+          <li>Vigencia: ${vigenciaDias} dias naturales</li>
+          <li>Precios sujetos a disponibilidad</li>
+          <li>Inicio tras firma y pago inicial</li>
+          <li>Creativos 5 dias habiles antes</li>
+          <li>Soporte tecnico incluido</li>
+          <li>Penalizaciones por cancelacion</li>
+        </ul>
+      </div>
+
+      <div class="foot">
+        <div>
+          <div class="title">CONTACTO</div>
+          <div>Email: ${esc(config.email || "-")}</div>
+          <div>Tel: ${esc(config.telefono || "-")}</div>
+        </div>
+        <div>
+          <div class="title">SITIO WEB</div>
+          <div>Web: www.thegoodmark.com</div>
+        </div>
+        <div>
+          <div class="title">OFICINA</div>
+          <div>${esc(config.direccion || "Durango, DGO")}</div>
+        </div>
+      </div>
+
+      <div class="legal">
+        ${esc(config.nombreEmpresa || "The Good Mark")} © ${new Date().getFullYear()} • Orden de venta sujeta a firma de contrato
+      </div>
+    </div>
+  `;
+};
+
+/**
+ * Genera y descarga un PDF real a partir del diseño HTML.
+ */
+export const generarPDFOrden = async (
+  orden: OrdenDeCompra,
+  config: ConfiguracionEmpresa,
+  nombreUsuario: string,
+): Promise<void> => {
+  const root = document.createElement("div");
+  root.style.position = "fixed";
+  root.style.left = "-10000px";
+  root.style.top = "0";
+  root.style.width = "960px";
+  root.style.background = "#ffffff";
+  root.innerHTML = buildCotizacionHTML(orden, config, nombreUsuario);
+  document.body.appendChild(root);
+
+  try {
+    const source = root.firstElementChild as HTMLElement | null;
+    if (!source) throw new Error("No se pudo renderizar el contenido de la orden de venta");
+
+    const canvas = await html2canvas(source, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 6;
+    const contentWidth = pageWidth - margin * 2;
+
+    const imgWidth = contentWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let y = margin;
+    pdf.addImage(imgData, "PNG", margin, y, imgWidth, imgHeight, undefined, "FAST");
+    heightLeft -= (pageHeight - margin * 2);
+
+    while (heightLeft > 0) {
+      pdf.addPage();
+      y = margin - (imgHeight - heightLeft);
+      pdf.addImage(imgData, "PNG", margin, y, imgWidth, imgHeight, undefined, "FAST");
+      heightLeft -= (pageHeight - margin * 2);
+    }
+
+    pdf.save(`OrdenVenta-${orden.numeroOrden}.pdf`);
+  } finally {
+    document.body.removeChild(root);
+  }
 };

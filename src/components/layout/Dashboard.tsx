@@ -43,7 +43,9 @@ export const Dashboard: React.FC = () => {
     <div className="dashboard-nuevo">
       <header className="dashboard-header-nuevo">
         <div className="header-left">
-          <h1>The Good Mark</h1>
+          <h1>
+            The Good Mark <span className="brand-infinito">∞</span>
+          </h1>
         </div>
         <div className="header-right">
           <div className="bd-status">

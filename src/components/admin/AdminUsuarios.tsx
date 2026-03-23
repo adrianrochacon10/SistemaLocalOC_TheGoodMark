@@ -168,6 +168,7 @@ import React, { useEffect, useState } from "react";
 import { backendApi } from "../../lib/backendApi";
 import { InputField } from "../ui/InputField";
 import { BotonAccion } from "../ui/BotonAccion";
+import { toast } from "react-toastify";
 import "./AdminUsuarios.css";
 
 interface UsuarioRow {
@@ -207,7 +208,9 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
       const data = (await backendApi.get("/api/vendedores")) as UsuarioRow[];
       setUsuarios(Array.isArray(data) ? data : []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al cargar usuarios");
+      const msg = e instanceof Error ? e.message : "Error al cargar usuarios";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setCargando(false);
     }
@@ -222,12 +225,16 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
     setExito(null);
 
     if (!nombre.trim() || !email.trim() || !password.trim()) {
-      setError("Nombre, email y contraseña son obligatorios");
+      const msg = "Nombre, email y contraseña son obligatorios";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
     if (usuarios.some((u) => u.email === email.trim())) {
-      setError("Ya existe un usuario con ese email");
+      const msg = "Ya existe un usuario con ese email";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -245,9 +252,12 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
       setEmail("");
       setPassword("");
       setExito("Usuario creado correctamente");
+      toast.success("Usuario creado correctamente");
       setTimeout(() => setExito(null), 3000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al crear usuario");
+      const msg = e instanceof Error ? e.message : "Error al crear usuario";
+      setError(msg);
+      toast.error(msg);
     }
   };
 
@@ -276,7 +286,9 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
     setExito(null);
 
     if (!nombre.trim() || !email.trim()) {
-      setError("Nombre y email son obligatorios");
+      const msg = "Nombre y email son obligatorios";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -289,16 +301,21 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
 
       setUsuarios((prev) => prev.map((u) => (u.id === editandoId ? actualizado : u)));
       setExito("Usuario actualizado correctamente");
+      toast.success("Usuario actualizado correctamente");
       handleCancelarEdicion();
       setTimeout(() => setExito(null), 3000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al actualizar usuario");
+      const msg = e instanceof Error ? e.message : "Error al actualizar usuario";
+      setError(msg);
+      toast.error(msg);
     }
   };
 
   const handleEliminarUsuario = async (usuario: UsuarioRow) => {
     if (usuario.id === usuarioActualId) {
-      setError("No puedes eliminar tu propio usuario");
+      const msg = "No puedes eliminar tu propio usuario";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -311,9 +328,12 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
       await backendApi.del(`/api/vendedores/${usuario.id}`);
       setUsuarios((prev) => prev.filter((u) => u.id !== usuario.id));
       setExito("Usuario eliminado correctamente");
+      toast.warn("Usuario eliminado correctamente");
       setTimeout(() => setExito(null), 3000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al eliminar usuario");
+      const msg = e instanceof Error ? e.message : "Error al eliminar usuario";
+      setError(msg);
+      toast.error(msg);
     }
   };
 

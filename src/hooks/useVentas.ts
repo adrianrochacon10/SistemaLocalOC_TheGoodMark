@@ -1,6 +1,7 @@
 // src/hooks/useVentas.ts
 import { useState, useEffect } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { toast } from "react-toastify";
 import { RegistroVenta } from "../types";
 import { backendApi } from "../lib/backendApi";
 import { registrarVenta } from "../lib/ventas";
@@ -71,6 +72,7 @@ export function useVentas(profile: any, session: Session | null) {
         setVentasRegistradas(data.map(mapVentaFromApi));
       } catch (e) {
         console.error("Error cargando ventas:", e);
+        toast.error("Error cargando ventas");
       }
     };
     cargar();
@@ -135,6 +137,11 @@ export function useVentas(profile: any, session: Session | null) {
 
         if (error) {
           console.error("Error al guardar venta:", error);
+          toast.error(
+            error instanceof Error
+              ? `Error: ${error.message}`
+              : "Error al guardar en la base de datos.",
+          );
           setErrorVenta(
             error instanceof Error
               ? `Error: ${error.message}`
@@ -152,6 +159,7 @@ export function useVentas(profile: any, session: Session | null) {
       }
     } catch (e) {
       console.error("Excepción al guardar venta:", e);
+      toast.error(e instanceof Error ? `Error: ${e.message}` : "Error desconocido.");
       setErrorVenta(
         e instanceof Error ? `Error: ${e.message}` : "Error desconocido.",
       );
@@ -162,6 +170,7 @@ export function useVentas(profile: any, session: Session | null) {
   // ── Eliminar venta ────────────────────────────────────────────────────
   const handleEliminarVenta = (ventaId: string) => {
     setVentasRegistradas((prev) => prev.filter((v) => v.id !== ventaId));
+    toast.warn("Venta eliminada correctamente");
   };
 
   return {

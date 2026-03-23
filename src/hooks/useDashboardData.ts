@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "react-toastify";
 import { Usuario } from "../types";
 import { useAuth } from "./useAuth";
 import { backendApi } from "../lib/backendApi";
@@ -47,6 +48,7 @@ export function useDashboardData() {
         );
       } catch (e) {
         console.error("Error cargando usuarios (vendedores):", e);
+        toast.error("Error cargando usuarios (vendedores)");
       }
     };
     void cargar();
@@ -65,6 +67,7 @@ export function useDashboardData() {
         );
       } catch (e) {
         console.error("Error cargando tipos de pago:", e);
+        toast.error("Error cargando tipos de pago");
       }
     };
     cargar();

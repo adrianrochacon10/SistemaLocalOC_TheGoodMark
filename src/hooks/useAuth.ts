@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
 import { invalidateBackendAuthCache } from "../lib/backendApi";
+import { toast } from "react-toastify";
 
 export type Rol = "admin" | "usuario";
 
@@ -89,11 +90,13 @@ export function useAuth() {
             ? "Correo no confirmado. En Supabase: Authentication → Providers → Email → desactiva «Confirm email», o confirma el correo desde el enlace que te enviaron."
             : err.message;
         setError(msg);
+        toast.error(msg);
         return { error: err };
       }
       if (data.user) {
         await fetchProfile(data.user.id, data.user.email ?? "");
       }
+      toast.success("Sesión iniciada correctamente");
       return { data, error: null };
     },
     [fetchProfile]
@@ -102,10 +105,17 @@ export function useAuth() {
   const signOut = useCallback(async () => {
     setError(null);
     invalidateBackendAuthCache();
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-    setProfile(null);
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      toast.success("Sesión cerrada");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "No se pudo cerrar sesión";
+      setError(msg);
+      toast.error(msg);
+    }
   }, []);
 
   return {

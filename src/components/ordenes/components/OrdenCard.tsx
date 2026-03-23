@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   OrdenDeCompra,
   Colaborador,
@@ -7,6 +7,7 @@ import {
   Usuario,
 } from "../../../types";
 import { generarPDFOrden } from "../../../utils/pdfGenerator";
+import { toast } from "react-toastify";
 
 interface Props {
   orden: OrdenDeCompra;
@@ -42,7 +43,23 @@ export const OrdenCard: React.FC<Props> = ({
   expandido,
   onToggle,
 }) => {
-  const handlePDF = () => generarPDFOrden(orden, config, usuarioActual.nombre);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
+
+  const handlePDF = () => {
+    if (descargandoPdf) return;
+    setDescargandoPdf(true);
+    void generarPDFOrden(orden, config, usuarioActual.nombre)
+      .then(() => {
+        toast.success("PDF descargado correctamente");
+      })
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : "No se pudo descargar el PDF";
+        toast.error(msg);
+      })
+      .finally(() => {
+        setDescargandoPdf(false);
+      });
+  };
 
   return (
     <div className={`orden-card ${expandido ? "expandido" : ""}`}>
@@ -109,8 +126,12 @@ export const OrdenCard: React.FC<Props> = ({
             </p>
           </div>
 
-          <button className="btn btn-primary btn-sm" onClick={handlePDF}>
-            📥 Descargar PDF
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handlePDF}
+            disabled={descargandoPdf}
+          >
+            {descargandoPdf ? "Generando PDF..." : "📥 Descargar PDF"}
           </button>
         </div>
       )}

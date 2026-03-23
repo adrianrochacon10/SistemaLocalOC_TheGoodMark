@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Pantalla, AsignacionPantalla, Cliente } from "../../types";
+import { toast } from "react-toastify";
 import "./GestorPantallas.css";
 
 interface GestorPantallasProps {
@@ -50,7 +51,7 @@ export const GestorPantallas: React.FC<GestorPantallasProps> = ({
 
   const handleAgregarPantalla = () => {
     if (!nuevaPantalla.nombre || nuevaPantalla.precioUnitario <= 0) {
-      alert("Completa los campos requeridos");
+      toast.error("Completa los campos requeridos");
       return;
     }
 
@@ -70,7 +71,7 @@ export const GestorPantallas: React.FC<GestorPantallasProps> = ({
 
   const handleAgregarCliente = () => {
     if (!nuevoCliente.nombre) {
-      alert("El nombre del cliente es requerido");
+      toast.error("El nombre del cliente es requerido");
       return;
     }
 
@@ -90,7 +91,7 @@ export const GestorPantallas: React.FC<GestorPantallasProps> = ({
 
   const handleAsignarPantalla = () => {
     if (!asignacion.pantallaId || !asignacion.clienteId || asignacion.precioUnitario <= 0) {
-      alert("Completa todos los campos");
+      toast.error("Completa todos los campos");
       return;
     }
 

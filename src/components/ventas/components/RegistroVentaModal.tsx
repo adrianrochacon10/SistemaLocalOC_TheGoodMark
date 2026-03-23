@@ -1,5 +1,6 @@
 // src/components/ventas/RegistroVentaModal.tsx
 import React, { useState, useEffect, useMemo } from "react";
+import { toast } from "react-toastify";
 import {
   RegistroVenta,
   Pantalla,
@@ -25,7 +26,7 @@ interface RegistroVentaModalProps {
   clientes: Colaborador[];
   usuarios: Usuario[];
   usuarioActual: Usuario;
-  onRegistrarVenta: (venta: RegistroVenta) => void;
+  onRegistrarVenta: (venta: RegistroVenta) => Promise<void> | void;
   onCerrar: () => void;
   ventaInicial: RegistroVenta | null;
 }
@@ -84,6 +85,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
 
   const [error, setError] = useState<string>("");
   const [exito, setExito] = useState<string>("");
+  const [guardando, setGuardando] = useState(false);
 
   // ── Derivados ─────────────────────────────────────────────────────────
   const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId);
@@ -211,31 +213,44 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   };
 
   // ── Registrar ─────────────────────────────────────────────────────────
-  const handleRegistrarVenta = () => {
+  const handleRegistrarVenta = async () => {
+    if (guardando) return;
     setError("");
     setExito("");
     if (!clienteSeleccionado) {
-      setError("Selecciona un cliente");
+      const msg = "Selecciona un cliente";
+      setError(msg);
+      toast.error(msg);
       return;
     }
     if (itemsVenta.length === 0) {
-      setError("Selecciona al menos una pantalla");
+      const msg = "Selecciona al menos una pantalla";
+      setError(msg);
+      toast.error(msg);
       return;
     }
     if (!vendidoA.trim()) {
-      setError("Especifica a quién se vendió/rentó");
+      const msg = "Especifica a quién se vendió/rentó";
+      setError(msg);
+      toast.error(msg);
       return;
     }
     if (!fechaInicio) {
-      setError("Selecciona una fecha de inicio");
+      const msg = "Selecciona una fecha de inicio";
+      setError(msg);
+      toast.error(msg);
       return;
     }
     if (mesesRenta < 1) {
-      setError("La duración debe ser al menos 1 mes");
+      const msg = "La duración debe ser al menos 1 mes";
+      setError(msg);
+      toast.error(msg);
       return;
     }
     if (precioGeneral <= 0) {
-      setError("El precio debe ser mayor a 0");
+      const msg = "El precio debe ser mayor a 0";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -267,11 +282,21 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
         : undefined,
     };
 
-    onRegistrarVenta(nuevaVenta);
-    setExito("Venta registrada correctamente");
-    resetFormularioVenta();
-    setTimeout(() => setExito(""), 2000);
-    onCerrar();
+    try {
+      setGuardando(true);
+      await onRegistrarVenta(nuevaVenta);
+      setExito("Venta registrada correctamente");
+      toast.success("Venta registrada correctamente");
+      resetFormularioVenta();
+      setTimeout(() => setExito(""), 2000);
+      onCerrar();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "No se pudo registrar la venta";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setGuardando(false);
+    }
   };
 
   // ── JSX ───────────────────────────────────────────────────────────────
@@ -480,7 +505,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
           variante="primario"
           fullWidth
         >
-          Registrar Venta
+          {guardando ? "Guardando..." : "Registrar Venta"}
         </BotonAccion>
 
         <BotonAccion

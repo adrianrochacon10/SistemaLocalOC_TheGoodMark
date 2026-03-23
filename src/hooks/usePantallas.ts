@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Pantalla, AsignacionPantalla } from "../types";
 import { backendApi } from "../lib/backendApi";
+import { toast } from "react-toastify";
 
 export function usePantallas(profile: any, session: Session | null) {
   const [pantallas, setPantallas] = useState<Pantalla[]>([]);
@@ -39,6 +40,7 @@ export function usePantallas(profile: any, session: Session | null) {
         );
       } catch (e) {
         console.error("Error cargando pantallas:", e);
+        toast.error("Error cargando pantallas");
       }
     };
     cargar();
@@ -91,11 +93,13 @@ export function usePantallas(profile: any, session: Session | null) {
   const handleEliminarPantalla = async (pantallaId: string) => {
     try {
       await backendApi.del(`/api/pantallas/${pantallaId}`);
+      toast.warn("Pantalla eliminada correctamente");
+      setPantallas((prev) => prev.filter((p) => p.id !== pantallaId));
+      setAsignaciones((prev) => prev.filter((a) => a.pantallaId !== pantallaId));
     } catch (e) {
       console.error("Error eliminando pantalla:", e);
+      toast.error("No se pudo eliminar la pantalla");
     }
-    setPantallas((prev) => prev.filter((p) => p.id !== pantallaId));
-    setAsignaciones((prev) => prev.filter((a) => a.pantallaId !== pantallaId));
   };
 
   const handleAsignarPantalla = (asignacion: AsignacionPantalla) => {
@@ -120,20 +124,21 @@ export function usePantallas(profile: any, session: Session | null) {
   ) => {
     try {
       await backendApi.del(`/api/colaboradores/${colaboradorId}`);
+      const pantallasAsignadas = asignaciones
+        .filter((a) => a.clienteId === colaboradorId)
+        .map((a) => a.pantallaId);
+
+      setAsignaciones((prev) =>
+        prev.filter((a) => a.clienteId !== colaboradorId),
+      );
+      setPantallas((prev) =>
+        prev.filter((p) => !pantallasAsignadas.includes(p.id)),
+      );
+      toast.warn("Colaborador eliminado correctamente");
     } catch (e) {
       console.error("Error eliminando colaborador:", e);
+      toast.error("No se pudo eliminar el colaborador");
     }
-
-    const pantallasAsignadas = asignaciones
-      .filter((a) => a.clienteId === colaboradorId)
-      .map((a) => a.pantallaId);
-
-    setAsignaciones((prev) =>
-      prev.filter((a) => a.clienteId !== colaboradorId),
-    );
-    setPantallas((prev) =>
-      prev.filter((p) => !pantallasAsignadas.includes(p.id)),
-    );
   };
 
   return {

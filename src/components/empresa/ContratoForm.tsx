@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Contrato, TipoCliente } from "../../types";
+import { toast } from "react-toastify";
 import "./ContratoForm.css";
 
 interface ContratoFormProps {
@@ -35,7 +36,7 @@ export const ContratoForm: React.FC<ContratoFormProps> = ({
     e.preventDefault();
 
     if (!formData.fechaInicio || !formData.fechaFin) {
-      alert("Ambas fechas son obligatorias");
+      toast.error("Ambas fechas son obligatorias");
       return;
     }
 
@@ -43,7 +44,7 @@ export const ContratoForm: React.FC<ContratoFormProps> = ({
     const fechaFin = new Date(formData.fechaFin);
 
     if (fechaFin <= fechaInicio) {
-      alert("La fecha de fin debe ser posterior a la fecha de inicio");
+      toast.error("La fecha de fin debe ser posterior a la fecha de inicio");
       return;
     }
 

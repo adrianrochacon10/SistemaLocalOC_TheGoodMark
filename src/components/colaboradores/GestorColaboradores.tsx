@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { toast } from "react-toastify";
 import {
   Pantalla,
   AsignacionPantalla,
@@ -383,6 +384,7 @@ export function useGestorColaboradores(props: Props) {
           codigo_edicion: profile?.rol === "vendedor" ? codigoEdicion : undefined,
         });
         setMensajeGuardado("Código válido y cambios guardados");
+        toast.success("Colaborador actualizado correctamente");
       } else {
         await onAgregarCliente(colaborador, {
           tipo_pago_id: tipoPagoFinal,
@@ -392,6 +394,7 @@ export function useGestorColaboradores(props: Props) {
           porcentaje: esTipoPagoPorcentaje ? porcentaje : undefined,
         });
         setMensajeGuardado("Colaborador guardado correctamente");
+        toast.success("Colaborador guardado correctamente");
       }
       resetFormulario();
     } catch (e) {
@@ -403,8 +406,10 @@ export function useGestorColaboradores(props: Props) {
           msg.toLowerCase().includes("utilizado"))
       ) {
         setErrorColaborador("Código inválido/expirado");
+        toast.error("Código inválido/expirado");
       } else {
         setErrorColaborador(msg);
+        toast.error(msg);
       }
     } finally {
       setGuardando(false);
@@ -446,11 +451,11 @@ export function useGestorColaboradores(props: Props) {
         await onEliminarPantallasYAsignaciones(colaboradorId);
         resetFormulario();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "No se pudo eliminar colaborador");
+        toast.error(e instanceof Error ? e.message : "No se pudo eliminar colaborador");
       }
     };
     if (profile?.rol !== "admin") {
-      alert("Solo administrador puede eliminar colaboradores");
+      toast.error("Solo administrador puede eliminar colaboradores");
       return;
     }
     if (
