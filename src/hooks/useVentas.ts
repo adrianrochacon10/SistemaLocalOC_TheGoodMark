@@ -24,9 +24,9 @@ export function useVentas(profile: any, session: Session | null) {
       })),
       colaboradorId: row.colaborador_id ?? row.cliente_id,
       productoId: row.producto_id ?? undefined,
-      vendidoA: row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
-      precioGeneral:
-        Number(row.precio_por_mes ?? row.precio_general ?? 0) || 0,
+      vendidoA:
+        row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
+      precioGeneral: Number(row.precio_por_mes ?? row.precio_general ?? 0) || 0,
       cantidad: row.cantidad ?? 1,
       precioTotal: row.precio_total ?? row.importe_total ?? 0,
       fechaRegistro: row.created_at
@@ -39,8 +39,6 @@ export function useVentas(profile: any, session: Session | null) {
       mesesRenta: row.duracion_meses ?? row.meses_renta ?? 1,
       importeTotal: row.importe_total ?? row.precio_total ?? 0,
       activo: row.activo ?? true,
-
-      // ✅ vendedorId separado de usuarioRegistroId
       vendedorId: row.vendedor_id ?? undefined,
       usuarioRegistroId: row.usuario_registro_id ?? row.vendedor_id ?? "",
 
@@ -55,7 +53,6 @@ export function useVentas(profile: any, session: Session | null) {
 
       tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
 
-      // ✅ Campos financieros que faltaban
       costos: row.costos ?? 0,
       comision: row.comisiones ?? row.comision ?? 0,
       pagoConsiderar: row.pago_considerar ?? undefined,
@@ -89,17 +86,18 @@ export function useVentas(profile: any, session: Session | null) {
   // ── Registrar venta ───────────────────────────────────────────────────
   const handleRegistrarVentaConSupabase = async (venta: RegistroVenta) => {
     setErrorVenta(null);
+    console.log("=== VENTA A REGISTRAR ===");
+    console.log("pantallasIds:", venta.pantallasIds);
+    console.log("longitud:", venta.pantallasIds.length);
 
-    const pantallasParaVenta =
-      venta.pantallasIds.length > 0 ? venta.pantallasIds : [];
-
-    if (pantallasParaVenta.length === 0) {
+    if (venta.pantallasIds.length === 0) {
       setErrorVenta("Selecciona al menos una pantalla");
       return;
     }
 
     const estadoApi = venta.estadoVenta?.toLowerCase() ?? "prospecto";
-    const payloadBase = {
+
+    const payload = {
       colaborador_id: venta.colaboradorId,
       producto_id: venta.productoId ?? null,
       cantidad: venta.cantidad ?? 1,
@@ -122,33 +120,29 @@ export function useVentas(profile: any, session: Session | null) {
       costos_total: (venta.costos ?? 0) * venta.mesesRenta,
       comision_mes: venta.comision ?? 0,
       comision_total: (venta.comision ?? 0) * venta.mesesRenta,
+      pantallas_ids: venta.pantallasIds, // ✅ array completo
+      pantalla_id: venta.pantallasIds[0] ?? null, // ✅ primera por compatibilidad
     };
 
-    const ventasCreadas: RegistroVenta[] = [];
+    console.log("=== PAYLOAD ENVIADO AL BACKEND ===");
+    console.log(JSON.stringify(payload, null, 2));
 
     try {
-      for (const pantallaId of pantallasParaVenta) {
-        const { data, error } = await registrarVenta({
-          ...payloadBase,
-          pantalla_id: pantallaId,
-        });
+      const { data, error } = await registrarVenta(payload); // ← una sola llamada
 
-        if (error) {
-          console.error("Error al guardar venta:", error);
-          setErrorVenta(
-            error instanceof Error
-              ? `Error: ${error.message}`
-              : "Error al guardar en la base de datos.",
-          );
-          setVentasRegistradas((prev) => [...prev, venta]);
-          return;
-        }
-
-        if (data) ventasCreadas.push(mapVentaFromApi(data));
+      if (error) {
+        console.error("Error al guardar venta:", error);
+        setErrorVenta(
+          error instanceof Error
+            ? `Error: ${error.message}`
+            : "Error al guardar.",
+        );
+        setVentasRegistradas((prev) => [...prev, venta]);
+        return;
       }
 
-      if (ventasCreadas.length > 0) {
-        setVentasRegistradas((prev) => [...prev, ...ventasCreadas]);
+      if (data) {
+        setVentasRegistradas((prev) => [...prev, mapVentaFromApi(data)]);
       }
     } catch (e) {
       console.error("Excepción al guardar venta:", e);

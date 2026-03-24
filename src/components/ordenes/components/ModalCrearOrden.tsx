@@ -41,25 +41,25 @@ export const ModalCrearOrden: React.FC<Props> = ({
   onCancelar,
 }) => {
   const hoy = new Date();
-
-  // ── Paso 1: colaborador
   const [colaboradorId, setColaboradorId] = useState("");
-  // ── Paso 2: período (solo visible cuando hay colaborador)
   const [mes, setMes] = useState(hoy.getMonth());
   const [año, setAño] = useState(hoy.getFullYear());
 
   const pasoActual = colaboradorId ? 2 : 1;
-
   const años = Array.from({ length: 4 }, (_, i) => hoy.getFullYear() - 2 + i);
-
   const colaboradorSeleccionado = clientes.find((c) => c.id === colaboradorId);
 
-  // Ventas filtradas
   const ventasDelMes = useMemo(() => {
     if (!colaboradorId) return [];
-    return obtenerRegistrosDelMes(ventasRegistradas, mes, año).filter(
-      (v) => v.clienteId === colaboradorId,
-    );
+
+    return ventasRegistradas.filter((v) => {
+      const fecha = new Date(v.fechaInicio); // ← campo correcto
+      return (
+        v.colaboradorId === colaboradorId && // ← campo correcto
+        fecha.getMonth() === mes &&
+        fecha.getFullYear() === año
+      );
+    });
   }, [ventasRegistradas, mes, año, colaboradorId]);
 
   const subtotal = ventasDelMes.reduce((s, v) => s + v.precioGeneral, 0);
@@ -78,11 +78,9 @@ export const ModalCrearOrden: React.FC<Props> = ({
     onConfirmar(colaboradorId, mes, año);
   };
 
-  // ── Renderizar en el body via portal ──────────────────────────────
   return ReactDOM.createPortal(
     <div className="modal-overlay" onClick={onCancelar}>
       <div className="modal-container" onClick={(e) => e.stopPropagation()}>
-        {/* Encabezado */}
         <div className="modal-header">
           <h2>📋 Nueva Orden de Compra</h2>
           <button className="modal-close" onClick={onCancelar}>
@@ -90,7 +88,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Indicador de pasos */}
         <div className="modal-steps">
           <div className={`step ${pasoActual >= 1 ? "step-activo" : ""}`}>
             <span className="step-num">1</span>
@@ -104,7 +101,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
         </div>
 
         <div className="modal-body">
-          {/* ── PASO 1: Seleccionar colaborador ── */}
+          {/* PASO 1 */}
           <div className="modal-section">
             <h3>🤝 Colaborador *</h3>
             <select
@@ -113,16 +110,13 @@ export const ModalCrearOrden: React.FC<Props> = ({
               className="form-select form-select-lg"
             >
               <option value="">— Seleccionar colaborador —</option>
-              {clientes
-                .filter((c) => c.activo)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre}
-                  </option>
-                ))}
+              {clientes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
             </select>
 
-            {/* Mini-ficha del colaborador seleccionado */}
             {colaboradorSeleccionado && (
               <div className="colaborador-ficha">
                 {colaboradorSeleccionado.alias && (
@@ -138,7 +132,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
             )}
           </div>
 
-          {/* ── PASO 2: Período + resumen (solo si hay colaborador) ── */}
+          {/* PASO 2 */}
           {colaboradorId && (
             <>
               <div className="modal-section">
@@ -175,10 +169,9 @@ export const ModalCrearOrden: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* ── RESUMEN de ventas ── */}
               <div className="modal-section">
                 <h3>
-                  📦 Ventas a incluir
+                  Ventas a incluir
                   <span className="badge-count">{ventasDelMes.length}</span>
                 </h3>
 
@@ -194,7 +187,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
                     <div className="ventas-resumen-list">
                       {ventasDelMes.map((v) => {
                         const pantalla = pantallas.find(
-                          (p) => p.id === v.pantallasIds[0],
+                          (p) => p.id === v.pantallasIds?.[0],
                         );
                         return (
                           <div key={v.id} className="venta-resumen-item">
@@ -226,7 +219,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
                       })}
                     </div>
 
-                    {/* Totales */}
                     <div className="modal-totales">
                       <div className="total-row">
                         <span>Subtotal</span>
@@ -263,7 +255,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
           )}
         </div>
 
-        {/* Footer con acciones */}
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onCancelar}>
             Cancelar
@@ -278,6 +269,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
         </div>
       </div>
     </div>,
-    document.body, // ← se monta directamente en el body, encima de todo
+    document.body,
   );
 };
