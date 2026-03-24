@@ -21,15 +21,18 @@ export const VentaCard: React.FC<VentaCardProps> = ({
   onClick,
 }) => {
   const colaborador = colaboradores.find((c) => c.id === venta.colaboradorId);
-  const pantallasNombres = venta.pantallasIds
+
+  // ✅ Pantallas con recorte
+  const todasLasPantallas = venta.pantallasIds
     .map((id) => pantallas.find((p) => p.id === id)?.nombre)
-    .filter(Boolean)
-    .join(", ");
+    .filter(Boolean) as string[];
+  const MAX_PANTALLAS = 2;
+  const pantallasVisibles = todasLasPantallas.slice(0, MAX_PANTALLAS);
+  const pantallasExtra = todasLasPantallas.length - MAX_PANTALLAS;
 
   const colores = colorPorEstado(venta.estadoVenta);
   const colorColaborador = colaborador?.color || "#1461a1";
 
-  // ✅ Precio por mes calculado
   const precioMes =
     venta.precioGeneral > 0
       ? venta.precioGeneral
@@ -37,7 +40,6 @@ export const VentaCard: React.FC<VentaCardProps> = ({
         ? (venta.precioTotal ?? 0) / venta.mesesRenta
         : (venta.precioTotal ?? 0);
 
-  // ✅ Total del contrato
   const precioTotalContrato = venta.precioTotal ?? precioMes * venta.mesesRenta;
 
   return (
@@ -113,17 +115,12 @@ export const VentaCard: React.FC<VentaCardProps> = ({
         </button>
       </div>
 
-      {/* Nombre cliente */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 4,
-        }}
-      >
+      {/* ✅ Badge colaborador + pantallas en 2 líneas */}
+      <div style={{ marginBottom: 4 }}>
+        {/* Línea 1: badge */}
         <span
           style={{
+            display: "inline-block",
             background: colorColaborador,
             color: "#fff",
             borderRadius: "6px",
@@ -131,13 +128,35 @@ export const VentaCard: React.FC<VentaCardProps> = ({
             fontWeight: 700,
             fontSize: "0.85em",
             whiteSpace: "nowrap",
+            marginBottom: 2,
           }}
         >
           {colaborador?.nombre ?? "Sin colaborador"}
         </span>
-        <span style={{ fontWeight: 600, color: "#334155", fontSize: "0.9em" }}>
-          {pantallasNombres || "Sin pantallas"}
-        </span>
+
+        {/* Línea 2: pantallas con ellipsis */}
+        {todasLasPantallas.length > 0 && (
+          <div
+            title={todasLasPantallas.join(", ")}
+            style={{
+              fontWeight: 600,
+              color: "#334155",
+              fontSize: "0.85em",
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              textOverflow: "ellipsis",
+              maxWidth: "calc(100% - 10px)",
+            }}
+          >
+            {pantallasVisibles.join(", ")}
+            {pantallasExtra > 0 && (
+              <span style={{ color: "#94a3b8", fontWeight: 400 }}>
+                {" "}
+                +{pantallasExtra} más
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Importe + estado */}
@@ -149,7 +168,6 @@ export const VentaCard: React.FC<VentaCardProps> = ({
           marginBottom: 6,
         }}
       >
-        {/* ✅ Precio por mes */}
         <span
           style={{
             background: colores.badge,
@@ -163,7 +181,6 @@ export const VentaCard: React.FC<VentaCardProps> = ({
           {formatearMoneda(precioMes)}
         </span>
 
-        {/* ✅ Total del contrato si es más de 1 mes */}
         {venta.mesesRenta > 1 && (
           <span
             style={{ color: "#64748b", fontSize: "0.82em", fontWeight: 500 }}
@@ -172,7 +189,6 @@ export const VentaCard: React.FC<VentaCardProps> = ({
           </span>
         )}
 
-        {/* Tachado si hay descuento */}
         {venta.importeTotal !== venta.precioTotal && venta.precioTotal && (
           <span
             style={{
