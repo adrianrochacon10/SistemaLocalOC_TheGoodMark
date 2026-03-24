@@ -34,3 +34,26 @@ export async function generar(req, res) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
   }
 }
+
+export async function crearManual(req, res) {
+  const userId = req.user.id;
+  const b = req.body || {};
+  try {
+    const result = await ordenesService.crearManual({
+      colaborador_id: b.colaborador_id,
+      mes: b.mes,
+      anio: b.anio,
+      ventas_ids: b.ventas_ids,
+      subtotal: b.subtotal,
+      iva: b.iva,
+      total: b.total,
+      iva_porcentaje: b.iva_porcentaje,
+      detalle_lineas: b.detalle_lineas,
+      userId,
+    });
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
+  }
+}

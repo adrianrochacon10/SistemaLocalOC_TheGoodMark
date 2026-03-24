@@ -7,15 +7,28 @@ import {
   Pantalla,
   Colaborador,
 } from "../../types";
-import {
-  obtenerRegistrosDelMes,
-  obtenerOrdenDelMes,
-} from "../../utils/ordenUtils";
+import { obtenerRegistrosDelMes } from "../../utils/ordenUtils";
 import "./OrdenesMensualesNuevo.css";
 import { SelectorPeriodo } from "./components/SelectorPeriodo";
 import { RegistrosDelMes } from "./components/RegistrosDelMes";
 import { OrdenesGrid } from "./components/OrdenesGrid";
 import { ModalCrearOrden } from "./components/ModalCrearOrden";
+import type { CrearOrdenPayload } from "../../utils/ordenCompraLineas";
+
+const MESES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
 
 interface Props {
   ordenes: OrdenDeCompra[];
@@ -24,7 +37,9 @@ interface Props {
   usuarioActual: Usuario;
   clientes: Colaborador[];
   pantallas: Pantalla[];
-  onGenerarOrden: (orden: OrdenDeCompra) => void;
+  onGenerarOrdenMesEnBackend: (mes: number, año: number) => Promise<void>;
+  onCrearOrdenEnBackend: (payload: CrearOrdenPayload) => Promise<void>;
+  onRecargarColaboradores?: () => Promise<void>;
 }
 
 export const OrdenesMensualesNuevo: React.FC<Props> = ({
@@ -34,7 +49,9 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
   usuarioActual,
   clientes,
   pantallas,
-  onGenerarOrden,
+  onGenerarOrdenMesEnBackend,
+  onCrearOrdenEnBackend,
+  onRecargarColaboradores,
 }) => {
   const hoy = new Date();
   const [mes, setMes] = useState(hoy.getMonth());
@@ -43,90 +60,77 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
   const [modalAbierto, setModal] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
+  const [generandoMes, setGenerandoMes] = useState(false);
 
   const registrosDelMes = obtenerRegistrosDelMes(ventasRegistradas, mes, año);
-  const ordenExistente = obtenerOrdenDelMes(ordenes, mes, año);
+  const ordenesEsteMes = ordenes.filter((o) => o.mes === mes && o.año === año);
   const subtotal = registrosDelMes.reduce((s, v) => s + v.precioGeneral, 0);
   const iva = subtotal * (config.ivaPercentaje / 100);
   const total = subtotal + iva;
 
-  const handleGenerarOrden = () => {
+  const handleGenerarOrdenMes = async () => {
     setError("");
     setExito("");
     if (registrosDelMes.length === 0) {
       setError("No hay ventas registradas para este mes");
       return;
     }
-    if (ordenExistente) {
-      setError("Ya existe una orden para este mes");
-      return;
+    setGenerandoMes(true);
+    try {
+      await onGenerarOrdenMesEnBackend(mes, año);
+      setExito(
+        "Órdenes del mes guardadas en la base (una por colaborador, ventas que tocan este mes).",
+      );
+      setTimeout(() => setExito(""), 5000);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "No se pudieron guardar las órdenes en el servidor",
+      );
+    } finally {
+      setGenerandoMes(false);
     }
-
-    const nueva: OrdenDeCompra = {
-      id: `OC-${año}${String(mes + 1).padStart(2, "0")}-${Date.now()}`,
-      numeroOrden: `OC-${año}${String(mes + 1).padStart(2, "0")}-${Date.now()}`,
-      fecha: new Date(),
-      estado: "generada",
-      mes,
-      año,
-      registrosVenta: registrosDelMes,
-      subtotal,
-      ivaPercentaje: config.ivaPercentaje,
-      ivaTotal: iva,
-      total,
-    };
-
-    onGenerarOrden(nueva);
-    setExito("Orden generada exitosamente");
-    setTimeout(() => setExito(""), 3000);
   };
 
-  const handleConfirmarModal = (
-    colaboradorId: string,
-    mesOrden: number,
-    añoOrden: number,
-  ) => {
-    const registros = ventasRegistradas.filter((v) => {
-      const fecha = new Date(v.fechaInicio);
-      return (
-        v.colaboradorId === colaboradorId &&
-        fecha.getMonth() === mesOrden &&
-        fecha.getFullYear() === añoOrden
+  const handleConfirmarModal = async (payload: CrearOrdenPayload) => {
+    setError("");
+    setExito("");
+    try {
+      await onCrearOrdenEnBackend(payload);
+      setModal(false);
+      setExito("✅ Orden guardada en la base de datos");
+      setTimeout(() => setExito(""), 4000);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "No se pudo guardar la orden",
       );
-    });
-
-    const sub = registros.reduce((s, v) => s + v.precioGeneral, 0);
-    const ivaCalc = sub * (config.ivaPercentaje / 100);
-    const totalCalc = sub + ivaCalc;
-
-    const nueva: OrdenDeCompra = {
-      id: `OC-${añoOrden}${String(mesOrden + 1).padStart(2, "0")}-${Date.now()}`,
-      numeroOrden: `OC-${añoOrden}${String(mesOrden + 1).padStart(2, "0")}-${Date.now()}`,
-      fecha: new Date(),
-      estado: "generada",
-      mes: mesOrden,
-      año: añoOrden,
-      registrosVenta: registros,
-      subtotal: sub,
-      ivaPercentaje: config.ivaPercentaje,
-      ivaTotal: ivaCalc,
-      total: totalCalc,
-    };
-
-    onGenerarOrden(nueva);
-    setModal(false);
-    setExito("✅ Orden generada exitosamente");
-    setTimeout(() => setExito(""), 3000);
+    }
   };
 
   return (
     <div className="ordenes-mensuales-nuevo">
       <div className="ordenes-header">
-        <h2>📋 Órdenes de Compra Mensuales</h2>
-        <button className="btn btn-primary" onClick={() => setModal(true)}>
-          ➕ Crear Orden de Compra
-        </button>
+        <div className="ordenes-titulo-row">
+          <h2>📋 Órdenes de Compra Mensuales</h2>
+          <button
+            type="button"
+            className="btn btn-primary btn-crear-orden-inline"
+            onClick={() => {
+              setError("");
+              setModal(true);
+            }}
+          >
+            ➕ Crear orden
+          </button>
+        </div>
       </div>
+
+      {exito ? (
+        <div className="orden-exito-banner" role="status">
+          {exito}
+        </div>
+      ) : null}
 
       <div className="contenido-ordenes">
         <SelectorPeriodo
@@ -136,15 +140,28 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
           onCambiarAño={setAño}
         />
 
-        {ordenExistente ? (
-          <div className="orden-existente-box">
-            <h3>✅ Ya existe una orden para este mes</h3>
-            <button
-              className="btn btn-secondary"
-              onClick={() => setExpandido(ordenExistente.id)}
-            >
-              Ver Detalles
-            </button>
+        {error && !modalAbierto && (
+          <div className="orden-error-banner" role="alert">
+            {error}
+          </div>
+        )}
+
+        {ordenesEsteMes.length > 0 && (
+          <div className="orden-ya-en-bd-banner" role="status">
+            <strong>{ordenesEsteMes.length}</strong> orden(es) en la base para{" "}
+            {MESES[mes]} {año}. Puedes volver a generar desde ventas o crear una
+            orden manual con «Crear orden».
+          </div>
+        )}
+
+        {registrosDelMes.length === 0 ? (
+          <div className="registros-section">
+            <h3>
+              📅 Registros de Ventas - {MESES[mes]} {año}
+            </h3>
+            <div className="no-registros">
+              <p>No hay ventas registradas para este mes</p>
+            </div>
           </div>
         ) : (
           <RegistrosDelMes
@@ -157,7 +174,8 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
             iva={iva}
             total={total}
             ivaPercentaje={config.ivaPercentaje}
-            onGenerar={handleGenerarOrden}
+            onGenerar={handleGenerarOrdenMes}
+            generando={generandoMes}
             error={error}
             exito={exito}
           />
@@ -165,7 +183,7 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
       </div>
 
       <div className="ordenes-generadas-section">
-        <h3>📚 Órdenes Generadas</h3>
+        <h3>📚 Órdenes en base de datos</h3>
         <OrdenesGrid
           ordenes={ordenes}
           clientes={clientes}
@@ -184,7 +202,12 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
           ventasRegistradas={ventasRegistradas}
           config={config}
           onConfirmar={handleConfirmarModal}
-          onCancelar={() => setModal(false)}
+          onCancelar={() => {
+            setError("");
+            setModal(false);
+          }}
+          mensajeError={error}
+          onRecargarColaboradores={onRecargarColaboradores}
         />
       )}
     </div>

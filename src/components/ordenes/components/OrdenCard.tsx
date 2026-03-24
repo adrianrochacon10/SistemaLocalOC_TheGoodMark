@@ -42,7 +42,18 @@ export const OrdenCard: React.FC<Props> = ({
   expandido,
   onToggle,
 }) => {
-  const handlePDF = () => generarPDFOrden(orden, config, usuarioActual.nombre);
+  const handlePDF = () => {
+    generarPDFOrden(orden, config, usuarioActual.nombre, pantallas);
+    window.setTimeout(() => {
+      alert(
+        `Descarga iniciada: OrdendeCompra-${orden.numeroOrden}.html. Ábrelo y, si necesitas PDF, usa Imprimir → Guardar como PDF.`,
+      );
+    }, 200);
+  };
+
+  const nombreColaborador = orden.colaboradorId
+    ? clientes.find((c) => c.id === orden.colaboradorId)?.nombre
+    : undefined;
 
   return (
     <div className={`orden-card ${expandido ? "expandido" : ""}`}>
@@ -56,6 +67,11 @@ export const OrdenCard: React.FC<Props> = ({
 
       {/* Resumen */}
       <div className="orden-info">
+        {nombreColaborador ? (
+          <p>
+            <strong>Colaborador:</strong> {nombreColaborador}
+          </p>
+        ) : null}
         <p>
           <strong>Mes:</strong> {MESES[orden.mes ?? 0]} {orden.año ?? ""}
         </p>
@@ -73,15 +89,19 @@ export const OrdenCard: React.FC<Props> = ({
           <h5>Detalles de la Orden</h5>
           <div className="detalles-list">
             {(orden.registrosVenta ?? []).map((venta) => {
-              const cliente = clientes.find((c) => c.id === venta.clienteId);
-              const pantalla = pantallas.find(
-                (p) => p.id === venta.pantallasIds[0],
+              const socio = clientes.find(
+                (c) =>
+                  c.id === (venta.colaboradorId || orden.colaboradorId),
               );
+              const nombresP =
+                (venta.pantallasIds ?? [])
+                  .map((id) => pantallas.find((p) => p.id === id)?.nombre ?? id)
+                  .join(", ") || "—";
               return (
                 <div key={venta.id} className="detalle-item">
                   <p>
                     <strong>
-                      {cliente?.nombre} — {pantalla?.nombre}
+                      {socio?.nombre ?? "Colaborador"} — {nombresP}
                     </strong>
                   </p>
                   <p>Vendido a: {venta.vendidoA}</p>
@@ -90,7 +110,12 @@ export const OrdenCard: React.FC<Props> = ({
                     {new Date(venta.fechaInicio).toLocaleDateString("es-MX")} →{" "}
                     {new Date(venta.fechaFin).toLocaleDateString("es-MX")}
                   </p>
-                  <p>Importe: ${venta.importeTotal.toFixed(2)}</p>
+                  <p>
+                    Importe: $
+                    {(venta.precioGeneral ?? venta.importeTotal ?? 0).toFixed(
+                      2,
+                    )}
+                  </p>
                 </div>
               );
             })}

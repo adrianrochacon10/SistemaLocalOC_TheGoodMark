@@ -22,7 +22,7 @@ const app = express();
 
 app.use(cors({ origin: true, credentials: false }));
 app.use(express.json());
-app.use(morgan());
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, message: "Backend The Good Mark activo" });
@@ -42,6 +42,15 @@ app.use("/api/diagnostico", diagnosticoRoutes);
 app.use("/api/configuracion", configuracionRoutes);
 app.use("/api/asignaciones", asignacionesRoutes);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log("The Good Mark (BACKEND) en http://localhost:" + PORT);
+});
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(
+      `Puerto ${PORT} en uso. Cierra el otro proceso Node o cambia PORT en .env (por defecto 4000).`
+    );
+    process.exit(1);
+  }
+  throw err;
 });

@@ -16,6 +16,8 @@ export interface Pantalla {
   ubicacion?: string;
   activa: boolean;
   fechaCreacion: Date;
+  /** Precio mensual de catálogo (si existe en BD) para prorratear órdenes por pantalla */
+  precio?: number;
 }
 
 export interface Producto {
@@ -126,6 +128,10 @@ export interface OrdenDeCompra {
   numeroOrden: string;
   fecha: Date;
   estado: "borrador" | "generada" | "descargada" | "enviada";
+
+  /** Colaborador dueño de la orden (órdenes por socio en BD) */
+  colaboradorId?: string;
+  colaboradorNombre?: string;
 
   // Modelo nuevo (OrdenesMensualesNuevo)
   mes?: number;

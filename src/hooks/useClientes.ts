@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Colaborador } from "../types";
 import { backendApi } from "../lib/backendApi";
@@ -75,19 +75,19 @@ const mapBackendColaborador = (row: any): Colaborador & ExtrasColaborador => {
 export function useClientes(profile: any, session: Session | null) {
   const [clientes, setClientes] = useState<Colaborador[]>([]);
 
+  const refetchClientes = useCallback(async () => {
+    if (!profile || !session?.access_token) return;
+    const data = (await backendApi.get("/api/colaboradores")) as any[];
+    if (!Array.isArray(data)) return;
+    setClientes(data.map((row: any) => mapBackendColaborador(row)));
+  }, [profile?.id, session?.access_token]);
+
   // Cargar desde backend (solo con sesión lista — evita 401 por token aún no persistido)
   useEffect(() => {
-    if (!profile || !session?.access_token) return;
-    const cargar = async () => {
-      try {
-        const data = (await backendApi.get("/api/colaboradores")) as any[];
-        setClientes(data.map((row: any) => mapBackendColaborador(row)));
-      } catch (e) {
-        console.error("Error cargando Colaboradores:", e);
-      }
-    };
-    cargar();
-  }, [profile?.id, session?.access_token]);
+    void refetchClientes().catch((e) => {
+      console.error("Error cargando Colaboradores:", e);
+    });
+  }, [refetchClientes]);
 
   // Persistir en localStorage
   useEffect(() => {
@@ -214,6 +214,7 @@ export function useClientes(profile: any, session: Session | null) {
       handleAgregarCliente,
       handleActualizarCliente,
       handleEliminarCliente,
+      refetchClientes,
     },
   };
 }
