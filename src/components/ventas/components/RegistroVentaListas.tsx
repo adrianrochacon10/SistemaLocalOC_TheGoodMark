@@ -37,6 +37,19 @@ const MESES = [
   "diciembre",
 ];
 
+function obtenerMesesCubiertos(
+  fechaInicio: Date | string,
+  mesesRenta: number,
+): { mes: number; anio: number }[] {
+  const inicio = new Date(fechaInicio);
+  const meses: { mes: number; anio: number }[] = [];
+  for (let i = 0; i < mesesRenta; i++) {
+    const d = new Date(inicio.getFullYear(), inicio.getMonth() + i, 1);
+    meses.push({ mes: d.getMonth(), anio: d.getFullYear() });
+  }
+  return meses;
+}
+
 export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   pantallas,
   asignaciones,
@@ -52,7 +65,6 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   const [busquedaVenta, setBusquedaVenta] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<string>("Todos");
   const [filtroCliente, setFiltroCliente] = useState<string>("Todos");
-  /** -1 = mostrar todos los meses / todos los años */
   const [filtroMes, setFiltroMes] = useState<number>(-1);
   const [filtroAnio, setFiltroAnio] = useState<number>(-1);
   const [paginaActual, setPaginaActual] = useState(1);
@@ -60,7 +72,6 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
 
   const ventasPorPagina = 20;
 
-  // Años disponibles derivados de las ventas
   const aniosDisponibles = useMemo(() => {
     const set = new Set(
       ventasRegistradas.map((v) => new Date(v.fechaInicio).getFullYear()),
@@ -72,9 +83,11 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
 
   const ventasFiltradas = useMemo(() => {
     return ventasRegistradas.filter((venta) => {
-      const colaborador = colaboradores.find((c) => c.id === venta.colaboradorId);
-      const fecha = new Date(venta.fechaInicio);
+      const colaborador = colaboradores.find(
+        (c) => c.id === venta.colaboradorId,
+      );
 
+      // Búsqueda por nombre colaborador o vendidoA
       const vendido = (venta.vendidoA ?? "").toLowerCase();
       const coincideBusqueda =
         busquedaVenta === "" ||
@@ -83,22 +96,31 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
           .includes(busquedaVenta.toLowerCase()) ||
         vendido.includes(busquedaVenta.toLowerCase());
 
+      // Filtro por estado
       const coincideEstado =
         filtroEstado === "Todos" ||
         (venta.estadoVenta ?? "Prospecto") === filtroEstado;
 
+      // Filtro por colaborador/cliente
       const coincideCliente =
         filtroCliente === "Todos" || venta.colaboradorId === filtroCliente;
 
-      const coincideMes = filtroMes < 0 || fecha.getMonth() === filtroMes;
-      const coincideAnio = filtroAnio < 0 || fecha.getFullYear() === filtroAnio;
+      // ✅ Filtro por mes/año usando mesesRenta (excluye el mes de fechaFin)
+      let coincideMesAnio = true;
+      if (filtroMes >= 0 || filtroAnio >= 0) {
+        const mesesCubiertos = obtenerMesesCubiertos(
+          venta.fechaInicio,
+          venta.mesesRenta,
+        );
+        coincideMesAnio = mesesCubiertos.some(({ mes, anio }) => {
+          const okMes = filtroMes < 0 || mes === filtroMes;
+          const okAnio = filtroAnio < 0 || anio === filtroAnio;
+          return okMes && okAnio;
+        });
+      }
 
       return (
-        coincideBusqueda &&
-        coincideEstado &&
-        coincideCliente &&
-        coincideMes &&
-        coincideAnio
+        coincideBusqueda && coincideEstado && coincideCliente && coincideMesAnio
       );
     });
   }, [
@@ -108,6 +130,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
     filtroCliente,
     filtroMes,
     filtroAnio,
+    colaboradores,
   ]);
 
   const totalPaginas = Math.ceil(ventasFiltradas.length / ventasPorPagina);
