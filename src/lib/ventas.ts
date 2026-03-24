@@ -1,9 +1,9 @@
-// src/lib/ventas.ts
 import { backendApi } from "./backendApi";
 
 export interface RegistroVentaPayload {
   colaborador_id: string;
-  pantalla_id: string;
+  pantallas_ids: string[]; // ✅ array de pantallas
+  pantalla_id?: string | null; // ✅ opcional, por compatibilidad
   producto_id?: string | null;
   cantidad?: number;
   precio_unitario_manual?: number | null;
@@ -16,10 +16,12 @@ export interface RegistroVentaPayload {
   vendedor_id?: string | null;
   importe_total?: number;
   pago_considerar?: number;
-  costos_mes?: number; // ✅
-  comision_mes?: number; // ✅
-  costos_total?: number; // ✅
-  comision_total?: number; // ✅
+  costos?: number;
+  comision?: number;
+  costos_mes?: number;
+  comision_mes?: number;
+  costos_total?: number;
+  comision_total?: number;
 }
 
 export async function registrarVenta(payload: RegistroVentaPayload) {
