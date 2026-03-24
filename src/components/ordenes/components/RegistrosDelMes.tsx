@@ -11,7 +11,8 @@ interface Props {
   iva: number;
   total: number;
   ivaPercentaje: number;
-  onGenerar: () => void;
+  onGenerar: () => void | Promise<void>;
+  generando?: boolean;
   error: string;
   exito: string;
 }
@@ -42,6 +43,7 @@ export const RegistrosDelMes: React.FC<Props> = ({
   total,
   ivaPercentaje,
   onGenerar,
+  generando = false,
   error,
   exito,
 }) => {
@@ -66,7 +68,9 @@ export const RegistrosDelMes: React.FC<Props> = ({
 
       <div className="registros-list">
         {registros.map((venta) => {
-          const cliente = clientes.find((c) => c.id === venta.clienteId);
+          const cliente = clientes.find(
+            (c) => c.id === venta.colaboradorId,
+          );
           const pantallasNombres = venta.pantallasIds
             .map((id) => pantallas.find((p) => p.id === id)?.nombre)
             .filter(Boolean)
@@ -129,9 +133,20 @@ export const RegistrosDelMes: React.FC<Props> = ({
       {error && <div className="error-message">{error}</div>}
       {exito && <div className="success-message">{exito}</div>}
 
-      <button className="btn btn-primary btn-lg" onClick={onGenerar}>
-        📄 Generar Orden de Compra
+      <button
+        type="button"
+        className="btn btn-primary btn-lg"
+        disabled={generando}
+        onClick={() => {
+          void onGenerar();
+        }}
+      >
+        {generando ? "⏳ Guardando en base de datos…" : "📄 Generar y guardar órdenes del mes"}
       </button>
+      <p className="generar-orden-ayuda">
+        Crea o actualiza en la base una orden por colaborador con las ventas de
+        ese mes (según fechas en el sistema).
+      </p>
     </div>
   );
 };

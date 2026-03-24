@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { ConfiguracionEmpresa, OrdenDeCompra } from "../types";
 import { backendApi } from "../lib/backendApi";
+import { mapOrdenFromApi } from "../utils/ordenApiMapper";
+import type { CrearOrdenPayload } from "../utils/ordenCompraLineas";
 
 export function useConfiguracion(profile: any, session: Session | null) {
   const [config, setConfig] = useState<ConfiguracionEmpresa>({
@@ -51,19 +53,36 @@ export function useConfiguracion(profile: any, session: Session | null) {
     }
   }, [config, ordenes, profile]);
 
-  // Cargar inicial
+  // Cargar inicial (órdenes vienen del API, no del localStorage)
   useEffect(() => {
     const datos = localStorage.getItem("config");
     if (datos) {
       try {
         const parsed = JSON.parse(datos);
         setConfig(parsed.config || config);
-        setOrdenes(parsed.ordenes || []);
       } catch (e) {
         console.error("Error cargando config desde localStorage:", e);
       }
     }
   }, []);
+
+  const refetchOrdenes = useCallback(async () => {
+    if (!profile || !session?.access_token) return;
+    const data = await backendApi.get("/api/ordenes");
+    if (Array.isArray(data)) {
+      setOrdenes(data.map(mapOrdenFromApi));
+    }
+  }, [profile?.id, session?.access_token]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        await refetchOrdenes();
+      } catch (e) {
+        console.error("Error cargando órdenes:", e);
+      }
+    })();
+  }, [refetchOrdenes]);
 
   const handleGuardarConfiguracion = async () => {
     try {
@@ -87,8 +106,37 @@ export function useConfiguracion(profile: any, session: Session | null) {
     }
   };
 
+  /** Solo local (sin API); por compatibilidad. Preferir generar/guardar vía backend. */
   const handleGenerarOrden = (orden: OrdenDeCompra) => {
     setOrdenes((prev) => [...prev, orden]);
+  };
+
+  /**
+   * Genera órdenes en BD por colaborador para el mes calendario (1–12) y año,
+   * a partir de las ventas cuyo período cae en ese mes (lógica del backend).
+   */
+  const handleGenerarOrdenMesEnBackend = async (mesJs: number, anioVal: number) => {
+    await backendApi.post("/api/ordenes/generar", {
+      mes: mesJs + 1,
+      anio: anioVal,
+    });
+    await refetchOrdenes();
+  };
+
+  const handleCrearOrdenManual = async (payload: CrearOrdenPayload) => {
+    const res = (await backendApi.post("/api/ordenes/crear-manual", {
+      colaborador_id: payload.colaboradorId,
+      mes: payload.mes + 1,
+      anio: payload.año,
+      ventas_ids: payload.ventasIds,
+      detalle_lineas: payload.detalleLineas,
+      subtotal: payload.subtotal,
+      iva: payload.iva,
+      total: payload.total,
+      iva_porcentaje: payload.ivaPercentaje,
+    })) as { orden?: unknown };
+    if (!res?.orden) throw new Error("Respuesta inválida del servidor");
+    await refetchOrdenes();
   };
 
   return {
@@ -97,6 +145,8 @@ export function useConfiguracion(profile: any, session: Session | null) {
     acciones: {
       handleGuardarConfiguracion,
       handleGenerarOrden,
+      handleGenerarOrdenMesEnBackend,
+      handleCrearOrdenManual,
     },
   };
 }

@@ -1,4 +1,13 @@
-import { OrdenDeCompra, ConfiguracionEmpresa } from "../types";
+import { OrdenDeCompra, ConfiguracionEmpresa, Pantalla } from "../types";
+
+function nombresPantallasPdf(
+  ids: string[] | undefined,
+  pantallas: Pantalla[] | undefined,
+): string {
+  if (!ids?.length) return "—";
+  const map = new Map((pantallas ?? []).map((p) => [p.id, p.nombre]));
+  return ids.map((id) => map.get(id) ?? id).join(", ");
+}
 
 /**
  * Genera un PDF de la orden de compra en HTML imprimible
@@ -7,7 +16,8 @@ import { OrdenDeCompra, ConfiguracionEmpresa } from "../types";
 export const generarPDFOrden = (
   orden: OrdenDeCompra,
   config: ConfiguracionEmpresa,
-  nombreUsuario: string
+  nombreUsuario: string,
+  pantallas: Pantalla[] = [],
 ): void => {
   const mesFormato = new Date(orden.año ?? 0, orden.mes ?? 0).toLocaleDateString("es-MX", {
     month: "long",
@@ -280,23 +290,38 @@ export const generarPDFOrden = (
           <table>
             <thead>
               <tr>
-                <th>Cliente</th>
+                <th>Colaborador (ref.)</th>
                 <th>Vendido a</th>
-                <th class="text-center">Pantallas</th>
+                <th>Pantallas incluidas</th>
                 <th class="text-center">Período</th>
                 <th class="text-right">Importe</th>
               </tr>
             </thead>
             <tbody>
-              ${(orden.registrosVenta ?? []).map(venta => `
+              ${(orden.registrosVenta ?? [])
+                .map((venta) => {
+                  const colab =
+                    (orden.colaboradorNombre || "").slice(0, 35) ||
+                    (orden.colaboradorId || "").slice(0, 12) ||
+                    "—";
+                  const vendido = (venta.vendidoA || "—").slice(0, 40);
+                  const pantallasTxt = nombresPantallasPdf(
+                    venta.pantallasIds,
+                    pantallas,
+                  );
+                  const imp =
+                    venta.precioGeneral ?? venta.importeTotal ?? 0;
+                  return `
                 <tr>
-                  <td>${venta.clienteId.substring(0, 20)}</td>
-                  <td>${venta.vendidoA.substring(0, 25)}</td>
-                  <td class="text-center">${venta.pantallasIds.length}</td>
-                  <td class="text-center">${new Date(venta.fechaInicio).toLocaleDateString("es-MX")} - ${new Date(venta.fechaFin).toLocaleDateString("es-MX")}</td>
-                  <td class="text-right"><strong>$${venta.precioGeneral.toFixed(2)}</strong></td>
+                  <td>${colab}</td>
+                  <td>${vendido}</td>
+                  <td>${pantallasTxt}</td>
+                  <td class="text-center">${new Date(venta.fechaInicio).toLocaleDateString("es-MX")} – ${new Date(venta.fechaFin).toLocaleDateString("es-MX")}</td>
+                  <td class="text-right"><strong>$${Number(imp).toFixed(2)}</strong></td>
                 </tr>
-              `).join("")}
+              `;
+                })
+                .join("")}
             </tbody>
           </table>
         </div>

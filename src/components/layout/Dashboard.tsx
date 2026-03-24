@@ -20,7 +20,6 @@ export const Dashboard: React.FC = () => {
   const [vistaActual, setVistaActual] = useState<
     "gestor" | "catalogo" | "ventas" | "ordenes" | "config" | "admin"
   >("ordenes");
-
   if (loading) {
     return <div className="cargando-perfil">Cargando perfil...</div>;
   }
@@ -75,10 +74,11 @@ export const Dashboard: React.FC = () => {
           💰 Registrar Ventas
         </button>
         <button
+          type="button"
           className={`nav-btn-nuevo ${vistaActual === "ordenes" ? "active" : ""}`}
           onClick={() => setVistaActual("ordenes")}
         >
-          📋 Órdenes Mensuales
+          📋 Órdenes de Compra Mensuales
         </button>
         {esAdmin && (
           <button
@@ -145,7 +145,9 @@ export const Dashboard: React.FC = () => {
             usuarioActual={usuarioActual}
             clientes={datos.clientes}
             pantallas={datos.pantallas}
-            onGenerarOrden={acciones.handleGenerarOrden}
+            onGenerarOrdenMesEnBackend={acciones.handleGenerarOrdenMesEnBackend}
+            onCrearOrdenEnBackend={acciones.handleCrearOrdenManual}
+            onRecargarColaboradores={acciones.refetchClientes}
           />
         )}
 

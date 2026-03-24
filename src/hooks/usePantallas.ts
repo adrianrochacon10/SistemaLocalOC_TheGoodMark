@@ -25,6 +25,12 @@ export function usePantallas(profile: any, session: Session | null) {
             fechaCreacion: row.fecha_creacion
               ? new Date(row.fecha_creacion)
               : new Date(),
+            precio:
+              row.precio != null
+                ? Number(row.precio)
+                : row.precio_mensual != null
+                  ? Number(row.precio_mensual)
+                  : undefined,
           })),
         );
 
