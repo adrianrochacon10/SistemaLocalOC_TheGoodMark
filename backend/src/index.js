@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
+import morgan from "morgan";
 
 import authRoutes from "./routes/auth.js";
 import tipoPagoRoutes from "./routes/tipoPago.js";
@@ -21,6 +22,7 @@ const app = express();
 
 app.use(cors({ origin: true, credentials: false }));
 app.use(express.json());
+app.use(morgan());
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, message: "Backend The Good Mark activo" });
