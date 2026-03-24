@@ -1,8 +1,0 @@
-@import "../styles/forms.css";
-
-/* Estilos para OrdenCompleja */
-.orden-compleja {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
