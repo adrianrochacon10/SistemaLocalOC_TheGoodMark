@@ -8,6 +8,7 @@ router.use(requireAuth);
 router.get("/", ordenesController.listar);
 router.get("/ventas", ordenesController.listarVentas);
 router.post("/generar", ordenesController.generar);
+router.post("/generar-colaborador", ordenesController.generarColaborador);
 router.post("/crear-manual", ordenesController.crearManual);
 
 export default router;

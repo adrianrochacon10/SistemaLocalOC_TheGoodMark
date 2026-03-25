@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   OrdenDeCompra,
   Colaborador,
@@ -6,7 +6,7 @@ import {
   ConfiguracionEmpresa,
   Usuario,
 } from "../../../types";
-import { generarPDFOrden } from "../../../utils/pdfGenerator";
+import { exportarPDFOrden } from "../../../utils/pdfGenerator";
 
 interface Props {
   orden: OrdenDeCompra;
@@ -42,13 +42,28 @@ export const OrdenCard: React.FC<Props> = ({
   expandido,
   onToggle,
 }) => {
+  const [pdfBusy, setPdfBusy] = useState(false);
+
   const handlePDF = () => {
-    generarPDFOrden(orden, config, usuarioActual.nombre, pantallas);
-    window.setTimeout(() => {
-      alert(
-        `Descarga iniciada: OrdendeCompra-${orden.numeroOrden}.html. Ábrelo y, si necesitas PDF, usa Imprimir → Guardar como PDF.`,
-      );
-    }, 200);
+    void (async () => {
+      setPdfBusy(true);
+      try {
+        await exportarPDFOrden(
+          orden,
+          config,
+          usuarioActual.nombre,
+          pantallas,
+        );
+      } catch (e) {
+        alert(
+          e instanceof Error
+            ? e.message
+            : "No se pudo generar el PDF. Prueba de nuevo.",
+        );
+      } finally {
+        setPdfBusy(false);
+      }
+    })();
   };
 
   const nombreColaborador = orden.colaboradorId
@@ -134,8 +149,13 @@ export const OrdenCard: React.FC<Props> = ({
             </p>
           </div>
 
-          <button className="btn btn-primary btn-sm" onClick={handlePDF}>
-            📥 Descargar PDF
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={pdfBusy}
+            onClick={handlePDF}
+          >
+            {pdfBusy ? "Generando PDF…" : "📥 Descargar PDF"}
           </button>
         </div>
       )}

@@ -66,7 +66,7 @@ export function construirDetalleLineas(
   const lineas: DetalleLineaOrden[] = [];
 
   for (const v of ventas) {
-    const sel = seleccion.get(v.id);
+    const sel = seleccion.get(String(v.id));
     if (!sel || sel.length === 0) continue;
     const imp = importeVentaSeleccion(v, sel, precios);
     if (imp <= 0) continue;

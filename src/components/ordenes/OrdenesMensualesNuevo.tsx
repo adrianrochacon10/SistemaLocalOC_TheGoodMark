@@ -7,10 +7,8 @@ import {
   Pantalla,
   Colaborador,
 } from "../../types";
-import { obtenerRegistrosDelMes } from "../../utils/ordenUtils";
 import "./OrdenesMensualesNuevo.css";
 import { SelectorPeriodo } from "./components/SelectorPeriodo";
-import { RegistrosDelMes } from "./components/RegistrosDelMes";
 import { OrdenesGrid } from "./components/OrdenesGrid";
 import { ModalCrearOrden } from "./components/ModalCrearOrden";
 import type { CrearOrdenPayload } from "../../utils/ordenCompraLineas";
@@ -37,7 +35,6 @@ interface Props {
   usuarioActual: Usuario;
   clientes: Colaborador[];
   pantallas: Pantalla[];
-  onGenerarOrdenMesEnBackend: (mes: number, año: number) => Promise<void>;
   onCrearOrdenEnBackend: (payload: CrearOrdenPayload) => Promise<void>;
   onRecargarColaboradores?: () => Promise<void>;
 }
@@ -49,7 +46,6 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
   usuarioActual,
   clientes,
   pantallas,
-  onGenerarOrdenMesEnBackend,
   onCrearOrdenEnBackend,
   onRecargarColaboradores,
 }) => {
@@ -60,47 +56,21 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
   const [modalAbierto, setModal] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
-  const [generandoMes, setGenerandoMes] = useState(false);
 
-  const registrosDelMes = obtenerRegistrosDelMes(ventasRegistradas, mes, año);
   const ordenesEsteMes = ordenes.filter((o) => o.mes === mes && o.año === año);
-  const subtotal = registrosDelMes.reduce((s, v) => s + v.precioGeneral, 0);
-  const iva = subtotal * (config.ivaPercentaje / 100);
-  const total = subtotal + iva;
-
-  const handleGenerarOrdenMes = async () => {
-    setError("");
-    setExito("");
-    if (registrosDelMes.length === 0) {
-      setError("No hay ventas registradas para este mes");
-      return;
-    }
-    setGenerandoMes(true);
-    try {
-      await onGenerarOrdenMesEnBackend(mes, año);
-      setExito(
-        "Órdenes del mes guardadas en la base (una por colaborador, ventas que tocan este mes).",
-      );
-      setTimeout(() => setExito(""), 5000);
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "No se pudieron guardar las órdenes en el servidor",
-      );
-    } finally {
-      setGenerandoMes(false);
-    }
-  };
 
   const handleConfirmarModal = async (payload: CrearOrdenPayload) => {
     setError("");
     setExito("");
     try {
       await onCrearOrdenEnBackend(payload);
+      setMes(payload.mes);
+      setAño(payload.año);
       setModal(false);
-      setExito("✅ Orden guardada en la base de datos");
-      setTimeout(() => setExito(""), 4000);
+      setExito(
+        "Orden guardada. Se añadió a la lista de abajo; las anteriores del mismo mes se mantienen.",
+      );
+      setTimeout(() => setExito(""), 5000);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "No se pudo guardar la orden",
@@ -110,7 +80,7 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
 
   return (
     <div className="ordenes-mensuales-nuevo">
-      <div className="ordenes-header">
+      <div className="ordenes-header ordenes-header-bar">
         <div className="ordenes-titulo-row">
           <h2>📋 Órdenes de Compra Mensuales</h2>
           <button
@@ -148,44 +118,25 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
 
         {ordenesEsteMes.length > 0 && (
           <div className="orden-ya-en-bd-banner" role="status">
-            <strong>{ordenesEsteMes.length}</strong> orden(es) en la base para{" "}
-            {MESES[mes]} {año}. Puedes volver a generar desde ventas o crear una
-            orden manual con «Crear orden».
+            <strong>{ordenesEsteMes.length}</strong> orden
+            {ordenesEsteMes.length === 1 ? "" : "es"} guardada
+            {ordenesEsteMes.length === 1 ? "" : "s"} para {MESES[mes]} {año}.
+            Puedes crear otra con «Crear orden» sin perder las demás.
           </div>
-        )}
-
-        {registrosDelMes.length === 0 ? (
-          <div className="registros-section">
-            <h3>
-              📅 Registros de Ventas - {MESES[mes]} {año}
-            </h3>
-            <div className="no-registros">
-              <p>No hay ventas registradas para este mes</p>
-            </div>
-          </div>
-        ) : (
-          <RegistrosDelMes
-            registros={registrosDelMes}
-            clientes={clientes}
-            pantallas={pantallas}
-            mes={mes}
-            año={año}
-            subtotal={subtotal}
-            iva={iva}
-            total={total}
-            ivaPercentaje={config.ivaPercentaje}
-            onGenerar={handleGenerarOrdenMes}
-            generando={generandoMes}
-            error={error}
-            exito={exito}
-          />
         )}
       </div>
 
       <div className="ordenes-generadas-section">
-        <h3>📚 Órdenes en base de datos</h3>
+        <h3>
+          Órdenes de {MESES[mes]} {año}
+        </h3>
+        <p className="ordenes-bd-hint">
+          Aquí ves las órdenes de compra de este mes y año (el selector está
+          arriba). Cada vez que guardas una nueva, se suma a la lista.
+        </p>
         <OrdenesGrid
-          ordenes={ordenes}
+          ordenes={ordenesEsteMes}
+          vacioMensaje={`Todavía no hay órdenes para ${MESES[mes]} ${año}. Usa «Crear orden» para añadir una.`}
           clientes={clientes}
           pantallas={pantallas}
           config={config}

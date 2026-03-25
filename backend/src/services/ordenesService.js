@@ -4,6 +4,18 @@ const IVA_RATE = 0.16;
 
 const round2 = (n) => Math.round(Number(n) * 100) / 100;
 
+/** Evita fallo de FK si el JWT no tiene fila en `perfiles`. */
+async function generadoPorSeguro(userId) {
+  if (!userId) return undefined;
+  const { data, error } = await supabase
+    .from("perfiles")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error || !data?.id) return undefined;
+  return data.id;
+}
+
 const SELECT_ORDENES = "*, colaborador:colaboradores(id,nombre)";
 const SELECT_VENTAS =
   "*, colaborador:colaboradores(id,nombre,pantalla:pantallas(id,nombre),producto:productos(id,nombre,precio))";
@@ -85,6 +97,7 @@ export async function generarOrden(mes, anio, userId) {
   const m = Number(mes);
   const a = Number(anio);
   if (!m || m < 1 || m > 12 || !a) return { error: "mes (1-12) y anio son obligatorios" };
+  const genPor = await generadoPorSeguro(userId);
   const { inicio, finStr } = boundsMesCalendario(a, m);
 
   let vq = supabase
@@ -117,8 +130,9 @@ export async function generarOrden(mes, anio, userId) {
     const iva = round2(subtotal * IVA_RATE);
     const total = round2(subtotal + iva);
 
-    // Buscar orden existente (evita depender de constraints/unique de upsert)
-    const { data: existing } = await supabase
+    // Si ya hay cualquier orden manual/automática para este colaborador y mes,
+    // no generar otra ni actualizar (evita pisar órdenes creadas a mano).
+    const { data: yaHayOrdenes } = await supabase
       .from("orden_de_compra")
       .select("id")
       .eq("colaborador_id", colaboradorId)
@@ -126,68 +140,129 @@ export async function generarOrden(mes, anio, userId) {
       .eq("anio", a)
       .limit(1);
 
-    if (existing?.[0]?.id) {
-      const ordenId = existing[0].id;
-      const { error: upOrdErr } = await supabase
-        .from("orden_de_compra")
-        .update({
-          ventas_ids: ventasIds,
-          subtotal,
-          iva,
-          total,
-          generado_por: userId,
-        })
-        .eq("id", ordenId);
-      if (upOrdErr) throw new Error(upOrdErr.message);
-
-      const { data: orden, error: selErr } = await supabase
-        .from("orden_de_compra")
-        .select(SELECT_ORDENES)
-        .eq("id", ordenId)
-        .single();
-      if (selErr) throw new Error(selErr.message);
-
-      const { error: upVenErr } = await supabase
-        .from("ventas")
-        .update({ orden_de_compra_id: ordenId })
-        .in("id", ventasIds);
-      if (upVenErr) throw new Error(upVenErr.message);
-
-      ordenesActualizadas.push(orden);
-    } else {
-      const { data: orden, error: errInsert } = await supabase
-        .from("orden_de_compra")
-        .insert({
-          colaborador_id: colaboradorId,
-          mes: m,
-          anio: a,
-          ventas_ids: ventasIds,
-          subtotal,
-          iva,
-          total,
-          generado_por: userId,
-        })
-        .select(SELECT_ORDENES)
-        .single();
-
-      if (errInsert) throw new Error(errInsert.message);
-
-      const { error: upVenErr } = await supabase
-        .from("ventas")
-        .update({ orden_de_compra_id: orden.id })
-        .in("id", ventasIds);
-      if (upVenErr) throw new Error(upVenErr.message);
-
-      ordenesActualizadas.push(orden);
+    if (yaHayOrdenes?.length) {
+      continue;
     }
+
+    const baseInsert = {
+      colaborador_id: colaboradorId,
+      mes: m,
+      anio: a,
+      ventas_ids: ventasIds,
+      subtotal,
+      iva,
+      total,
+    };
+    let orden;
+    let errInsert;
+    ({ data: orden, error: errInsert } = await supabase
+      .from("orden_de_compra")
+      .insert({ ...baseInsert, ...(genPor ? { generado_por: genPor } : {}) })
+      .select(SELECT_ORDENES)
+      .single());
+
+    if (errInsert && genPor && String(errInsert.message || "").toLowerCase().includes("generado")) {
+      ({ data: orden, error: errInsert } = await supabase
+        .from("orden_de_compra")
+        .insert(baseInsert)
+        .select(SELECT_ORDENES)
+        .single());
+    }
+    if (errInsert) throw new Error(errInsert.message);
+
+    const { error: upVenErr } = await supabase
+      .from("ventas")
+      .update({ orden_de_compra_id: orden.id })
+      .in("id", ventasIds);
+    if (upVenErr) throw new Error(upVenErr.message);
+
+    ordenesActualizadas.push(orden);
   }
 
   return { ordenes: ordenesActualizadas };
 }
 
 /**
- * Crea o actualiza una orden de compra para un colaborador y mes/año (1–12),
- * con ventas seleccionadas y detalle opcional para PDF (pantallas parciales).
+ * Igual que generarOrden pero solo para un colaborador (ventas del mes que lo tocan).
+ */
+export async function generarOrdenColaborador(mes, anio, colaborador_id, userId) {
+  const m = Number(mes);
+  const a = Number(anio);
+  const cid = colaborador_id;
+  if (!m || m < 1 || m > 12 || !a) return { error: "mes (1-12) y anio son obligatorios" };
+  if (!cid) return { error: "colaborador_id es obligatorio" };
+
+  const genPor = await generadoPorSeguro(userId);
+  const { inicio, finStr } = boundsMesCalendario(a, m);
+
+  let vq = supabase
+    .from("ventas")
+    .select("id,colaborador_id,precio_total,fecha_inicio,fecha_fin")
+    .eq("colaborador_id", cid);
+  vq = queryVentasSolapanMes(vq, inicio, finStr);
+  const { data: ventasRows, error: errVentas } = await vq;
+
+  if (errVentas) throw new Error(errVentas.message);
+  const groupVentas = ventasRows ?? [];
+  if (groupVentas.length === 0) return { ordenes: [], sinVentas: true };
+
+  const { data: yaHayOrdenes } = await supabase
+    .from("orden_de_compra")
+    .select("id")
+    .eq("colaborador_id", cid)
+    .eq("mes", m)
+    .eq("anio", a)
+    .limit(1);
+
+  if (yaHayOrdenes?.length) return { ordenes: [], skipped: true };
+
+  const ventasIds = groupVentas.map((v) => v.id);
+  const subtotalRaw = groupVentas.reduce(
+    (sum, v) => sum + importeVentaEnMes(v, inicio, finStr),
+    0,
+  );
+  const subtotal = round2(subtotalRaw);
+  const iva = round2(subtotal * IVA_RATE);
+  const total = round2(subtotal + iva);
+
+  const baseInsert = {
+    colaborador_id: cid,
+    mes: m,
+    anio: a,
+    ventas_ids: ventasIds,
+    subtotal,
+    iva,
+    total,
+  };
+  let orden;
+  let errInsert;
+  ({ data: orden, error: errInsert } = await supabase
+    .from("orden_de_compra")
+    .insert({ ...baseInsert, ...(genPor ? { generado_por: genPor } : {}) })
+    .select(SELECT_ORDENES)
+    .single());
+
+  if (errInsert && genPor && String(errInsert.message || "").toLowerCase().includes("generado")) {
+    ({ data: orden, error: errInsert } = await supabase
+      .from("orden_de_compra")
+      .insert(baseInsert)
+      .select(SELECT_ORDENES)
+      .single());
+  }
+  if (errInsert) throw new Error(errInsert.message);
+
+  const { error: upVenErr } = await supabase
+    .from("ventas")
+    .update({ orden_de_compra_id: orden.id })
+    .in("id", ventasIds);
+  if (upVenErr) throw new Error(upVenErr.message);
+
+  return { ordenes: [orden] };
+}
+
+/**
+ * Crea una **nueva** orden de compra (no reemplaza otras del mismo colaborador/mes).
+ * Ventas seleccionadas quedan ligadas a esta orden.
  */
 export async function crearManual({
   colaborador_id,
@@ -206,6 +281,8 @@ export async function crearManual({
   const a = Number(anio);
   if (!cid) return { error: "colaborador_id es obligatorio" };
   if (!m || m < 1 || m > 12 || !a) return { error: "mes (1-12) y anio son obligatorios" };
+
+  const genPor = await generadoPorSeguro(userId);
 
   const ventasIds = Array.isArray(ventas_ids)
     ? ventas_ids.map((x) => String(x).trim()).filter(Boolean)
@@ -241,89 +318,59 @@ export async function crearManual({
     subtotal: sub,
     iva: iv,
     total: tot,
-    generado_por: userId,
+    ...(genPor ? { generado_por: genPor } : {}),
   };
   if (Array.isArray(detalle_lineas) && detalle_lineas.length > 0) {
     payload.detalle_lineas = detalle_lineas;
   }
   if (ivaPct != null) payload.iva_porcentaje = ivaPct;
 
-  const { data: existing } = await supabase
-    .from("orden_de_compra")
-    .select("id")
-    .eq("colaborador_id", cid)
-    .eq("mes", m)
-    .eq("anio", a)
-    .limit(1);
-
   let ordenId;
 
-  if (existing?.[0]?.id) {
-    ordenId = existing[0].id;
-    const { error: clrErr } = await supabase
-      .from("ventas")
-      .update({ orden_de_compra_id: null })
-      .eq("orden_de_compra_id", ordenId);
-    if (clrErr) throw new Error(clrErr.message);
-
-    const updateFull = {
-      ventas_ids: ventasIds,
-      subtotal: sub,
-      iva: iv,
-      total: tot,
-      generado_por: userId,
-      ...(payload.detalle_lineas != null
-        ? { detalle_lineas: payload.detalle_lineas }
-        : {}),
-      ...(ivaPct != null ? { iva_porcentaje: ivaPct } : {}),
-    };
-    let { error: upErr } = await supabase
-      .from("orden_de_compra")
-      .update(updateFull)
-      .eq("id", ordenId);
-    if (upErr) {
-      const msg = upErr.message || "";
-      if (msg.includes("detalle_lineas") || msg.includes("iva_porcentaje") || msg.includes("column")) {
-        ({ error: upErr } = await supabase
-          .from("orden_de_compra")
-          .update({
-            ventas_ids: ventasIds,
-            subtotal: sub,
-            iva: iv,
-            total: tot,
-            generado_por: userId,
-          })
-          .eq("id", ordenId));
-      }
-      if (upErr) throw new Error(upErr.message);
+  const { data: ordenIns, error: insErr } = await supabase
+    .from("orden_de_compra")
+    .insert(payload)
+    .select("id")
+    .single();
+  if (insErr) {
+    const msg = insErr.message || "";
+    if (
+      msg.includes("detalle_lineas") ||
+      msg.includes("iva_porcentaje") ||
+      msg.includes("column")
+    ) {
+      const { detalle_lineas: _d, iva_porcentaje: _i, ...minimal } = payload;
+      const retry = await supabase
+        .from("orden_de_compra")
+        .insert(minimal)
+        .select("id")
+        .single();
+      if (retry.error) throw new Error(retry.error.message);
+      ordenId = retry.data.id;
+    } else if (genPor && msg.toLowerCase().includes("generado")) {
+      const { generado_por: _g, ...sinGen } = payload;
+      const retry = await supabase
+        .from("orden_de_compra")
+        .insert(sinGen)
+        .select("id")
+        .single();
+      if (retry.error) throw new Error(retry.error.message);
+      ordenId = retry.data.id;
+    } else if (
+      msg.includes("unique") ||
+      msg.includes("duplicate key") ||
+      msg.includes("orden_de_compra_colaborador_mes_anio")
+    ) {
+      throw new Error(
+        "La base de datos aún tiene una regla de «una sola orden por colaborador y mes». " +
+          "En Supabase → SQL ejecuta el archivo de migración que quita esa restricción " +
+          "(orden_de_compra_varias_por_mes.sql) y vuelve a intentar.",
+      );
+    } else {
+      throw new Error(insErr.message);
     }
   } else {
-    const { data: orden, error: insErr } = await supabase
-      .from("orden_de_compra")
-      .insert(payload)
-      .select("id")
-      .single();
-    if (insErr) {
-      const msg = insErr.message || "";
-      if (
-        msg.includes("detalle_lineas") ||
-        msg.includes("iva_porcentaje") ||
-        msg.includes("column")
-      ) {
-        const { detalle_lineas: _d, iva_porcentaje: _i, ...minimal } = payload;
-        const retry = await supabase
-          .from("orden_de_compra")
-          .insert(minimal)
-          .select("id")
-          .single();
-        if (retry.error) throw new Error(retry.error.message);
-        ordenId = retry.data.id;
-      } else {
-        throw new Error(insErr.message);
-      }
-    } else {
-      ordenId = orden.id;
-    }
+    ordenId = ordenIns.id;
   }
 
   const { error: linkErr } = await supabase

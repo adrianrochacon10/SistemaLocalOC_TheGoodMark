@@ -11,9 +11,9 @@ CREATE TABLE IF NOT EXISTS public.orden_de_compra (
   generado_por uuid REFERENCES public.perfiles(id),
   created_at timestamptz DEFAULT now(),
   detalle_lineas jsonb,
-  iva_porcentaje numeric(6, 2),
-  CONSTRAINT orden_de_compra_colaborador_mes_anio_unique UNIQUE (colaborador_id, mes, anio)
+  iva_porcentaje numeric(6, 2)
 );
+-- Varias órdenes por colaborador/mes/año permitidas (sin UNIQUE aquí).
 
 CREATE INDEX IF NOT EXISTS idx_orden_de_compra_anio_mes ON public.orden_de_compra (anio, mes);
 CREATE INDEX IF NOT EXISTS idx_orden_de_compra_colaborador ON public.orden_de_compra (colaborador_id);

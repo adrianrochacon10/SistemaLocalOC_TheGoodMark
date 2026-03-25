@@ -1,6 +1,7 @@
 import type { OrdenDeCompra, RegistroVenta } from "../types";
 
-function mapVentaNested(row: any): RegistroVenta {
+/** Fila de `ventas` desde el API (p. ej. GET /api/ordenes/ventas). */
+export function mapVentaFromApi(row: any): RegistroVenta {
   const pantallasIds: string[] =
     row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []);
 
@@ -15,7 +16,13 @@ function mapVentaNested(row: any): RegistroVenta {
     productoId: row.producto_id ?? undefined,
     vendidoA:
       row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
-    precioGeneral: Number(row.precio_por_mes ?? row.precio_general ?? 0) || 0,
+    precioGeneral:
+      Number(
+        row.precio_por_mes ??
+          row.precio_general ??
+          row.precio_total ??
+          0,
+      ) || 0,
     cantidad: row.cantidad ?? 1,
     precioTotal: row.precio_total ?? row.importe_total ?? 0,
     fechaRegistro: row.created_at
@@ -93,7 +100,7 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
   } else {
     const ventas = row.ventas ?? [];
     registrosVenta = Array.isArray(ventas)
-      ? ventas.map(mapVentaNested)
+      ? ventas.map(mapVentaFromApi)
       : [];
   }
 

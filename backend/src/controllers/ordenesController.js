@@ -35,6 +35,23 @@ export async function generar(req, res) {
   }
 }
 
+export async function generarColaborador(req, res) {
+  const { mes, anio, colaborador_id } = req.body || {};
+  const userId = req.user.id;
+  try {
+    const result = await ordenesService.generarOrdenColaborador(
+      mes,
+      anio,
+      colaborador_id,
+      userId,
+    );
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
+  }
+}
+
 export async function crearManual(req, res) {
   const userId = req.user.id;
   const b = req.body || {};

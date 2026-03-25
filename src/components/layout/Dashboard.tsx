@@ -145,7 +145,6 @@ export const Dashboard: React.FC = () => {
             usuarioActual={usuarioActual}
             clientes={datos.clientes}
             pantallas={datos.pantallas}
-            onGenerarOrdenMesEnBackend={acciones.handleGenerarOrdenMesEnBackend}
             onCrearOrdenEnBackend={acciones.handleCrearOrdenManual}
             onRecargarColaboradores={acciones.refetchClientes}
           />

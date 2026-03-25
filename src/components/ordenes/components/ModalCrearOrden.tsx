@@ -3,7 +3,6 @@ import React, {
   useMemo,
   useEffect,
   useCallback,
-  useRef,
 } from "react";
 import ReactDOM from "react-dom";
 import {
@@ -12,6 +11,9 @@ import {
   Pantalla,
   ConfiguracionEmpresa,
 } from "../../../types";
+import { backendApi } from "../../../lib/backendApi";
+import { mapVentaFromApi } from "../../../utils/ordenApiMapper";
+import { ventaSolapaMesCalendario } from "../../../utils/ordenUtils";
 import {
   construirDetalleLineas,
   totalesDesdeLineas,
@@ -28,7 +30,6 @@ interface Props {
   onConfirmar: (payload: CrearOrdenPayload) => void | Promise<void>;
   onCancelar: () => void;
   mensajeError?: string;
-  /** Al abrir el modal, vuelve a pedir la lista (corrige lista vacía / sesión recién lista) */
   onRecargarColaboradores?: () => Promise<void>;
 }
 
@@ -46,12 +47,6 @@ const MESES = [
   "Noviembre",
   "Diciembre",
 ];
-
-function seleccionToArrays(m: Map<string, Set<string>>): Map<string, string[]> {
-  const out = new Map<string, string[]>();
-  m.forEach((set, vid) => out.set(vid, [...set]));
-  return out;
-}
 
 export const ModalCrearOrden: React.FC<Props> = ({
   clientes,
@@ -71,14 +66,23 @@ export const ModalCrearOrden: React.FC<Props> = ({
   const [errorCargaColabs, setErrorCargaColabs] = useState("");
   const [mes, setMes] = useState(hoy.getMonth());
   const [año, setAño] = useState(hoy.getFullYear());
-  const [seleccion, setSeleccion] = useState<Map<string, Set<string>>>(
-    () => new Map(),
+  const [ventasDelMes, setVentasDelMes] = useState<RegistroVenta[]>([]);
+  const [cargandoVentas, setCargandoVentas] = useState(false);
+  const [avisoVentas, setAvisoVentas] = useState("");
+  /** Ventas (contratos) incluidas en la orden */
+  const [ventasSeleccionadas, setVentasSeleccionadas] = useState<Set<string>>(
+    () => new Set(),
   );
   const [guardando, setGuardando] = useState(false);
 
   const pasoActual = colaboradorId ? 2 : 1;
   const años = Array.from({ length: 4 }, (_, i) => hoy.getFullYear() - 2 + i);
   const colaboradorSeleccionado = clientes.find((c) => c.id === colaboradorId);
+
+  const ventaIdsKey = useMemo(
+    () => ventasDelMes.map((v) => String(v.id)).sort().join("|"),
+    [ventasDelMes],
+  );
 
   useEffect(() => {
     if (!onRecargarColaboradores) {
@@ -106,43 +110,82 @@ export const ModalCrearOrden: React.FC<Props> = ({
     };
   }, [onRecargarColaboradores]);
 
-  const ventasDelMes = useMemo(() => {
-    if (!colaboradorId) return [];
-    return ventasRegistradas.filter((v) => {
-      const fecha = new Date(v.fechaInicio);
-      return (
-        v.colaboradorId === colaboradorId &&
-        fecha.getMonth() === mes &&
-        fecha.getFullYear() === año
-      );
-    });
-  }, [ventasRegistradas, mes, año, colaboradorId]);
-
-  const ventaIdsKey = useMemo(
-    () => ventasDelMes.map((v) => v.id).sort().join(","),
-    [ventasDelMes],
-  );
-
-  const ventasDelMesRef = useRef(ventasDelMes);
-  ventasDelMesRef.current = ventasDelMes;
-
   useEffect(() => {
-    const list = ventasDelMesRef.current;
-    if (!colaboradorId || list.length === 0) {
-      setSeleccion(new Map());
+    if (!colaboradorId) {
+      setVentasDelMes([]);
+      setAvisoVentas("");
       return;
     }
-    const m = new Map<string, Set<string>>();
-    for (const v of list) {
-      m.set(v.id, new Set(v.pantallasIds ?? []));
-    }
-    setSeleccion(m);
+    let cancel = false;
+    setCargandoVentas(true);
+    setAvisoVentas("");
+    void (async () => {
+      try {
+        const data = await backendApi.get(
+          `/api/ordenes/ventas?mes=${mes + 1}&anio=${año}`,
+        );
+        const list = Array.isArray(data) ? data.map(mapVentaFromApi) : [];
+        const filtradas = list.filter(
+          (v) => String(v.colaboradorId) === String(colaboradorId),
+        );
+        if (!cancel) {
+          setVentasDelMes(filtradas);
+          if (filtradas.length === 0 && list.length > 0) {
+            setAvisoVentas(
+              "Este colaborador no tiene ventas que crucen el mes seleccionado.",
+            );
+          }
+        }
+      } catch (e) {
+        if (!cancel) {
+          const local = ventasRegistradas.filter(
+            (v) =>
+              String(v.colaboradorId) === String(colaboradorId) &&
+              ventaSolapaMesCalendario(v, mes, año),
+          );
+          setVentasDelMes(local);
+          setAvisoVentas(
+            e instanceof Error
+              ? `Sin conexión al servidor (${e.message}). Mostrando ventas locales.`
+              : "Mostrando ventas locales.",
+          );
+        }
+      } finally {
+        if (!cancel) setCargandoVentas(false);
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [colaboradorId, mes, año, ventasRegistradas]);
+
+  useEffect(() => {
+    setVentasSeleccionadas(new Set(ventasDelMes.map((v) => String(v.id))));
   }, [colaboradorId, mes, año, ventaIdsKey]);
 
-  const seleccionArrays = useMemo(
-    () => seleccionToArrays(seleccion),
-    [seleccion],
-  );
+  const toggleVenta = useCallback((ventaId: string) => {
+    setVentasSeleccionadas((prev) => {
+      const next = new Set(prev);
+      if (next.has(ventaId)) next.delete(ventaId);
+      else next.add(ventaId);
+      return next;
+    });
+  }, []);
+
+  const marcarTodasVentas = () =>
+    setVentasSeleccionadas(new Set(ventasDelMes.map((v) => String(v.id))));
+  const quitarTodasVentas = () => setVentasSeleccionadas(new Set());
+
+  const seleccionArrays = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const v of ventasDelMes) {
+      const id = String(v.id);
+      if (!ventasSeleccionadas.has(id)) continue;
+      const pids = [...new Set(v.pantallasIds ?? [])];
+      m.set(id, pids);
+    }
+    return m;
+  }, [ventasDelMes, ventasSeleccionadas]);
 
   const detalleLineas = useMemo(
     () => construirDetalleLineas(ventasDelMes, seleccionArrays, pantallas),
@@ -159,47 +202,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
     [seleccionArrays],
   );
 
-  const togglePantalla = useCallback((ventaId: string, pantallaId: string) => {
-    setSeleccion((prev) => {
-      const next = new Map(prev);
-      const set = new Set(next.get(ventaId) ?? []);
-      if (set.has(pantallaId)) set.delete(pantallaId);
-      else set.add(pantallaId);
-      next.set(ventaId, set);
-      return next;
-    });
-  }, []);
-
-  const setTodasPantallasVenta = useCallback(
-    (venta: RegistroVenta, todas: boolean) => {
-      setSeleccion((prev) => {
-        const next = new Map(prev);
-        next.set(
-          venta.id,
-          todas ? new Set(venta.pantallasIds ?? []) : new Set(),
-        );
-        return next;
-      });
-    },
-    [],
-  );
-
-  const seleccionarTodasGlobal = () => {
-    const m = new Map<string, Set<string>>();
-    for (const v of ventasDelMes) {
-      m.set(v.id, new Set(v.pantallasIds ?? []));
-    }
-    setSeleccion(m);
-  };
-
-  const quitarTodasGlobal = () => {
-    const m = new Map<string, Set<string>>();
-    for (const v of ventasDelMes) {
-      m.set(v.id, new Set());
-    }
-    setSeleccion(m);
-  };
-
   const handleConfirmar = async () => {
     if (!colaboradorId) {
       alert("Selecciona un colaborador");
@@ -209,8 +211,8 @@ export const ModalCrearOrden: React.FC<Props> = ({
       alert("No hay ventas para ese período");
       return;
     }
-    if (detalleLineas.length === 0) {
-      alert("Selecciona al menos una pantalla");
+    if (ventasSeleccionadas.size === 0 || detalleLineas.length === 0) {
+      alert("Selecciona al menos una venta");
       return;
     }
 
@@ -235,16 +237,21 @@ export const ModalCrearOrden: React.FC<Props> = ({
   };
 
   return ReactDOM.createPortal(
-    <div className="modal-overlay" onClick={onCancelar}>
-      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>📋 Nueva Orden de Compra</h2>
+    <div className="modal-overlay modal-crear-orden-overlay" onClick={onCancelar}>
+      <div
+        className="modal-container modal-crear-orden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header modal-crear-orden-header">
+          <div>
+            <h2>Nueva orden de compra</h2>
+          </div>
           <button type="button" className="modal-close" onClick={onCancelar}>
             ✕
           </button>
         </div>
 
-        <div className="modal-steps">
+        <div className="modal-steps modal-crear-orden-steps">
           <div className={`step ${pasoActual >= 1 ? "step-activo" : ""}`}>
             <span className="step-num">1</span>
             <span className="step-label">Colaborador</span>
@@ -252,7 +259,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
           <div className="step-linea" />
           <div className={`step ${pasoActual >= 2 ? "step-activo" : ""}`}>
             <span className="step-num">2</span>
-            <span className="step-label">Pantallas y totales</span>
+            <span className="step-label">Ventas y totales</span>
           </div>
         </div>
 
@@ -262,8 +269,8 @@ export const ModalCrearOrden: React.FC<Props> = ({
               {mensajeError}
             </div>
           ) : null}
-          <div className="modal-section">
-            <h3>🤝 Colaborador *</h3>
+          <div className="modal-section modal-crear-orden-section">
+            <h3>Colaborador</h3>
             {cargandoColabs ? (
               <p className="modal-cargando-hint">Cargando colaboradores…</p>
             ) : null}
@@ -275,14 +282,14 @@ export const ModalCrearOrden: React.FC<Props> = ({
             <select
               value={colaboradorId}
               onChange={(e) => setColaboradorId(e.target.value)}
-              className="form-select form-select-lg"
+              className="form-select form-select-lg modal-crear-orden-select"
               disabled={cargandoColabs}
             >
               <option value="">
                 {cargandoColabs
                   ? "— Cargando… —"
                   : clientes.length === 0
-                    ? "— No hay colaboradores (revisa conexión o permisos) —"
+                    ? "— No hay colaboradores —"
                     : "— Seleccionar colaborador —"}
               </option>
               {clientes.map((c) => {
@@ -296,15 +303,15 @@ export const ModalCrearOrden: React.FC<Props> = ({
             </select>
 
             {colaboradorSeleccionado && (
-              <div className="colaborador-ficha">
+              <div className="colaborador-ficha modal-colaborador-ficha">
                 {colaboradorSeleccionado.alias && (
-                  <span>👤 {colaboradorSeleccionado.alias}</span>
+                  <span>{colaboradorSeleccionado.alias}</span>
                 )}
                 {colaboradorSeleccionado.telefono && (
-                  <span>📞 {colaboradorSeleccionado.telefono}</span>
+                  <span>{colaboradorSeleccionado.telefono}</span>
                 )}
                 {colaboradorSeleccionado.email && (
-                  <span>✉️ {colaboradorSeleccionado.email}</span>
+                  <span>{colaboradorSeleccionado.email}</span>
                 )}
               </div>
             )}
@@ -312,9 +319,9 @@ export const ModalCrearOrden: React.FC<Props> = ({
 
           {colaboradorId && (
             <>
-              <div className="modal-section">
-                <h3>📅 Período</h3>
-                <div className="form-row">
+              <div className="modal-section modal-crear-orden-section">
+                <h3>Período</h3>
+                <div className="form-row modal-periodo-row">
                   <div className="form-group">
                     <label>Mes</label>
                     <select
@@ -346,130 +353,93 @@ export const ModalCrearOrden: React.FC<Props> = ({
                 </div>
               </div>
 
-              <div className="modal-section">
-                <div className="modal-section-toolbar">
+              <div className="modal-section modal-crear-orden-section">
+                <div className="modal-section-toolbar modal-ventas-toolbar">
                   <h3>
-                    Pantallas incluidas
-                    <span className="badge-count">{detalleLineas.length}</span>
+                    Ventas a incluir
+                    <span className="badge-count">{ventasSeleccionadas.size}</span>
                   </h3>
                   <div className="toolbar-chips">
                     <button
                       type="button"
                       className="btn btn-sm btn-outline"
-                      onClick={seleccionarTodasGlobal}
+                      onClick={marcarTodasVentas}
+                      disabled={ventasDelMes.length === 0}
                     >
-                      Todas
+                      Marcar todas
                     </button>
                     <button
                       type="button"
                       className="btn btn-sm btn-outline"
-                      onClick={quitarTodasGlobal}
+                      onClick={quitarTodasVentas}
+                      disabled={ventasDelMes.length === 0}
                     >
-                      Ninguna
+                      Quitar todas
                     </button>
                   </div>
                 </div>
 
-                {ventasDelMes.length === 0 ? (
+                {cargandoVentas ? (
+                  <p className="modal-cargando-hint">Cargando ventas del mes…</p>
+                ) : null}
+                {avisoVentas ? (
+                  <div className="modal-aviso-ventas" role="status">
+                    {avisoVentas}
+                  </div>
+                ) : null}
+
+                {ventasDelMes.length === 0 && !cargandoVentas ? (
                   <div className="empty-msg">
                     <p>
-                      ⚠️ No hay ventas para {colaboradorSeleccionado?.nombre} en{" "}
-                      {MESES[mes]} {año}.
+                      No hay ventas que crucen {MESES[mes]} {año} para{" "}
+                      {colaboradorSeleccionado?.nombre ?? "este colaborador"}.
                     </p>
                   </div>
-                ) : (
-                  <div className="ventas-seleccion-list">
-                    {ventasDelMes.map((v) => {
-                      const pids = v.pantallasIds ?? [];
-                      const selSet = seleccion.get(v.id) ?? new Set();
-                      const todasSel =
-                        pids.length > 0 && pids.every((id) => selSet.has(id));
+                ) : null}
 
+                {ventasDelMes.length > 0 ? (
+                  <ul className="modal-ventas-seleccion-list">
+                    {ventasDelMes.map((v) => {
+                      const id = String(v.id);
+                      const checked = ventasSeleccionadas.has(id);
+                      const pids = [...new Set(v.pantallasIds ?? [])];
+                      const importeLinea = detalleLineas
+                        .filter((l) => String(l.venta_id) === id)
+                        .reduce((s, l) => s + l.importe, 0);
                       return (
-                        <div key={v.id} className="venta-seleccion-bloque">
-                          <div className="venta-seleccion-head">
-                            <div>
-                              <strong>{v.vendidoA}</strong>
-                              <span className="venta-seleccion-periodo">
-                                {new Date(v.fechaInicio).toLocaleDateString(
-                                  "es-MX",
-                                )}{" "}
-                                →{" "}
-                                {new Date(v.fechaFin).toLocaleDateString(
-                                  "es-MX",
-                                )}
+                        <li key={id}>
+                          <label className="modal-venta-fila">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleVenta(id)}
+                            />
+                            <span className="modal-venta-fila-body">
+                              <span className="modal-venta-titulo">
+                                {v.vendidoA || "—"}
                               </span>
-                            </div>
-                            {pids.length > 1 && (
-                              <label className="check-todas-venta">
-                                <input
-                                  type="checkbox"
-                                  checked={todasSel}
-                                  onChange={() =>
-                                    setTodasPantallasVenta(v, !todasSel)
-                                  }
-                                />
-                                Todas las pantallas de esta venta
-                              </label>
-                            )}
-                          </div>
-                          <ul className="pantallas-check-list">
-                            {pids.map((pid) => {
-                              const p = pantallas.find((x) => x.id === pid);
-                              const precioRef =
-                                p?.precio != null && p.precio > 0
-                                  ? `$${p.precio.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
-                                  : null;
-                              return (
-                                <li key={`${v.id}-${pid}`}>
-                                  <label>
-                                    <input
-                                      type="checkbox"
-                                      checked={selSet.has(pid)}
-                                      onChange={() =>
-                                        togglePantalla(v.id, pid)
-                                      }
-                                    />
-                                    <span className="pantalla-nombre-check">
-                                      📺 {p?.nombre ?? pid}
-                                    </span>
-                                    {precioRef && (
-                                      <span className="pantalla-precio-ref">
-                                        Ref. {precioRef}/mes
-                                      </span>
-                                    )}
-                                  </label>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                          <div className="venta-linea-importe">
-                            Línea (selección):{" "}
-                            <strong>
-                              $
-                              {detalleLineas
-                                .filter((l) => l.venta_id === v.id)
-                                .reduce((s, l) => s + l.importe, 0)
-                                .toLocaleString("es-MX", {
-                                  minimumFractionDigits: 2,
-                                })}
-                            </strong>
-                            <span className="nombres-seleccionados">
-                              {" "}
-                              —{" "}
-                              {nombresPantallas(
-                                [...selSet].filter((id) => pids.includes(id)),
-                                pantallas,
-                              ) || "—"}
+                              <span className="modal-venta-pantallas">
+                                Pantallas:{" "}
+                                {nombresPantallas(pids, pantallas) || "—"}
+                              </span>
                             </span>
-                          </div>
-                        </div>
+                            <span className="modal-venta-importe">
+                              $
+                              {(checked
+                                ? importeLinea
+                                : 0
+                              ).toLocaleString("es-MX", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </span>
+                          </label>
+                        </li>
                       );
                     })}
-                  </div>
-                )}
+                  </ul>
+                ) : null}
 
-                <div className="modal-totales">
+                <div className="modal-totales modal-totales-orden">
                   <div className="total-row">
                     <span>Subtotal</span>
                     <span>
@@ -518,13 +488,13 @@ export const ModalCrearOrden: React.FC<Props> = ({
             disabled={
               !colaboradorId ||
               ventasDelMes.length === 0 ||
+              ventasSeleccionadas.size === 0 ||
               detalleLineas.length === 0 ||
-              guardando
+              guardando ||
+              cargandoVentas
             }
           >
-            {guardando
-              ? "Guardando…"
-              : `✅ Crear orden — ${MESES[mes]} ${año}`}
+            {guardando ? "Guardando…" : "Guardar orden"}
           </button>
         </div>
       </div>
