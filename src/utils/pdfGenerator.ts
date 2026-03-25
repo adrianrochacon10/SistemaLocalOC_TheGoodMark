@@ -222,11 +222,12 @@ export async function exportarPDFOrden(
   const pMap = pantallaMap(pantallas);
   const registros = orden.registrosVenta ?? [];
   const fechaDoc = new Date().toLocaleDateString("es-MX");
-  const mesFormato = new Date(
+  const mesFormatoRaw = new Date(
     orden.año ?? 0,
     orden.mes ?? 0,
   ).toLocaleDateString("es-MX", { month: "long", year: "numeric" });
-
+  const mesFormato =
+    mesFormatoRaw.charAt(0).toUpperCase() + mesFormatoRaw.slice(1);
   const pantallasUnicas = new Set<string>();
   for (const v of registros) {
     for (const pid of v.pantallasIds ?? []) pantallasUnicas.add(String(pid));
@@ -289,20 +290,16 @@ export async function exportarPDFOrden(
     },
     { label: "Periodo", value: mesFormato },
     { label: "Total de productos", value: String(numProductos) },
-    { label: "Descuento", value: fmtMoney(0) },
   ]);
 
   const pantallasBeneficio =
     numPantallas > 0
       ? numPantallas
-      : registros.reduce(
-          (m, v) => Math.max(m, v.pantallasIds?.length ?? 0),
-          0,
-        );
+      : registros.reduce((m, v) => Math.max(m, v.pantallasIds?.length ?? 0), 0);
 
   const h2 = drawInfoBox(doc, margin + boxW + gap, y, boxW, "BENEFICIOS", [
     { label: "Pantallas", value: String(pantallasBeneficio) },
-    { label: "Periodo", value: mesFormato },
+    { label: "Descuento", value: fmtMoney(0) },
   ]);
 
   y += Math.max(h1, h2) + 8;
@@ -324,19 +321,13 @@ export async function exportarPDFOrden(
     const firstId = ids[0];
     const p0 = firstId ? pMap.get(firstId) : undefined;
     const titulo = (p0?.nombre ?? ids[0] ?? "SERVICIO").toUpperCase();
-    const ubic =
-      p0?.ubicacion?.trim() || "Ubicacion no especificada";
     const mesesV = Number(venta.mesesRenta) || 1;
     const fi = new Date(venta.fechaInicio).toLocaleDateString("es-MX");
     const ff = new Date(venta.fechaFin).toLocaleDateString("es-MX");
     const precio = precioLineaOrden(venta);
     descByRow.set(idx - 1, {
       title: titulo,
-      details: [
-        `${ubic} · Resolucion no especificada`,
-        `Periodo: ${fi} - ${ff}`,
-        `Pantallas: ${ids.length}`,
-      ],
+      details: [`Periodo: ${fi} - ${ff}`, `Pantallas: ${ids.length}`],
     });
     tableBody.push([String(idx), " ", `${mesesV} Mes`, fmtMoney(precio)]);
   }
@@ -397,7 +388,10 @@ export async function exportarPDFOrden(
       data.doc.setFont("helvetica", "bold");
       data.doc.setFontSize(8);
       data.doc.setTextColor(0, 0, 0);
-      const titleLines = data.doc.splitTextToSize(meta.title, colDescW - pad * 2);
+      const titleLines = data.doc.splitTextToSize(
+        meta.title,
+        colDescW - pad * 2,
+      );
       data.doc.text(titleLines, x, py);
       py += titleLines.length * 4;
       data.doc.setFont("helvetica", "normal");
@@ -449,7 +443,8 @@ export async function exportarPDFOrden(
   doc.setFontSize(7);
   doc.setTextColor(...COL_GREY);
   const colW = (pageW - 2 * margin) / 3;
-  const contacto = [config.email, config.telefono].filter(Boolean).join(" · ") || "—";
+  const contacto =
+    [config.email, config.telefono].filter(Boolean).join(" · ") || "—";
   const web = (config.sitioWeb ?? "").trim() || "—";
   const oficina = (config.direccion ?? "").trim() || "—";
 

@@ -89,15 +89,10 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId);
 
   const opcionesClientes = clientes
-    .map((c) => {
-      const numPantallas = asignaciones.filter(
-        (a) => a.clienteId === c.id && a.activa,
-      ).length;
-      return {
-        value: c.id,
-        label: `${c.nombre} (${numPantallas} pantalla${numPantallas !== 1 ? "s" : ""})`,
-      };
-    })
+    .map((c) => ({
+      value: c.id,
+      label: c.nombre,
+    }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
   const opcionesVendedores = useMemo(() => {

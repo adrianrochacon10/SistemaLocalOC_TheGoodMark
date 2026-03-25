@@ -56,7 +56,6 @@ export async function crear(body, vendedorId) {
     body.comisiones ?? body.comision ?? body.comision_total ?? 0,
   );
   const descuento = Number(body.descuento ?? 0);
-
   const renovable = body.renovable ?? false;
 
   const { data: colaborador, error: errColab } = await supabase
@@ -83,6 +82,7 @@ export async function crear(body, vendedorId) {
   const insertPayload = {
     colaborador_id: colaboradorId,
     client_name: colaborador.nombre,
+    vendido_a: body.vendido_a ?? null,
     estado_venta: estadoVenta,
     fecha_inicio: body.fecha_inicio,
     fecha_fin: body.fecha_fin,
@@ -109,6 +109,7 @@ export async function crear(body, vendedorId) {
         : [],
   };
 
+  console.log("=== INSERT PAYLOAD vendido_a ===", insertPayload.vendido_a);
   const { data, error } = await supabase
     .from("ventas")
     .insert(insertPayload)
@@ -138,7 +139,8 @@ export async function crear(body, vendedorId) {
     const texto = [
       "Se ha registrado una nueva venta en The Good Mark.",
       "",
-      `Cliente (snapshot): ${data?.client_name || "N/D"}`,
+      `Cliente (colaborador): ${data?.client_name || "N/D"}`,
+      `Vendido a: ${data?.vendido_a || "N/D"}`, // ✅
       `Pantalla: ${data?.colaborador?.pantalla?.nombre || "N/D"}`,
       `Producto: ${data?.colaborador?.producto?.nombre || "N/D"}`,
       `Precio por mes: $${n(data?.precio_por_mes).toFixed(2)}`,
@@ -155,7 +157,8 @@ export async function crear(body, vendedorId) {
     const html = `
       <p>Se ha registrado una nueva venta en <strong>The Good Mark</strong>.</p>
       <ul>
-        <li><strong>Cliente (snapshot):</strong> ${data?.client_name || "N/D"}</li>
+        <li><strong>Cliente (colaborador):</strong> ${data?.client_name || "N/D"}</li>
+        <li><strong>Vendido a:</strong> ${data?.vendido_a || "N/D"}</li>
         <li><strong>Pantalla:</strong> ${data?.colaborador?.pantalla?.nombre || "N/D"}</li>
         <li><strong>Producto:</strong> ${data?.colaborador?.producto?.nombre || "N/D"}</li>
         <li><strong>Precio por mes:</strong> $${n(data?.precio_por_mes).toFixed(2)}</li>
@@ -173,10 +176,7 @@ export async function crear(body, vendedorId) {
     for (const email of destinatarios)
       await sendEmail(email, asunto, texto, html);
   } catch (e) {
-    console.error(
-      "[VENTAS] Error enviando notificaciones de venta:",
-      e?.message || e,
-    );
+    console.error("[VENTAS] Error enviando notificaciones:", e?.message || e);
   }
 
   return { data };
@@ -202,7 +202,6 @@ export async function actualizar(id, body) {
 
   let precioPorMes =
     body.precio_por_mes ?? body.precio_unitario_manual ?? venta.precio_por_mes;
-
   precioPorMes =
     precioPorMes != null && precioPorMes !== "" ? Number(precioPorMes) : null;
 
@@ -210,9 +209,9 @@ export async function actualizar(id, body) {
     body.costos ?? body.costos_venta ?? body.costo_venta ?? venta.costos;
   costos = costos != null && costos !== "" ? Number(costos) : null;
 
-  // Estado (compatibilidad con el nombre viejo)
   if (body.estado_venta !== undefined) payload.estado_venta = body.estado_venta;
   else if (body.estado !== undefined) payload.estado_venta = body.estado;
+  if (body.vendido_a !== undefined) payload.vendido_a = body.vendido_a; // ✅
   if (body.pantalla_id !== undefined)
     payload.pantalla_id = body.pantalla_id ?? null;
   if (body.pantallas_ids !== undefined) {
@@ -237,7 +236,6 @@ export async function actualizar(id, body) {
     payload.client_name = colaborador.nombre;
     payload.tipo_pago_id = colaborador.tipo_pago_id;
 
-    // Si no viene precio_por_mes explícito, lo extraemos del producto del colaborador.
     if (precioPorMes == null) {
       const { data: producto, error: errProd } = await supabase
         .from("productos")
@@ -356,6 +354,7 @@ export async function renovar(id, body) {
   const insertPayload = {
     colaborador_id: venta.colaborador_id,
     client_name: colaborador.nombre,
+    vendido_a: venta.vendido_a ?? null, // ✅ hereda el receptor original
     estado_venta: "aceptado",
     fecha_inicio: nuevaInicio,
     fecha_fin: nuevaFin,
