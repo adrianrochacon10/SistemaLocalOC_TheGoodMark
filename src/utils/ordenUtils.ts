@@ -154,3 +154,17 @@ export function etiquetaMes(mes: number, año: number): string {
     year: "numeric",
   });
 }
+
+/** Misma regla que el backend: la venta se solapa con el mes calendario (mes 0–11). */
+export function ventaSolapaMesCalendario(
+  v: RegistroVenta,
+  mes0: number,
+  año: number,
+): boolean {
+  const inicioMes = `${año}-${String(mes0 + 1).padStart(2, "0")}-01`;
+  const ultimo = new Date(año, mes0 + 1, 0);
+  const finMes = ultimo.toISOString().slice(0, 10);
+  const s = new Date(v.fechaInicio).toISOString().slice(0, 10);
+  const e = new Date(v.fechaFin).toISOString().slice(0, 10);
+  return s <= finMes && e >= inicioMes;
+}

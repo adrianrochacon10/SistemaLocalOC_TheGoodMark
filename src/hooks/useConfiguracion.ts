@@ -34,6 +34,12 @@ export function useConfiguracion(profile: any, session: Session | null) {
             email: data.email ?? undefined,
             ivaPercentaje: data.iva_percentaje ?? 16,
             activo: data.activo ?? true,
+            sitioWeb: data.sitio_web ?? data.sitioWeb ?? undefined,
+            bancoTitular: data.banco_titular ?? data.bancoTitular ?? undefined,
+            bancoNombre: data.banco_nombre ?? data.bancoNombre ?? undefined,
+            bancoTarjeta: data.banco_tarjeta ?? data.bancoTarjeta ?? undefined,
+            bancoCuenta: data.banco_cuenta ?? data.bancoCuenta ?? undefined,
+            bancoClabe: data.banco_clabe ?? data.bancoClabe ?? undefined,
           });
         }
       } catch (e) {
@@ -111,18 +117,6 @@ export function useConfiguracion(profile: any, session: Session | null) {
     setOrdenes((prev) => [...prev, orden]);
   };
 
-  /**
-   * Genera órdenes en BD por colaborador para el mes calendario (1–12) y año,
-   * a partir de las ventas cuyo período cae en ese mes (lógica del backend).
-   */
-  const handleGenerarOrdenMesEnBackend = async (mesJs: number, anioVal: number) => {
-    await backendApi.post("/api/ordenes/generar", {
-      mes: mesJs + 1,
-      anio: anioVal,
-    });
-    await refetchOrdenes();
-  };
-
   const handleCrearOrdenManual = async (payload: CrearOrdenPayload) => {
     const res = (await backendApi.post("/api/ordenes/crear-manual", {
       colaborador_id: payload.colaboradorId,
@@ -145,7 +139,6 @@ export function useConfiguracion(profile: any, session: Session | null) {
     acciones: {
       handleGuardarConfiguracion,
       handleGenerarOrden,
-      handleGenerarOrdenMesEnBackend,
       handleCrearOrdenManual,
     },
   };

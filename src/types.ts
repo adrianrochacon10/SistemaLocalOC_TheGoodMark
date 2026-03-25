@@ -164,4 +164,12 @@ export interface ConfiguracionEmpresa {
   ivaPercentaje: number;
   logo?: string;
   activo: boolean;
+  /** PDF / pie de página */
+  sitioWeb?: string;
+  /** Datos bancarios en PDF (opcional; si faltan se muestran guiones) */
+  bancoTitular?: string;
+  bancoNombre?: string;
+  bancoTarjeta?: string;
+  bancoCuenta?: string;
+  bancoClabe?: string;
 }

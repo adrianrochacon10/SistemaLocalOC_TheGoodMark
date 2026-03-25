@@ -10,6 +10,8 @@ import { OrdenCard } from "./OrdenCard";
 
 interface Props {
   ordenes: OrdenDeCompra[];
+  /** Mensaje cuando no hay filas (p. ej. período sin órdenes) */
+  vacioMensaje?: string;
   clientes: Colaborador[];
   pantallas: Pantalla[];
   config: ConfiguracionEmpresa;
@@ -20,6 +22,7 @@ interface Props {
 
 export const OrdenesGrid: React.FC<Props> = ({
   ordenes,
+  vacioMensaje,
   clientes,
   pantallas,
   config,
@@ -28,7 +31,11 @@ export const OrdenesGrid: React.FC<Props> = ({
   onToggle,
 }) => {
   if (ordenes.length === 0)
-    return <p className="no-ordenes">No hay órdenes generadas aún</p>;
+    return (
+      <p className="no-ordenes">
+        {vacioMensaje ?? "No hay órdenes generadas aún"}
+      </p>
+    );
 
   const ordenadas = [...ordenes].sort(
     (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),

@@ -16,20 +16,9 @@ ALTER TABLE public.orden_de_compra
 ALTER TABLE public.orden_de_compra
   ADD COLUMN IF NOT EXISTS iva_porcentaje numeric(6, 2);
 
--- Un solo registro por colaborador + mes + año (evita duplicados)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'orden_de_compra_colaborador_mes_anio_unique'
-  ) THEN
-    ALTER TABLE public.orden_de_compra
-      ADD CONSTRAINT orden_de_compra_colaborador_mes_anio_unique
-      UNIQUE (colaborador_id, mes, anio);
-  END IF;
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-END $$;
+-- Varias órdenes por colaborador/mes/año: no uses UNIQUE aquí.
+-- Si ya aplicaste una versión anterior con UNIQUE, ejecuta
+-- 20260326120000_orden_de_compra_varias_por_mes.sql
 
 ALTER TABLE public.ventas
   ADD COLUMN IF NOT EXISTS orden_de_compra_id uuid REFERENCES public.orden_de_compra (id) ON DELETE SET NULL;
