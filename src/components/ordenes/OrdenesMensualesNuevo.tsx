@@ -5,6 +5,7 @@ import {
   ConfiguracionEmpresa,
   Usuario,
   Pantalla,
+  Producto,
   Colaborador,
 } from "../../types";
 import "./OrdenesMensualesNuevo.css";
@@ -31,6 +32,7 @@ const MESES = [
 interface Props {
   ordenes: OrdenDeCompra[];
   ventasRegistradas: RegistroVenta[];
+  productos: Producto[];
   config: ConfiguracionEmpresa;
   usuarioActual: Usuario;
   clientes: Colaborador[];
@@ -43,12 +45,14 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
   ordenes,
   ventasRegistradas,
   config,
+  productos,
   usuarioActual,
   clientes,
   pantallas,
   onCrearOrdenEnBackend,
   onRecargarColaboradores,
 }) => {
+  console.log("productos en OrdenesMensualesNuevo:", productos);
   const hoy = new Date();
   const [mes, setMes] = useState(hoy.getMonth());
   const [año, setAño] = useState(hoy.getFullYear());
@@ -72,9 +76,7 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
       );
       setTimeout(() => setExito(""), 5000);
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "No se pudo guardar la orden",
-      );
+      setError(e instanceof Error ? e.message : "No se pudo guardar la orden");
     }
   };
 
@@ -141,6 +143,7 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
           pantallas={pantallas}
           config={config}
           usuarioActual={usuarioActual}
+          productos={productos}
           expandidoId={expandidoId}
           onToggle={(id) => setExpandido(expandidoId === id ? null : id)}
         />
@@ -151,6 +154,7 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
           clientes={clientes}
           pantallas={pantallas}
           ventasRegistradas={ventasRegistradas}
+          productos={productos}
           config={config}
           onConfirmar={handleConfirmarModal}
           onCancelar={() => {

@@ -15,13 +15,14 @@ import { SelectField } from "../../ui/SelectField";
 import { SelectorPantallas } from "./SelectorPantallas";
 import { InputField } from "../../ui/InputField";
 import { ResumenVenta } from "./ResumenVenta";
+import { SelectorProductos } from "./SelectorProductos";
 import { BotonAccion } from "../../ui/BotonAccion";
 
 interface RegistroVentaModalProps {
   pantallas: Pantalla[];
   productos: Producto[];
   asignaciones: AsignacionPantalla[];
-  Productos: AsignacionProductoExtra[];
+  AsignacionProductoExtra: AsignacionProductoExtra[];
   clientes: Colaborador[];
   usuarios: Usuario[];
   usuarioActual: Usuario;
@@ -35,6 +36,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   asignaciones,
   clientes,
   usuarios = [],
+  productos,
   usuarioActual,
   onRegistrarVenta,
   onCerrar,
@@ -61,6 +63,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const [precioGeneral, setPrecioGeneral] = useState<number>(
     ventaInicial?.precioGeneral ?? 0,
   );
+  const [productosSeleccionados, setProductosSeleccionados] = useState<
+    string[]
+  >(ventaInicial?.productosIds ?? []);
   const [porcentajeSocio, setPorcentajeSocio] = useState<number>(30);
   const [montoSocio, setMontoSocio] = useState<number>(0);
   const [aplicarDescuento, setAplicarDescuento] = useState<boolean>(false);
@@ -152,6 +157,24 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     }));
   }, [clienteSeleccionado, asignaciones, clientes]);
 
+  const productosDelCliente = useMemo((): Producto[] => {
+    const c = clientes.find((x) => x.id === clienteSeleccionado) as
+      | (Colaborador & { producto_ids?: string[] })
+      | undefined;
+    if (!c) return [];
+
+    const ids: string[] =
+      Array.isArray(c.producto_ids) && c.producto_ids.length > 0
+        ? (c.producto_ids.filter(Boolean) as string[])
+        : c.productoId
+          ? [c.productoId]
+          : [];
+
+    return ids
+      .map((id) => productos.find((p) => p.id === id))
+      .filter(Boolean) as Producto[];
+  }, [clienteSeleccionado, clientes, productos]);
+
   const clienteActual = clientes.find((c) => c.id === clienteSeleccionado);
   const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
   const tieneConsideracion = clienteActual?.tipoComision === "consideracion";
@@ -188,6 +211,14 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     );
   };
 
+  const toggleProducto = (productoId: string) => {
+    setProductosSeleccionados((prev) =>
+      prev.includes(productoId)
+        ? prev.filter((id) => id !== productoId)
+        : [...prev, productoId],
+    );
+  };
+
   const resetFormularioVenta = () => {
     setClienteSeleccionado("");
     setItemsVenta([]);
@@ -203,6 +234,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setExito("");
     setComision(0);
     setPagoConsiderar(0);
+    setProductosSeleccionados([]);
   };
 
   // ── Registrar ─────────────────────────────────────────────────────────
@@ -213,8 +245,8 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       setError("Selecciona un cliente");
       return;
     }
-    if (itemsVenta.length === 0) {
-      setError("Selecciona al menos una pantalla");
+    if (itemsVenta.length === 0 && productosSeleccionados.length === 0) {
+      setError("Selecciona al menos una pantalla o producto");
       return;
     }
     if (!vendidoA.trim()) {
@@ -237,6 +269,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     const nuevaVenta: RegistroVenta = {
       id: ventaInicial?.id ?? "v" + Date.now(),
       pantallasIds: itemsVenta.map((i) => i.pantallaId),
+      productosIds: productosSeleccionados,
       itemsVenta,
       colaboradorId: clienteSeleccionado,
       vendidoA: vendidoA.trim(),
@@ -284,6 +317,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
         </h3>
 
         <div className="formulario-section">
+          {/* ── Selector colaborador ── */}
           <SelectField
             label="Colaborador *"
             value={clienteSeleccionado}
@@ -298,14 +332,29 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
             options={opcionesClientes}
           />
 
-          {pantallasDelCliente.length > 0 && (
+          {/* ── Formulario completo: aparece si tiene pantallas O productos ── */}
+          {(pantallasDelCliente.length > 0 ||
+            productosDelCliente.length > 0) && (
             <>
-              <SelectorPantallas
-                pantallasDelCliente={pantallasDelCliente}
-                pantallasSeleccionadas={pantallasSeleccionadas}
-                pantallas={pantallas}
-                onToggle={togglePantalla}
-              />
+              {pantallasDelCliente.length > 0 && (
+                <SelectorPantallas
+                  pantallasDelCliente={pantallasDelCliente}
+                  pantallasSeleccionadas={pantallasSeleccionadas}
+                  pantallas={pantallas}
+                  ocultarHint={productosSeleccionados.length > 0}
+                  onToggle={togglePantalla}
+                />
+              )}
+
+              {productosDelCliente.length > 0 && (
+                <SelectorProductos
+                  productosDelCliente={productosDelCliente}
+                  productosSeleccionados={productosSeleccionados}
+                  onToggle={toggleProducto}
+                  ocultarHint={pantallasSeleccionadas.length > 0}
+                />
+              )}
+
               <InputField
                 label="Vendido a (Nombre del receptor) *"
                 value={vendidoA}
@@ -364,8 +413,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
 
               {tieneConsideracion && (
                 <div className="form-group">
-                  <label>Pago a Considerar (por mes)</label>{" "}
-                  {/* ← etiqueta actualizada */}
+                  <label>Pago a Considerar (por mes)</label>
                   <div className="input-prefix">
                     <input
                       type="number"
@@ -379,7 +427,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                       className="form-input"
                     />
                   </div>
-                  {/* ── Hints ── */}
                   {pagoConsiderar > 0 && mesesRenta > 1 && (
                     <small className="campo-hint hint-neutro">
                       Total pago a considerar ({mesesRenta} meses):{" "}
@@ -403,7 +450,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 </div>
               )}
 
-              {/* ── COMISIÓN ✅ ── */}
               <InputField
                 label="Comisión (por mes)"
                 value={comision || ""}
@@ -415,7 +461,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 step={0.01}
                 placeholder="0.00"
               />
-              {/* ── COSTOS ── */}
               <div className="form-group">
                 <label>Costos de la venta (por mes)</label>
                 <div className="input-prefix">
@@ -430,12 +475,15 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                   />
                 </div>
               </div>
+
               {tieneComisionPorcentaje && (
                 <>{/* bloque comisión porcentaje socio */}</>
               )}
+
               {fechaInicio &&
                 mesesRenta > 0 &&
-                pantallasSeleccionadas.length > 0 && (
+                (pantallasSeleccionadas.length > 0 ||
+                  productosSeleccionados.length > 0) && (
                   <ResumenVenta
                     pantallasActuales={pantallasActuales}
                     estadoVenta={estadoVenta}
@@ -459,12 +507,15 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
             </>
           )}
 
-          {clienteSeleccionado && pantallasDelCliente.length === 0 && (
-            <div className="error-message">
-              Este cliente no tiene pantallas asignadas. Asigna pantallas desde
-              la sección de Gestión.
-            </div>
-          )}
+          {/* ── Mensaje si no tiene pantallas NI productos ── */}
+          {clienteSeleccionado &&
+            pantallasDelCliente.length === 0 &&
+            productosDelCliente.length === 0 && (
+              <div className="error-message">
+                Este cliente no tiene pantallas ni productos asignados. Asigna
+                desde la sección de Gestión.
+              </div>
+            )}
         </div>
 
         {error && <div className="error-message">{error}</div>}

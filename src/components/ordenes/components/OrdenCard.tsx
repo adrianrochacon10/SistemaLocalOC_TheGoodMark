@@ -3,6 +3,7 @@ import {
   OrdenDeCompra,
   Colaborador,
   Pantalla,
+  Producto,
   ConfiguracionEmpresa,
   Usuario,
 } from "../../../types";
@@ -12,6 +13,7 @@ interface Props {
   orden: OrdenDeCompra;
   clientes: Colaborador[];
   pantallas: Pantalla[];
+  productos: Producto[];
   config: ConfiguracionEmpresa;
   usuarioActual: Usuario;
   expandido: boolean;
@@ -37,6 +39,7 @@ export const OrdenCard: React.FC<Props> = ({
   orden,
   clientes,
   pantallas,
+  productos,
   config,
   usuarioActual,
   expandido,
@@ -48,12 +51,7 @@ export const OrdenCard: React.FC<Props> = ({
     void (async () => {
       setPdfBusy(true);
       try {
-        await exportarPDFOrden(
-          orden,
-          config,
-          usuarioActual.nombre,
-          pantallas,
-        );
+        await exportarPDFOrden(orden, config, usuarioActual.nombre, pantallas);
       } catch (e) {
         alert(
           e instanceof Error
@@ -82,11 +80,11 @@ export const OrdenCard: React.FC<Props> = ({
 
       {/* Resumen */}
       <div className="orden-info">
-        {nombreColaborador ? (
+        {nombreColaborador && (
           <p>
             <strong>Colaborador:</strong> {nombreColaborador}
           </p>
-        ) : null}
+        )}
         <p>
           <strong>Mes:</strong> {MESES[orden.mes ?? 0]} {orden.año ?? ""}
         </p>
@@ -102,22 +100,62 @@ export const OrdenCard: React.FC<Props> = ({
       {expandido && (
         <div className="orden-detalles">
           <h5>Detalles de la Orden</h5>
+
+          {
+            console.log(
+              "registrosVenta:",
+              orden.registrosVenta?.map((v) => ({
+                id: v.id,
+                pantallasIds: v.pantallasIds,
+                productosIds: v.productosIds,
+              })),
+            ) as unknown as null
+          }
           <div className="detalles-list">
             {(orden.registrosVenta ?? []).map((venta) => {
               const socio = clientes.find(
-                (c) =>
-                  c.id === (venta.colaboradorId || orden.colaboradorId),
+                (c) => c.id === (venta.colaboradorId || orden.colaboradorId),
               );
+
+              // ✅ Pantallas o productos según lo que tenga la venta
+              const pids = venta.pantallasIds ?? [];
+              const prids = venta.productosIds ?? [];
+
               const nombresP =
-                (venta.pantallasIds ?? [])
-                  .map((id) => pantallas.find((p) => p.id === id)?.nombre ?? id)
-                  .join(", ") || "—";
+                pids.length > 0
+                  ? pids
+                      .map(
+                        (id) =>
+                          pantallas.find((p) => p.id === id)?.nombre ?? id,
+                      )
+                      .join(", ")
+                  : prids.length > 0
+                    ? prids
+                        .map(
+                          (id) =>
+                            (productos ?? []).find((p) => p.id === id)
+                              ?.nombre ?? id,
+                        )
+                        .join(", ")
+                    : "—";
+
+              // ✅ Etiqueta según tipo
+              const etiqueta =
+                pids.length > 0
+                  ? "Pantallas"
+                  : prids.length > 0
+                    ? "Productos"
+                    : "Sin asignar";
+
               return (
                 <div key={venta.id} className="detalle-item">
                   <p>
                     <strong>
                       {socio?.nombre ?? "Colaborador"} — {nombresP}
                     </strong>
+                  </p>
+                  <p>
+                    <strong>{etiqueta}:</strong> {nombresP}
                   </p>
                   <p>Vendido a: {venta.vendidoA}</p>
                   <p>

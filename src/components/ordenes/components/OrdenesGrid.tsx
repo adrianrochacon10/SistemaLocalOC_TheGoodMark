@@ -3,6 +3,7 @@ import {
   OrdenDeCompra,
   Colaborador,
   Pantalla,
+  Producto, // ← AGREGAR
   ConfiguracionEmpresa,
   Usuario,
 } from "../../../types";
@@ -10,10 +11,10 @@ import { OrdenCard } from "./OrdenCard";
 
 interface Props {
   ordenes: OrdenDeCompra[];
-  /** Mensaje cuando no hay filas (p. ej. período sin órdenes) */
   vacioMensaje?: string;
   clientes: Colaborador[];
   pantallas: Pantalla[];
+  productos: Producto[]; // ← AGREGAR
   config: ConfiguracionEmpresa;
   usuarioActual: Usuario;
   expandidoId: string | null;
@@ -25,6 +26,7 @@ export const OrdenesGrid: React.FC<Props> = ({
   vacioMensaje,
   clientes,
   pantallas,
+  productos, // ← AGREGAR
   config,
   usuarioActual,
   expandidoId,
@@ -49,6 +51,7 @@ export const OrdenesGrid: React.FC<Props> = ({
           orden={orden}
           clientes={clientes}
           pantallas={pantallas}
+          productos={productos} // ← AGREGAR
           config={config}
           usuarioActual={usuarioActual}
           expandido={expandidoId === orden.id}
