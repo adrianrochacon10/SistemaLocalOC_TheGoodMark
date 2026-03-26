@@ -141,6 +141,7 @@ export const Dashboard: React.FC = () => {
           <OrdenesMensualesNuevo
             ordenes={datos.ordenes}
             ventasRegistradas={datos.ventasRegistradas}
+            productos={datos.productos}
             config={datos.config}
             usuarioActual={usuarioActual}
             clientes={datos.clientes}

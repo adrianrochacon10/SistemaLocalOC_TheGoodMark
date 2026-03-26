@@ -5,9 +5,13 @@ export function mapVentaFromApi(row: any): RegistroVenta {
   const pantallasIds: string[] =
     row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []);
 
+  const productosIds: string[] = // ← AGREGAR
+    row.productos_ids ?? (row.producto_id ? [row.producto_id] : []); // ← AGREGAR
+
   return {
     id: row.id,
     pantallasIds,
+    productosIds, // ← AGREGAR
     itemsVenta: pantallasIds.map((pantallaId) => ({
       pantallaId,
       sinDescuento: false,
@@ -18,16 +22,11 @@ export function mapVentaFromApi(row: any): RegistroVenta {
       row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
     precioGeneral:
       Number(
-        row.precio_por_mes ??
-          row.precio_general ??
-          row.precio_total ??
-          0,
+        row.precio_por_mes ?? row.precio_general ?? row.precio_total ?? 0,
       ) || 0,
     cantidad: row.cantidad ?? 1,
     precioTotal: row.precio_total ?? row.importe_total ?? 0,
-    fechaRegistro: row.created_at
-      ? new Date(row.created_at)
-      : new Date(),
+    fechaRegistro: row.created_at ? new Date(row.created_at) : new Date(),
     fechaInicio: new Date(row.fecha_inicio),
     fechaFin: new Date(row.fecha_fin),
     mesesRenta: row.duracion_meses ?? row.meses_renta ?? 1,
@@ -70,9 +69,7 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
   if (Array.isArray(detalle) && detalle.length > 0) {
     registrosVenta = detalle.map((line: any) => {
       const pids: string[] = line.pantallas_seleccionadas ?? [];
-      const fi = line.fecha_inicio
-        ? new Date(line.fecha_inicio)
-        : new Date();
+      const fi = line.fecha_inicio ? new Date(line.fecha_inicio) : new Date();
       const ff = line.fecha_fin ? new Date(line.fecha_fin) : fi;
       const imp = Number(line.importe) || 0;
       return {
@@ -99,9 +96,7 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
     });
   } else {
     const ventas = row.ventas ?? [];
-    registrosVenta = Array.isArray(ventas)
-      ? ventas.map(mapVentaFromApi)
-      : [];
+    registrosVenta = Array.isArray(ventas) ? ventas.map(mapVentaFromApi) : [];
   }
 
   const subtotal = Number(row.subtotal) ?? 0;

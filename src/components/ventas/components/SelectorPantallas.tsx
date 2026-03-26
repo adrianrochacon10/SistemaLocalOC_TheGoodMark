@@ -7,12 +7,14 @@ interface SelectorPantallasProps {
   pantallasSeleccionadas: string[];
   pantallas: Pantalla[];
   onToggle: (pantallaId: string) => void;
+  ocultarHint?: boolean;
 }
 
 export const SelectorPantallas: React.FC<SelectorPantallasProps> = ({
   pantallasDelCliente,
   pantallasSeleccionadas,
   pantallas,
+  ocultarHint,
   onToggle,
 }) => (
   <div className="form-group">
@@ -20,11 +22,12 @@ export const SelectorPantallas: React.FC<SelectorPantallasProps> = ({
       Pantallas seleccionadas:{" "}
       <span className="badge-cantidad">{pantallasSeleccionadas.length}</span>
     </label>
-
     <div className="pantallas-checkbox-group">
       {pantallasDelCliente.map((asignacion) => {
         const pantalla = pantallas.find((p) => p.id === asignacion.pantallaId);
-        const isSelected = pantallasSeleccionadas.includes(asignacion.pantallaId);
+        const isSelected = pantallasSeleccionadas.includes(
+          asignacion.pantallaId,
+        );
         return (
           <label
             key={asignacion.pantallaId}
@@ -39,15 +42,16 @@ export const SelectorPantallas: React.FC<SelectorPantallasProps> = ({
             <span className="checkbox-label">
               <span className="pantalla-nombre">{pantalla?.nombre}</span>
               {pantalla?.ubicacion && (
-                <span className="pantalla-mini-ubicacion">{pantalla.ubicacion}</span>
+                <span className="pantalla-mini-ubicacion">
+                  {pantalla.ubicacion}
+                </span>
               )}
             </span>
           </label>
         );
       })}
     </div>
-
-    {pantallasSeleccionadas.length === 0 && (
+    {pantallasSeleccionadas.length === 0 && !ocultarHint && (
       <div className="hint-text">⚠️ Selecciona al menos una pantalla</div>
     )}
   </div>

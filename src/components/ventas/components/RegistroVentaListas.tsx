@@ -5,6 +5,7 @@ import {
   AsignacionPantalla,
   Colaborador,
   Usuario,
+  Producto
 } from "../../../types";
 import { FiltrosVentas } from "./filtrosVentas";
 import { EstadisticasVentas } from "./EstadisticasVenta";
@@ -15,6 +16,7 @@ interface RegistroVentasListaProps {
   pantallas: Pantalla[];
   asignaciones: AsignacionPantalla[];
   colaboradores: Colaborador[];
+  productos: Producto[];
   usuarios: Usuario[];
   ventasRegistradas: RegistroVenta[];
   onEliminarVenta: (ventaId: string) => void;
@@ -58,6 +60,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   ventasRegistradas,
   onEliminarVenta,
   onNuevaVenta,
+  productos,
   onEditarVenta,
 }) => {
   const hoy = new Date();
@@ -198,6 +201,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
             onEditar={onEditarVenta}
             onEliminar={onEliminarVenta}
             onClick={() => setVentaDetalle(venta)}
+            productos={productos}
           />
         ))}
       </div>

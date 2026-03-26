@@ -50,8 +50,7 @@ export const ColaboradorForm: React.FC<Props> = ({
     porcentaje,
     tipoPagoId,
     esTipoPagoPorcentaje,
-  } =
-    formData;
+  } = formData;
   const {
     setNombre,
     setAlias,
@@ -113,6 +112,23 @@ export const ColaboradorForm: React.FC<Props> = ({
           <ColorPicker value={color} onChange={setColor} />
         </div>
 
+        <div className="form-group">
+          <label>Tipo de pago</label>
+          <select
+            value={tipoPagoId}
+            onChange={(e) => setTipoPagoId(e.target.value)}
+            className="form-select"
+            disabled={!canEditarTipoPago}
+          >
+            <option value="">Selecciona tipo de pago</option>
+            {tiposPago.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {esTipoPagoPorcentaje && (
           <div className="form-group" style={{ marginTop: "-8px" }}>
             <label>Porcentaje (%)</label>
@@ -130,23 +146,6 @@ export const ColaboradorForm: React.FC<Props> = ({
             />
           </div>
         )}
-
-        <div className="form-group">
-          <label>Tipo de pago</label>
-          <select
-            value={tipoPagoId}
-            onChange={(e) => setTipoPagoId(e.target.value)}
-            className="form-select"
-            disabled={!canEditarTipoPago}
-          >
-            <option value="">Selecciona tipo de pago</option>
-            {tiposPago.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
 
         {errorColaborador && (
           <div className="error-message">{errorColaborador}</div>
@@ -177,12 +176,6 @@ export const ColaboradorForm: React.FC<Props> = ({
             key: "nombre",
             label: "Nombre de Producto",
             placeholder: "Ej: Espectacular",
-          },
-          {
-            key: "precio",
-            label: "Precio",
-            placeholder: "Ej: 123.45",
-            tipo: "number",
           },
         ]}
         filas={productosForm.filas}

@@ -1,14 +1,10 @@
-import React, {
-  useState,
-  useMemo,
-  useEffect,
-  useCallback,
-} from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import ReactDOM from "react-dom";
 import {
   RegistroVenta,
   Colaborador,
   Pantalla,
+  Producto,
   ConfiguracionEmpresa,
 } from "../../../types";
 import { backendApi } from "../../../lib/backendApi";
@@ -19,12 +15,14 @@ import {
   totalesDesdeLineas,
   ventasIdsDesdeSeleccion,
   nombresPantallas,
+  nombresProductos, // ← AGREGAR
   type CrearOrdenPayload,
 } from "../../../utils/ordenCompraLineas";
 
 interface Props {
   clientes: Colaborador[];
   pantallas: Pantalla[];
+  productos: Producto[]; // ← AGREGAR
   ventasRegistradas: RegistroVenta[];
   config: ConfiguracionEmpresa;
   onConfirmar: (payload: CrearOrdenPayload) => void | Promise<void>;
@@ -51,6 +49,7 @@ const MESES = [
 export const ModalCrearOrden: React.FC<Props> = ({
   clientes,
   pantallas,
+  productos, // ← AGREGAR
   ventasRegistradas,
   config,
   onConfirmar,
@@ -69,7 +68,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
   const [ventasDelMes, setVentasDelMes] = useState<RegistroVenta[]>([]);
   const [cargandoVentas, setCargandoVentas] = useState(false);
   const [avisoVentas, setAvisoVentas] = useState("");
-  /** Ventas (contratos) incluidas en la orden */
   const [ventasSeleccionadas, setVentasSeleccionadas] = useState<Set<string>>(
     () => new Set(),
   );
@@ -80,7 +78,11 @@ export const ModalCrearOrden: React.FC<Props> = ({
   const colaboradorSeleccionado = clientes.find((c) => c.id === colaboradorId);
 
   const ventaIdsKey = useMemo(
-    () => ventasDelMes.map((v) => String(v.id)).sort().join("|"),
+    () =>
+      ventasDelMes
+        .map((v) => String(v.id))
+        .sort()
+        .join("|"),
     [ventasDelMes],
   );
 
@@ -188,8 +190,14 @@ export const ModalCrearOrden: React.FC<Props> = ({
   }, [ventasDelMes, ventasSeleccionadas]);
 
   const detalleLineas = useMemo(
-    () => construirDetalleLineas(ventasDelMes, seleccionArrays, pantallas),
-    [ventasDelMes, seleccionArrays, pantallas],
+    () =>
+      construirDetalleLineas(
+        ventasDelMes,
+        seleccionArrays,
+        pantallas,
+        productos,
+      ), // ← productos
+    [ventasDelMes, seleccionArrays, pantallas, productos],
   );
 
   const { subtotal, iva, total } = useMemo(
@@ -237,7 +245,10 @@ export const ModalCrearOrden: React.FC<Props> = ({
   };
 
   return ReactDOM.createPortal(
-    <div className="modal-overlay modal-crear-orden-overlay" onClick={onCancelar}>
+    <div
+      className="modal-overlay modal-crear-orden-overlay"
+      onClick={onCancelar}
+    >
       <div
         className="modal-container modal-crear-orden"
         onClick={(e) => e.stopPropagation()}
@@ -264,21 +275,22 @@ export const ModalCrearOrden: React.FC<Props> = ({
         </div>
 
         <div className="modal-body">
-          {mensajeError ? (
+          {mensajeError && (
             <div className="modal-error-banner" role="alert">
               {mensajeError}
             </div>
-          ) : null}
+          )}
+
           <div className="modal-section modal-crear-orden-section">
             <h3>Colaborador</h3>
-            {cargandoColabs ? (
+            {cargandoColabs && (
               <p className="modal-cargando-hint">Cargando colaboradores…</p>
-            ) : null}
-            {errorCargaColabs ? (
+            )}
+            {errorCargaColabs && (
               <div className="modal-error-banner" role="alert">
                 {errorCargaColabs}
               </div>
-            ) : null}
+            )}
             <select
               value={colaboradorId}
               onChange={(e) => setColaboradorId(e.target.value)}
@@ -292,14 +304,11 @@ export const ModalCrearOrden: React.FC<Props> = ({
                     ? "— No hay colaboradores —"
                     : "— Seleccionar colaborador —"}
               </option>
-              {clientes.map((c) => {
-                const label = (c.nombre ?? "").trim() || `Sin nombre (${c.id})`;
-                return (
-                  <option key={c.id} value={c.id}>
-                    {label}
-                  </option>
-                );
-              })}
+              {clientes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {(c.nombre ?? "").trim() || `Sin nombre (${c.id})`}
+                </option>
+              ))}
             </select>
 
             {colaboradorSeleccionado && (
@@ -357,7 +366,9 @@ export const ModalCrearOrden: React.FC<Props> = ({
                 <div className="modal-section-toolbar modal-ventas-toolbar">
                   <h3>
                     Ventas a incluir
-                    <span className="badge-count">{ventasSeleccionadas.size}</span>
+                    <span className="badge-count">
+                      {ventasSeleccionadas.size}
+                    </span>
                   </h3>
                   <div className="toolbar-chips">
                     <button
@@ -379,30 +390,33 @@ export const ModalCrearOrden: React.FC<Props> = ({
                   </div>
                 </div>
 
-                {cargandoVentas ? (
-                  <p className="modal-cargando-hint">Cargando ventas del mes…</p>
-                ) : null}
-                {avisoVentas ? (
+                {cargandoVentas && (
+                  <p className="modal-cargando-hint">
+                    Cargando ventas del mes…
+                  </p>
+                )}
+                {avisoVentas && (
                   <div className="modal-aviso-ventas" role="status">
                     {avisoVentas}
                   </div>
-                ) : null}
+                )}
 
-                {ventasDelMes.length === 0 && !cargandoVentas ? (
+                {ventasDelMes.length === 0 && !cargandoVentas && (
                   <div className="empty-msg">
                     <p>
                       No hay ventas que crucen {MESES[mes]} {año} para{" "}
                       {colaboradorSeleccionado?.nombre ?? "este colaborador"}.
                     </p>
                   </div>
-                ) : null}
+                )}
 
-                {ventasDelMes.length > 0 ? (
+                {ventasDelMes.length > 0 && (
                   <ul className="modal-ventas-seleccion-list">
                     {ventasDelMes.map((v) => {
                       const id = String(v.id);
                       const checked = ventasSeleccionadas.has(id);
                       const pids = [...new Set(v.pantallasIds ?? [])];
+                      const prids = [...new Set(v.productosIds ?? [])]; // ← productos
                       const importeLinea = detalleLineas
                         .filter((l) => String(l.venta_id) === id)
                         .reduce((s, l) => s + l.importe, 0);
@@ -418,26 +432,30 @@ export const ModalCrearOrden: React.FC<Props> = ({
                               <span className="modal-venta-titulo">
                                 {v.vendidoA || "—"}
                               </span>
+                              {/* ✅ Muestra pantallas o productos según lo que tenga */}
                               <span className="modal-venta-pantallas">
-                                Pantallas:{" "}
-                                {nombresPantallas(pids, pantallas) || "—"}
+                                {pids.length > 0
+                                  ? `Pantallas: ${nombresPantallas(pids, pantallas) || "—"}`
+                                  : prids.length > 0
+                                    ? `Productos: ${nombresProductos(prids, productos)}`
+                                    : "Sin pantallas ni productos"}
                               </span>
                             </span>
                             <span className="modal-venta-importe">
                               $
-                              {(checked
-                                ? importeLinea
-                                : 0
-                              ).toLocaleString("es-MX", {
-                                minimumFractionDigits: 2,
-                              })}
+                              {(checked ? importeLinea : 0).toLocaleString(
+                                "es-MX",
+                                {
+                                  minimumFractionDigits: 2,
+                                },
+                              )}
                             </span>
                           </label>
                         </li>
                       );
                     })}
                   </ul>
-                ) : null}
+                )}
 
                 <div className="modal-totales modal-totales-orden">
                   <div className="total-row">

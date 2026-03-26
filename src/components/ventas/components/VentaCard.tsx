@@ -1,12 +1,13 @@
 import { colorPorEstado } from "../../../utils/colores";
 import { formatearFecha } from "../../../utils/formateoFecha";
 import { formatearMoneda } from "../../../utils/formateoMoneda";
-import { Colaborador, Pantalla, RegistroVenta } from "../../../types";
+import { Colaborador, Pantalla, Producto, RegistroVenta } from "../../../types";
 
 interface VentaCardProps {
   venta: RegistroVenta;
   colaboradores: Colaborador[];
   pantallas: Pantalla[];
+  productos: Producto[]; // ← AGREGAR
   onEditar: (venta: RegistroVenta) => void;
   onEliminar: (id: string) => void;
   onClick?: () => void;
@@ -16,19 +17,36 @@ export const VentaCard: React.FC<VentaCardProps> = ({
   venta,
   colaboradores,
   pantallas,
+  productos, // ← AGREGAR
   onEditar,
   onEliminar,
   onClick,
 }) => {
   const colaborador = colaboradores.find((c) => c.id === venta.colaboradorId);
 
-  // ✅ Pantallas con recorte
+  // Pantallas
   const todasLasPantallas = venta.pantallasIds
     .map((id) => pantallas.find((p) => p.id === id)?.nombre)
     .filter(Boolean) as string[];
   const MAX_PANTALLAS = 2;
   const pantallasVisibles = todasLasPantallas.slice(0, MAX_PANTALLAS);
   const pantallasExtra = todasLasPantallas.length - MAX_PANTALLAS;
+
+  // Productos                    // ← AGREGAR BLOQUE
+  const todosLosProductos = (venta.productosIds ?? [])
+    .map((id) => (productos ?? []).find((p) => p.id === id)?.nombre)
+    .filter(Boolean) as string[];
+
+  console.log("venta.productosIds:", venta.productosIds);
+  console.log(
+    "productos disponibles:",
+    productos?.map((p) => p.id),
+  );
+  console.log("todosLosProductos:", todosLosProductos);
+  
+  const MAX_PRODUCTOS = 2;
+  const productosVisibles = todosLosProductos.slice(0, MAX_PRODUCTOS);
+  const productosExtra = todosLosProductos.length - MAX_PRODUCTOS;
 
   const colores = colorPorEstado(venta.estadoVenta);
   const colorColaborador = colaborador?.color || "#1461a1";
@@ -115,9 +133,9 @@ export const VentaCard: React.FC<VentaCardProps> = ({
         </button>
       </div>
 
-      {/* ✅ Badge colaborador + pantallas en 2 líneas */}
+      {/* Badge colaborador + pantallas + productos */}
       <div style={{ marginBottom: 4 }}>
-        {/* Línea 1: badge */}
+        {/* Línea 1: badge colaborador */}
         <span
           style={{
             display: "inline-block",
@@ -134,7 +152,7 @@ export const VentaCard: React.FC<VentaCardProps> = ({
           {colaborador?.nombre ?? "Sin colaborador"}
         </span>
 
-        {/* Línea 2: pantallas con ellipsis */}
+        {/* Línea 2: pantallas */}
         {todasLasPantallas.length > 0 && (
           <div
             title={todasLasPantallas.join(", ")}
@@ -148,11 +166,35 @@ export const VentaCard: React.FC<VentaCardProps> = ({
               maxWidth: "calc(100% - 10px)",
             }}
           >
-            {pantallasVisibles.join(", ")}
+            📺 {pantallasVisibles.join(", ")}
             {pantallasExtra > 0 && (
               <span style={{ color: "#94a3b8", fontWeight: 400 }}>
                 {" "}
                 +{pantallasExtra} más
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Línea 3: productos */}
+        {todosLosProductos.length > 0 && (
+          <div
+            title={todosLosProductos.join(", ")}
+            style={{
+              fontWeight: 600,
+              color: "#334155",
+              fontSize: "0.85em",
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              textOverflow: "ellipsis",
+              maxWidth: "calc(100% - 10px)",
+            }}
+          >
+            📦 {productosVisibles.join(", ")}
+            {productosExtra > 0 && (
+              <span style={{ color: "#94a3b8", fontWeight: 400 }}>
+                {" "}
+                +{productosExtra} más
               </span>
             )}
           </div>

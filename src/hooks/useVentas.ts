@@ -14,10 +14,13 @@ export function useVentas(profile: any, session: Session | null) {
   const mapVentaFromApi = (row: any): RegistroVenta => {
     const pantallasIds: string[] =
       row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []);
+    const productosIds: string[] = // ← AGREGAR
+      row.productos_ids ?? (row.producto_id ? [row.producto_id] : []); // ← AGREGAR
 
     return {
       id: row.id,
       pantallasIds,
+      productosIds, // ← AGREGAR
       itemsVenta: pantallasIds.map((pantallaId) => ({
         pantallaId,
         sinDescuento: false,
@@ -58,7 +61,6 @@ export function useVentas(profile: any, session: Session | null) {
       pagoConsiderar: row.pago_considerar ?? undefined,
     };
   };
-
   // ── Cargar desde backend ──────────────────────────────────────────────
   useEffect(() => {
     if (!profile || !session?.access_token) return;
@@ -90,8 +92,11 @@ export function useVentas(profile: any, session: Session | null) {
     console.log("pantallasIds:", venta.pantallasIds);
     console.log("longitud:", venta.pantallasIds.length);
 
-    if (venta.pantallasIds.length === 0) {
-      setErrorVenta("Selecciona al menos una pantalla");
+    if (
+      venta.pantallasIds.length === 0 &&
+      (venta.productosIds ?? []).length === 0
+    ) {
+      setErrorVenta("Selecciona al menos una pantalla o producto");
       return;
     }
 
@@ -99,12 +104,10 @@ export function useVentas(profile: any, session: Session | null) {
 
     const payload = {
       colaborador_id: venta.colaboradorId,
-      producto_id: venta.productoId ?? null,
+      producto_id: venta.productoId ?? venta.productosIds?.[0] ?? null, // ✅ usa el primero
       cantidad: venta.cantidad ?? 1,
       precio_unitario_manual:
-        venta.precioGeneral > 0 && !venta.productoId
-          ? venta.precioGeneral
-          : null,
+        venta.precioGeneral > 0 ? venta.precioGeneral : null,
       tipo_pago_id: venta.tipoPagoId ?? null,
       estado: estadoApi,
       fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
@@ -120,8 +123,9 @@ export function useVentas(profile: any, session: Session | null) {
       costos_total: (venta.costos ?? 0) * venta.mesesRenta,
       comision_mes: venta.comision ?? 0,
       comision_total: (venta.comision ?? 0) * venta.mesesRenta,
-      pantallas_ids: venta.pantallasIds, // ✅ array completo
-      pantalla_id: venta.pantallasIds[0] ?? null, // ✅ primera por compatibilidad
+      pantallas_ids: venta.pantallasIds,
+      pantalla_id: venta.pantallasIds[0] ?? null,
+      productos_ids: venta.productosIds ?? [],
     };
 
     console.log("=== PAYLOAD ENVIADO AL BACKEND ===");

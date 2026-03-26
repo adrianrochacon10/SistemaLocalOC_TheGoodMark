@@ -88,10 +88,11 @@ export const VentaDetalleModal: React.FC<Props> = ({
               </div>
             </div>
           </div>
-
-          {/* ── Pantallas ── */}
           <div className="vd-section">
-            <h4 className="vd-section-title">📺 Pantallas</h4>
+            <h4 className="vd-section-title">📺 Pantallas y Productos</h4>
+
+            {/* Pantallas */}
+            <span className="vd-sub-label">Pantallas</span>
             <div className="vd-pantallas-list">
               {pantallasVenta.length > 0 ? (
                 pantallasVenta.map((p) => (
@@ -103,8 +104,38 @@ export const VentaDetalleModal: React.FC<Props> = ({
                 <span className="vd-empty">Sin pantallas registradas</span>
               )}
             </div>
-          </div>
 
+            {/* Productos */}
+            <span
+              className="vd-sub-label"
+              style={{ marginTop: "10px", display: "block" }}
+            >
+              Productos
+            </span>
+            <div className="vd-pantallas-list">
+              {(() => {
+                const productosVenta = (venta.productosIds ?? [])
+                  .map(
+                    (id) =>
+                      colaborador &&
+                      (colaborador as any).productos?.find(
+                        (p: any) => p.id === id,
+                      ),
+                  )
+                  .filter(Boolean);
+
+                return productosVenta.length > 0 ? (
+                  productosVenta.map((p: any) => (
+                    <span key={p.id} className="vd-pantalla-chip">
+                      {p.nombre}
+                    </span>
+                  ))
+                ) : (
+                  <span className="vd-empty">Sin productos registrados</span>
+                );
+              })()}
+            </div>
+          </div>
           {/* ── Período ── */}
           <div className="vd-section">
             <h4 className="vd-section-title">📅 Período</h4>
@@ -135,7 +166,6 @@ export const VentaDetalleModal: React.FC<Props> = ({
               </div>
             </div>
           </div>
-
           {/* ── Financiero ── */}
           <div className="vd-section">
             <h4 className="vd-section-title">💰 Resumen financiero</h4>

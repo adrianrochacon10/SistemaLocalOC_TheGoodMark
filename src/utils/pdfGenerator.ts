@@ -4,6 +4,7 @@ import {
   OrdenDeCompra,
   ConfiguracionEmpresa,
   Pantalla,
+  Producto,
   RegistroVenta,
 } from "../types";
 
@@ -26,19 +27,24 @@ function round2(n: number): number {
   return Math.round(Number(n) * 100) / 100;
 }
 
-/** Monto de línea para PDF: total de la venta, no el precio mensual suelto. */
+/** ✅ Precio POR MES (no el total del contrato) */
 function precioLineaOrden(v: RegistroVenta): number {
-  const imp = round2(Number(v.importeTotal) || 0);
-  const pt = round2(Number(v.precioTotal) || 0);
-  if (imp > 0) return imp;
-  if (pt > 0) return pt;
   const pg = round2(Number(v.precioGeneral) || 0);
+  if (pg > 0) return pg;
+  const imp = round2(Number(v.importeTotal) || 0);
   const meses = Math.max(1, Number(v.mesesRenta) || 1);
-  return round2(pg * meses);
+  if (imp > 0) return round2(imp / meses);
+  const pt = round2(Number(v.precioTotal) || 0);
+  if (pt > 0) return round2(pt / meses);
+  return 0;
 }
 
 function pantallaMap(pantallas: Pantalla[]): Map<string, Pantalla> {
   return new Map(pantallas.map((p) => [p.id, p]));
+}
+
+function productoMap(productos: Producto[]): Map<string, Producto> {
+  return new Map(productos.map((p) => [p.id, p]));
 }
 
 function drawLine(
@@ -125,10 +131,7 @@ function drawBankBox(
   if (cta) lines.push(`Número de cuenta: ${cta}`);
   if (cl) lines.push(`CLABE: ${cl}`);
   if (lines.length === 0) {
-    lines.push(
-      "Datos bancarios pendientes.",
-      "Configúralos en la ficha de empresa (campos opcionales en BD) o complétalos manualmente.",
-    );
+    lines.push("Datos bancarios pendientes.");
   }
   const lineH = 4;
   const titleH = 7;
@@ -202,24 +205,23 @@ function drawResumenFinanciero(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(...COL_BLUE);
-  const totTxt = `TOTAL: ${fmtMoney(total)}`;
-  doc.text(totTxt, x + w - pad, ry + 2, { align: "right" });
+  doc.text(`TOTAL: ${fmtMoney(total)}`, x + w - pad, ry + 2, {
+    align: "right",
+  });
   doc.setFont("helvetica", "normal");
   doc.setTextColor(0, 0, 0);
   return h;
 }
 
-/**
- * PDF estilo «The Good Mark»: cabecera, cajas informativas, tabla de detalle,
- * datos bancarios, resumen e pie. Guardar como / descarga según navegador.
- */
 export async function exportarPDFOrden(
   orden: OrdenDeCompra,
   config: ConfiguracionEmpresa,
   _nombreUsuario: string,
   pantallas: Pantalla[] = [],
+  productos: Producto[] = [], // ✅ nuevo parámetro
 ): Promise<void> {
   const pMap = pantallaMap(pantallas);
+  const prMap = productoMap(productos); // ✅
   const registros = orden.registrosVenta ?? [];
   const fechaDoc = new Date().toLocaleDateString("es-MX");
   const mesFormatoRaw = new Date(
@@ -228,6 +230,7 @@ export async function exportarPDFOrden(
   ).toLocaleDateString("es-MX", { month: "long", year: "numeric" });
   const mesFormato =
     mesFormatoRaw.charAt(0).toUpperCase() + mesFormatoRaw.slice(1);
+
   const pantallasUnicas = new Set<string>();
   for (const v of registros) {
     for (const pid of v.pantallasIds ?? []) pantallasUnicas.add(String(pid));
@@ -236,6 +239,8 @@ export async function exportarPDFOrden(
   const numProductos = registros.length;
 
   const pctIva = Number(orden.ivaPercentaje) || 16;
+
+  // ✅ Subtotal basado en precio por mes
   const subtotalPdf = round2(
     registros.reduce((s, v) => s + precioLineaOrden(v), 0),
   );
@@ -272,9 +277,7 @@ export async function exportarPDFOrden(
   doc.setTextColor(...COL_GREY);
   doc.text(`Fecha: ${fechaDoc}`, pageW - margin, y, { align: "right" });
   y += 6;
-  if (emailEmp) {
-    doc.text(emailEmp, margin, y);
-  }
+  if (emailEmp) doc.text(emailEmp, margin, y);
   doc.text("Vigencia: 30 dias", pageW - margin, y, { align: "right" });
   y += 5;
   drawLine(doc, y, margin, pageW);
@@ -284,10 +287,7 @@ export async function exportarPDFOrden(
   const boxW = (pageW - 2 * margin - gap) / 2;
 
   const h1 = drawInfoBox(doc, margin, y, boxW, "INFORMACION DEL SERVICIO", [
-    {
-      label: "Inicio",
-      value: inicioMin.toLocaleDateString("es-MX"),
-    },
+    { label: "Inicio", value: inicioMin.toLocaleDateString("es-MX") },
     { label: "Periodo", value: mesFormato },
     { label: "Total de productos", value: String(numProductos) },
   ]);
@@ -312,24 +312,43 @@ export async function exportarPDFOrden(
 
   type DescMeta = { title: string; details: string[] };
   const descByRow = new Map<number, DescMeta>();
-
   const tableBody: string[][] = [];
   let idx = 0;
+
   for (const venta of registros) {
-    idx += 1;
-    const ids = venta.pantallasIds ?? [];
-    const firstId = ids[0];
-    const p0 = firstId ? pMap.get(firstId) : undefined;
-    const titulo = (p0?.nombre ?? ids[0] ?? "SERVICIO").toUpperCase();
-    const mesesV = Number(venta.mesesRenta) || 1;
+    const pids = venta.pantallasIds ?? [];
+    const prids = venta.productosIds ?? [];
+
+    // ✅ Título: nombre de pantallas o productos
+    let titulo = "SERVICIO";
+    let detalleItems: string[] = [];
+
+    if (pids.length > 0) {
+      const nombres = pids.map((id) => pMap.get(id)?.nombre ?? id).join(", ");
+      titulo = nombres.toUpperCase();
+      detalleItems = [`Pantallas: ${pids.length}`];
+    } else if (prids.length > 0) {
+      const nombres = prids.map((id) => prMap.get(id)?.nombre ?? id).join(", ");
+      titulo = nombres.toUpperCase();
+      detalleItems = [`Productos: ${prids.length}`];
+    }
+
     const fi = new Date(venta.fechaInicio).toLocaleDateString("es-MX");
     const ff = new Date(venta.fechaFin).toLocaleDateString("es-MX");
+    detalleItems.push(`Periodo: ${fi} - ${ff}`);
+    detalleItems.push(`Vendido a: ${venta.vendidoA || "—"}`);
+
+    // ✅ Precio por mes
     const precio = precioLineaOrden(venta);
-    descByRow.set(idx - 1, {
+
+    descByRow.set(idx, {
       title: titulo,
-      details: [`Periodo: ${fi} - ${ff}`, `Pantallas: ${ids.length}`],
+      details: detalleItems,
     });
-    tableBody.push([String(idx), " ", `${mesesV} Mes`, fmtMoney(precio)]);
+
+    // ✅ Paquete: "1 Mes" siempre
+    tableBody.push([String(idx + 1), " ", "1 Mes", fmtMoney(precio)]);
+    idx++;
   }
 
   if (tableBody.length === 0) {
@@ -483,19 +502,13 @@ export async function exportarPDFOrden(
       const w = window as Window & {
         showSaveFilePicker: (opts: {
           suggestedName?: string;
-          types?: {
-            description: string;
-            accept: Record<string, string[]>;
-          }[];
+          types?: { description: string; accept: Record<string, string[]> }[];
         }) => Promise<FileSystemFileHandle>;
       };
       const handle = await w.showSaveFilePicker({
         suggestedName: defaultName,
         types: [
-          {
-            description: "PDF",
-            accept: { "application/pdf": [".pdf"] },
-          },
+          { description: "PDF", accept: { "application/pdf": [".pdf"] } },
         ],
       });
       const writable = await handle.createWritable();
