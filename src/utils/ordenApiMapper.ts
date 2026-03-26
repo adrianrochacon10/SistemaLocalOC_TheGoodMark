@@ -47,8 +47,8 @@ export function mapVentaFromApi(row: any): RegistroVenta {
     fechaRegistro: row.created_at
       ? new Date(row.created_at)
       : new Date(),
-    fechaInicio: new Date(row.fecha_inicio),
-    fechaFin: new Date(row.fecha_fin),
+    fechaInicio: parseFechaLocalOnly(row.fecha_inicio),
+    fechaFin: parseFechaLocalOnly(row.fecha_fin),
     mesesRenta: row.duracion_meses ?? row.meses_renta ?? 1,
     importeTotal: row.importe_total ?? row.precio_total ?? 0,
     activo: row.activo ?? true,
@@ -66,6 +66,25 @@ function mesFrontend(mesDb: unknown): number {
   const m = Number(mesDb);
   if (m >= 1 && m <= 12) return m - 1;
   return 0;
+}
+
+/**
+ * Convierte strings tipo 'YYYY-MM-DD' a Date local SIN offset de timezone.
+ * (new Date('YYYY-MM-DD') se trata como UTC y puede mostrar el día anterior/siguiente)
+ */
+function parseFechaLocalOnly(input: unknown): Date {
+  if (input instanceof Date) return input;
+  if (typeof input !== "string") return new Date();
+  const s = input.trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    const yyyy = Number(m[1]);
+    const mm = Number(m[2]);
+    const dd = Number(m[3]);
+    return new Date(yyyy, mm - 1, dd);
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
 /**
@@ -93,9 +112,9 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
     registrosVenta = detalle.map((line: any) => {
       const pids: string[] = line.pantallas_seleccionadas ?? [];
       const fi = line.fecha_inicio
-        ? new Date(line.fecha_inicio)
+        ? parseFechaLocalOnly(line.fecha_inicio)
         : new Date();
-      const ff = line.fecha_fin ? new Date(line.fecha_fin) : fi;
+      const ff = line.fecha_fin ? parseFechaLocalOnly(line.fecha_fin) : fi;
       const imp = Number(line.importe) || 0;
       return {
         id: String(line.venta_id ?? ""),
