@@ -39,7 +39,7 @@ export async function crear(nombre, email, password, rol) {
   };
 }
 
-export async function actualizar(id, nombre, email, rol) {
+export async function actualizar(id, nombre, email, rol, password) {
   if (!id) return { error: "Id es obligatorio" };
   if (!nombre?.trim()) return { error: "Nombre es obligatorio" };
   if (!email?.trim()) return { error: "Email es obligatorio" };
@@ -54,10 +54,17 @@ export async function actualizar(id, nombre, email, rol) {
   if (errorExistente) return { error: errorExistente.message };
   if (existente) return { error: "Ya existe un usuario con ese email" };
 
-  const { error: authError } = await supabase.auth.admin.updateUserById(id, {
+  const authPayload = {
     email: email.trim(),
     user_metadata: { nombre: nombre.trim(), rol: rolFinal },
-  });
+  };
+  if (password != null && String(password).trim() !== "") {
+    authPayload.password = String(password);
+  }
+  const { error: authError } = await supabase.auth.admin.updateUserById(
+    id,
+    authPayload,
+  );
   if (authError) return { error: authError.message };
 
   const { error: perfilError } = await supabase

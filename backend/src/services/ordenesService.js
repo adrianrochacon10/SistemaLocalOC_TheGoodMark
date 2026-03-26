@@ -18,7 +18,7 @@ async function generadoPorSeguro(userId) {
 
 const SELECT_ORDENES = "*, colaborador:colaboradores(id,nombre)";
 const SELECT_VENTAS =
-  "*, colaborador:colaboradores(id,nombre,pantalla:pantallas(id,nombre),producto:productos(id,nombre,precio))";
+  "*, colaborador:colaboradores(id,nombre,pantalla:pantallas(id,nombre),producto:productos(*))";
 
 /** Primer y último día del mes calendario (mes 1–12). */
 function boundsMesCalendario(anio, mes) {
@@ -400,4 +400,40 @@ export async function crearManual({
   }
 
   return { orden: { ...ordenFull, ventas } };
+}
+
+export async function eliminar(id) {
+  if (!id) return { error: "id es obligatorio" };
+
+  const { data: orden, error: errOrd } = await supabase
+    .from("orden_de_compra")
+    .select("id,ventas_ids")
+    .eq("id", id)
+    .single();
+  if (errOrd || !orden) throw new Error("Orden no encontrada");
+
+  let ids = orden.ventas_ids;
+  if (typeof ids === "string") {
+    try {
+      ids = JSON.parse(ids);
+    } catch {
+      ids = [];
+    }
+  }
+  ids = Array.isArray(ids) ? ids.filter(Boolean) : [];
+  if (ids.length > 0) {
+    const { error: unlinkErr } = await supabase
+      .from("ventas")
+      .update({ orden_de_compra_id: null })
+      .in("id", ids);
+    if (unlinkErr) throw new Error(unlinkErr.message);
+  }
+
+  const { error: delErr } = await supabase
+    .from("orden_de_compra")
+    .delete()
+    .eq("id", id);
+  if (delErr) throw new Error(delErr.message);
+
+  return { ok: true };
 }

@@ -22,6 +22,7 @@ export interface RegistroVentaPayload {
   comision_mes?: number;
   costos_total?: number;
   comision_total?: number;
+  notas?: string | null;
 }
 
 export async function registrarVenta(payload: RegistroVentaPayload) {

@@ -10,10 +10,10 @@ export async function listar(_req, res) {
 }
 
 export async function crear(req, res) {
-  const { nombre, precio } = req.body || {};
-  const result = await productosService.crear(nombre, precio);
-  if (result.error) return res.status(400).json({ error: result.error });
   try {
+    const { nombre, precio } = req.body || {};
+    const result = await productosService.crear(nombre, precio);
+    if (result.error) return res.status(400).json({ error: result.error });
     res.status(201).json(result.data);
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });

@@ -18,6 +18,7 @@ interface Props {
   usuarioActual: Usuario;
   expandidoId: string | null;
   onToggle: (id: string) => void;
+  onEliminarOrden: (ordenId: string) => Promise<void>;
 }
 
 export const OrdenesGrid: React.FC<Props> = ({
@@ -29,6 +30,7 @@ export const OrdenesGrid: React.FC<Props> = ({
   usuarioActual,
   expandidoId,
   onToggle,
+  onEliminarOrden,
 }) => {
   if (ordenes.length === 0)
     return (
@@ -53,6 +55,7 @@ export const OrdenesGrid: React.FC<Props> = ({
           usuarioActual={usuarioActual}
           expandido={expandidoId === orden.id}
           onToggle={() => onToggle(orden.id)}
+          onEliminarOrden={onEliminarOrden}
         />
       ))}
     </div>

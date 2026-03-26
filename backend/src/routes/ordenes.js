@@ -10,5 +10,6 @@ router.get("/ventas", ordenesController.listarVentas);
 router.post("/generar", ordenesController.generar);
 router.post("/generar-colaborador", ordenesController.generarColaborador);
 router.post("/crear-manual", ordenesController.crearManual);
+router.delete("/:id", ordenesController.eliminar);
 
 export default router;

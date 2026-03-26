@@ -285,6 +285,7 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
         nombre: nombre.trim(),
         email: email.trim(),
         rol: rolEdicion,
+        ...(password.trim() ? { password: password.trim() } : {}),
       })) as UsuarioRow;
 
       setUsuarios((prev) => prev.map((u) => (u.id === editandoId ? actualizado : u)));
@@ -340,14 +341,16 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
             onChange={setEmail}
             placeholder="correo@empresa.com"
           />
-          {!editandoId && (
-            <InputField
-              label="Contraseña"
-              value={password}
-              onChange={setPassword}
-              placeholder="Contraseña inicial"
-            />
-          )}
+          <InputField
+            label={editandoId ? "Nueva contraseña (opcional)" : "Contraseña"}
+            value={password}
+            onChange={setPassword}
+            placeholder={
+              editandoId
+                ? "Déjala vacía para conservar la actual"
+                : "Contraseña inicial"
+            }
+          />
           <InputField label="Rol" value="Vendedor" readOnly />
 
           {error && <div className="error-message">{error}</div>}

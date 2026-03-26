@@ -20,6 +20,7 @@ interface Props {
   onEliminar: (id: string) => void;
   canEliminar: boolean;
   canCrear: boolean;
+  mostrarBotonHeader?: boolean;
 }
 
 export const ColaboradorList: React.FC<Props> = ({
@@ -33,6 +34,7 @@ export const ColaboradorList: React.FC<Props> = ({
   onEliminar,
   canEliminar,
   canCrear,
+  mostrarBotonHeader = true,
 }) => {
   const visibles = clientes;
   const getArrayIds = (value: unknown): string[] => {
@@ -118,7 +120,7 @@ export const ColaboradorList: React.FC<Props> = ({
 
   return (
     <>
-      {canCrear && (
+      {canCrear && mostrarBotonHeader && (
         <div className="header-colaboradores">
           <button className="btn btn-flotante-mini" onClick={onAbrirModal}>
             <span style={{ fontSize: "1.1em", marginRight: 6 }}>＋</span>

@@ -10,10 +10,10 @@ export async function listar(_req, res) {
 }
 
 export async function crear(req, res) {
-  const { nombre, email, password, rol } = req.body || {};
-  const result = await vendedoresService.crear(nombre, email, password, rol);
-  if (result.error) return res.status(400).json({ error: result.error });
   try {
+    const { nombre, email, password, rol } = req.body || {};
+    const result = await vendedoresService.crear(nombre, email, password, rol);
+    if (result.error) return res.status(400).json({ error: result.error });
     res.status(201).json(result.data);
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error al agregar vendedor" });
@@ -21,11 +21,17 @@ export async function crear(req, res) {
 }
 
 export async function actualizar(req, res) {
-  const { id } = req.params;
-  const { nombre, email, rol } = req.body || {};
-  const result = await vendedoresService.actualizar(id, nombre, email, rol);
-  if (result.error) return res.status(400).json({ error: result.error });
   try {
+    const { id } = req.params;
+    const { nombre, email, rol, password } = req.body || {};
+    const result = await vendedoresService.actualizar(
+      id,
+      nombre,
+      email,
+      rol,
+      password,
+    );
+    if (result.error) return res.status(400).json({ error: result.error });
     res.json(result.data);
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error al actualizar vendedor" });

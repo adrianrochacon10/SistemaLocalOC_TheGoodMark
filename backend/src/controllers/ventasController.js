@@ -27,7 +27,7 @@ export async function actualizar(req, res) {
   const body = req.body || {};
   if (req.user.rol === "vendedor") {
     const codigo = body.codigo_edicion;
-    const resultado = await validarYConsumirCodigo(codigo, req.user.id, "orden", id);
+    const resultado = await validarYConsumirCodigo(codigo, req.user.id, "venta", id);
     if (!resultado.ok) return res.status(400).json({ error: resultado.error });
   }
   try {
@@ -49,6 +49,22 @@ export async function renovar(req, res) {
     res.status(201).json(result.data);
   } catch (e) {
     if (e.message === "Venta no encontrada") return res.status(404).json({ error: e.message });
+    res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
+  }
+}
+
+export async function eliminar(req, res) {
+  if (req.user.rol !== "admin") {
+    return res.status(403).json({ error: "Solo admin puede eliminar ventas" });
+  }
+  const { id } = req.params;
+  try {
+    await ventasService.eliminar(id);
+    res.status(204).send();
+  } catch (e) {
+    if (e.message === "Venta no encontrada") {
+      return res.status(404).json({ error: e.message });
+    }
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
   }
 }

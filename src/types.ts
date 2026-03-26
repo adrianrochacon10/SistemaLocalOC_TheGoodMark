@@ -77,6 +77,11 @@ export interface RegistroVenta {
   itemsVenta: ItemVenta[];
   colaboradorId: string;
   productoId?: string | null;
+  productoNombre?: string;
+  productoPrecioMensual?: number;
+  productoIncluidoEnOrden?: boolean;
+  precioBaseMensualOrden?: number;
+  codigoEdicion?: string;
   vendidoA: string;
   precioGeneral: number;
   cantidad: number;
@@ -94,6 +99,7 @@ export interface RegistroVenta {
   costos?: number;
   comision?: number;
   pagoConsiderar?: number;
+  notas?: string;
 }
 
 // ✅ Concepto para OrdenCompleja

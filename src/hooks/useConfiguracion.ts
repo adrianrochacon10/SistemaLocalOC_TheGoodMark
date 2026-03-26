@@ -128,9 +128,28 @@ export function useConfiguracion(profile: any, session: Session | null) {
       iva: payload.iva,
       total: payload.total,
       iva_porcentaje: payload.ivaPercentaje,
-    })) as { orden?: unknown };
+    })) as { orden?: any };
     if (!res?.orden) throw new Error("Respuesta inválida del servidor");
-    await refetchOrdenes();
+    const nuevaOrden = mapOrdenFromApi(res.orden);
+    setOrdenes((prev) => {
+      const sinDuplicado = prev.filter((o) => o.id !== nuevaOrden.id);
+      return [nuevaOrden, ...sinDuplicado];
+    });
+    try {
+      await refetchOrdenes();
+    } catch (e) {
+      console.warn("No se pudieron refrescar todas las órdenes tras guardar:", e);
+    }
+  };
+
+  const handleEliminarOrden = async (ordenId: string) => {
+    await backendApi.del(`/api/ordenes/${ordenId}`);
+    setOrdenes((prev) => prev.filter((o) => o.id !== ordenId));
+    try {
+      await refetchOrdenes();
+    } catch (e) {
+      console.warn("No se pudieron refrescar órdenes tras eliminar:", e);
+    }
   };
 
   return {
@@ -140,6 +159,7 @@ export function useConfiguracion(profile: any, session: Session | null) {
       handleGuardarConfiguracion,
       handleGenerarOrden,
       handleCrearOrdenManual,
+      handleEliminarOrden,
     },
   };
 }

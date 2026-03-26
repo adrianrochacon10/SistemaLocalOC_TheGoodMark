@@ -65,6 +65,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   const [busquedaVenta, setBusquedaVenta] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<string>("Todos");
   const [filtroCliente, setFiltroCliente] = useState<string>("Todos");
+  const [filtroVendedor, setFiltroVendedor] = useState<string>("Todos");
   const [filtroMes, setFiltroMes] = useState<number>(-1);
   const [filtroAnio, setFiltroAnio] = useState<number>(-1);
   const [paginaActual, setPaginaActual] = useState(1);
@@ -105,6 +106,10 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
       const coincideCliente =
         filtroCliente === "Todos" || venta.colaboradorId === filtroCliente;
 
+      const coincideVendedor =
+        filtroVendedor === "Todos" ||
+        String(venta.vendedorId ?? "") === String(filtroVendedor);
+
       // ✅ Filtro por mes/año usando mesesRenta (excluye el mes de fechaFin)
       let coincideMesAnio = true;
       if (filtroMes >= 0 || filtroAnio >= 0) {
@@ -120,7 +125,11 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
       }
 
       return (
-        coincideBusqueda && coincideEstado && coincideCliente && coincideMesAnio
+        coincideBusqueda &&
+        coincideEstado &&
+        coincideCliente &&
+        coincideVendedor &&
+        coincideMesAnio
       );
     });
   }, [
@@ -130,6 +139,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
     filtroCliente,
     filtroMes,
     filtroAnio,
+    filtroVendedor,
     colaboradores,
   ]);
 
@@ -147,10 +157,12 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
         busquedaVenta={busquedaVenta}
         filtroEstado={filtroEstado}
         filtroCliente={filtroCliente}
+        filtroVendedor={filtroVendedor}
         filtroMes={filtroMes}
         filtroAnio={filtroAnio}
         aniosDisponibles={aniosDisponibles}
         colaboradores={colaboradores}
+        usuarios={usuarios}
         asignaciones={asignaciones}
         onBusqueda={(v) => {
           setBusquedaVenta(v);
@@ -162,6 +174,10 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
         }}
         onFiltroCliente={(v) => {
           setFiltroCliente(v);
+          resetPagina();
+        }}
+        onFiltroVendedor={(v) => {
+          setFiltroVendedor(v);
           resetPagina();
         }}
         onFiltroMes={(v) => {

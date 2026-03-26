@@ -48,6 +48,12 @@ const MESES = [
   "Diciembre",
 ];
 
+const fmtMoney = (n: number) =>
+  Number(n || 0).toLocaleString("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 export const ModalCrearOrden: React.FC<Props> = ({
   clientes,
   pantallas,
@@ -73,6 +79,9 @@ export const ModalCrearOrden: React.FC<Props> = ({
   const [ventasSeleccionadas, setVentasSeleccionadas] = useState<Set<string>>(
     () => new Set(),
   );
+  const [ventasConProductoIncluido, setVentasConProductoIncluido] = useState<
+    Set<string>
+  >(() => new Set());
   const [guardando, setGuardando] = useState(false);
 
   const pasoActual = colaboradorId ? 2 : 1;
@@ -163,8 +172,28 @@ export const ModalCrearOrden: React.FC<Props> = ({
     setVentasSeleccionadas(new Set(ventasDelMes.map((v) => String(v.id))));
   }, [colaboradorId, mes, año, ventaIdsKey]);
 
+  useEffect(() => {
+    const conProducto = new Set<string>();
+    for (const v of ventasDelMes) {
+      const id = String(v.id);
+      const tieneProducto =
+        Boolean(v.productoId) || Boolean((v.productoNombre ?? "").trim());
+      if (tieneProducto) conProducto.add(id);
+    }
+    setVentasConProductoIncluido(conProducto);
+  }, [colaboradorId, mes, año, ventaIdsKey]);
+
   const toggleVenta = useCallback((ventaId: string) => {
     setVentasSeleccionadas((prev) => {
+      const next = new Set(prev);
+      if (next.has(ventaId)) next.delete(ventaId);
+      else next.add(ventaId);
+      return next;
+    });
+  }, []);
+
+  const toggleProductoEnOrden = useCallback((ventaId: string) => {
+    setVentasConProductoIncluido((prev) => {
       const next = new Set(prev);
       if (next.has(ventaId)) next.delete(ventaId);
       else next.add(ventaId);
@@ -187,9 +216,22 @@ export const ModalCrearOrden: React.FC<Props> = ({
     return m;
   }, [ventasDelMes, ventasSeleccionadas]);
 
+  const ventasAjustadasParaOrden = useMemo(() => {
+    return ventasDelMes.map((v) => {
+      const id = String(v.id);
+      const incluirProducto = ventasConProductoIncluido.has(id);
+      const precioGeneralActual = Math.max(0, Number(v.precioGeneral ?? 0));
+      return {
+        ...v,
+        productoIncluidoEnOrden: incluirProducto,
+        precioBaseMensualOrden: precioGeneralActual,
+      };
+    });
+  }, [ventasDelMes, ventasConProductoIncluido]);
+
   const detalleLineas = useMemo(
-    () => construirDetalleLineas(ventasDelMes, seleccionArrays, pantallas),
-    [ventasDelMes, seleccionArrays, pantallas],
+    () => construirDetalleLineas(ventasAjustadasParaOrden, seleccionArrays, pantallas),
+    [ventasAjustadasParaOrden, seleccionArrays, pantallas],
   );
 
   const { subtotal, iva, total } = useMemo(
@@ -406,6 +448,16 @@ export const ModalCrearOrden: React.FC<Props> = ({
                       const importeLinea = detalleLineas
                         .filter((l) => String(l.venta_id) === id)
                         .reduce((s, l) => s + l.importe, 0);
+                      const productoTxt =
+                        (v.productoNombre ?? "").trim() || "Sin producto";
+                      const precioMensual = Number(v.precioGeneral ?? 0) || 0;
+                      const precioProducto =
+                        Number(v.productoPrecioMensual ?? 0) || 0;
+                      const tieneProducto =
+                        Boolean(v.productoId) ||
+                        Boolean((v.productoNombre ?? "").trim());
+                      const incluirProducto =
+                        ventasConProductoIncluido.has(id);
                       return (
                         <li key={id}>
                           <label className="modal-venta-fila">
@@ -419,16 +471,33 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                 {v.vendidoA || "—"}
                               </span>
                               <span className="modal-venta-pantallas">
+                                Producto: {productoTxt}
+                              </span>
+                              <span className="modal-venta-pantallas">
+                                Precio producto: ${fmtMoney(precioProducto)}
+                              </span>
+                              <span className="modal-venta-pantallas">
+                                Precio mensual venta: ${fmtMoney(precioMensual)}
+                              </span>
+                              {tieneProducto ? (
+                                <span className="modal-venta-pantallas">
+                                  <input
+                                    type="checkbox"
+                                    checked={incluirProducto}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={() => toggleProductoEnOrden(id)}
+                                  />{" "}
+                                  Sumar producto en esta orden
+                                </span>
+                              ) : null}
+                              <span className="modal-venta-pantallas">
                                 Pantallas:{" "}
                                 {nombresPantallas(pids, pantallas) || "—"}
                               </span>
                             </span>
                             <span className="modal-venta-importe">
                               $
-                              {(checked
-                                ? importeLinea
-                                : 0
-                              ).toLocaleString("es-MX", {
+                              {(checked ? importeLinea : 0).toLocaleString("es-MX", {
                                 minimumFractionDigits: 2,
                               })}
                             </span>

@@ -12,6 +12,15 @@ export function useVentas(profile: any, session: Session | null) {
   const [errorVenta, setErrorVenta] = useState<string | null>(null);
 
   const mapVentaFromApi = (row: any): RegistroVenta => {
+    const leerPrecioProducto = (producto: any): number => {
+      const n = Number(
+        producto?.precio ??
+          producto?.precio_unitario ??
+          producto?.precio_por_mes ??
+          0,
+      );
+      return Number.isFinite(n) ? n : 0;
+    };
     const pantallasIds: string[] =
       row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []);
 
@@ -24,6 +33,13 @@ export function useVentas(profile: any, session: Session | null) {
       })),
       colaboradorId: row.colaborador_id ?? row.cliente_id,
       productoId: row.producto_id ?? undefined,
+      productoNombre:
+        row.producto?.nombre ??
+        row.colaborador?.producto?.nombre ??
+        undefined,
+      productoPrecioMensual: leerPrecioProducto(
+        row.producto ?? row.colaborador?.producto,
+      ),
       vendidoA:
         row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
       precioGeneral: Number(row.precio_por_mes ?? row.precio_general ?? 0) || 0,
@@ -56,7 +72,13 @@ export function useVentas(profile: any, session: Session | null) {
       costos: row.costos ?? 0,
       comision: row.comisiones ?? row.comision ?? 0,
       pagoConsiderar: row.pago_considerar ?? undefined,
+      notas: row.notas ?? undefined,
     };
+  };
+
+  const refetchVentas = async () => {
+    const data = (await backendApi.get("/api/ventas")) as any[];
+    setVentasRegistradas(Array.isArray(data) ? data.map(mapVentaFromApi) : []);
   };
 
   // ── Cargar desde backend ──────────────────────────────────────────────
@@ -64,8 +86,7 @@ export function useVentas(profile: any, session: Session | null) {
     if (!profile || !session?.access_token) return;
     const cargar = async () => {
       try {
-        const data = (await backendApi.get("/api/ventas")) as any[];
-        setVentasRegistradas(data.map(mapVentaFromApi));
+        await refetchVentas();
       } catch (e) {
         console.error("Error cargando ventas:", e);
       }
@@ -101,10 +122,9 @@ export function useVentas(profile: any, session: Session | null) {
       colaborador_id: venta.colaboradorId,
       producto_id: venta.productoId ?? null,
       cantidad: venta.cantidad ?? 1,
+      precio_por_mes: venta.precioGeneral ?? 0,
       precio_unitario_manual:
-        venta.precioGeneral > 0 && !venta.productoId
-          ? venta.precioGeneral
-          : null,
+        venta.precioGeneral ?? 0,
       tipo_pago_id: venta.tipoPagoId ?? null,
       estado: estadoApi,
       fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
@@ -121,7 +141,7 @@ export function useVentas(profile: any, session: Session | null) {
       comision_mes: venta.comision ?? 0,
       comision_total: (venta.comision ?? 0) * venta.mesesRenta,
       pantallas_ids: venta.pantallasIds, // ✅ array completo
-      pantalla_id: venta.pantallasIds[0] ?? null, // ✅ primera por compatibilidad
+      notas: venta.notas ?? null,
     };
 
     console.log("=== PAYLOAD ENVIADO AL BACKEND ===");
@@ -153,9 +173,52 @@ export function useVentas(profile: any, session: Session | null) {
     }
   };
 
+  const handleActualizarVentaConSupabase = async (venta: RegistroVenta) => {
+    setErrorVenta(null);
+    const estadoApi = venta.estadoVenta?.toLowerCase() ?? "prospecto";
+    const payload: any = {
+      colaborador_id: venta.colaboradorId,
+      producto_id: venta.productoId ?? null,
+      precio_por_mes: venta.precioGeneral ?? 0,
+      precio_unitario_manual: venta.precioGeneral ?? 0,
+      estado: estadoApi,
+      fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
+      fecha_fin: venta.fechaFin.toISOString().slice(0, 10),
+      duracion_meses: venta.mesesRenta,
+      vendido_a: venta.vendidoA,
+      importe_total: venta.importeTotal ?? venta.precioTotal,
+      pago_considerar: venta.pagoConsiderar ?? 0,
+      costos: venta.costos ?? 0,
+      comision: venta.comision ?? 0,
+      pantallas_ids: venta.pantallasIds,
+      notas: venta.notas ?? null,
+    };
+    if (venta.codigoEdicion) payload.codigo_edicion = venta.codigoEdicion;
+
+    try {
+      const data = await backendApi.patch(`/api/ventas/${venta.id}`, payload);
+      setVentasRegistradas((prev) =>
+        prev.map((v) => (String(v.id) === String(venta.id) ? mapVentaFromApi(data) : v)),
+      );
+      await refetchVentas();
+    } catch (e) {
+      setErrorVenta(
+        e instanceof Error ? `Error: ${e.message}` : "No se pudo actualizar la venta",
+      );
+      throw e;
+    }
+  };
+
   // ── Eliminar venta ────────────────────────────────────────────────────
-  const handleEliminarVenta = (ventaId: string) => {
-    setVentasRegistradas((prev) => prev.filter((v) => v.id !== ventaId));
+  const handleEliminarVenta = async (ventaId: string) => {
+    try {
+      await backendApi.del(`/api/ventas/${ventaId}`);
+      setVentasRegistradas((prev) => prev.filter((v) => v.id !== ventaId));
+    } catch (e) {
+      setErrorVenta(
+        e instanceof Error ? `Error: ${e.message}` : "No se pudo eliminar la venta",
+      );
+    }
   };
 
   return {
@@ -163,7 +226,9 @@ export function useVentas(profile: any, session: Session | null) {
     errorVenta,
     acciones: {
       handleRegistrarVentaConSupabase,
+      handleActualizarVentaConSupabase,
       handleEliminarVenta,
+      refetchVentas,
     },
   };
 }

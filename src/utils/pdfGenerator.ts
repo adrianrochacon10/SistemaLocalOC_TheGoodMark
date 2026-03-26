@@ -28,12 +28,25 @@ function round2(n: number): number {
 
 /** Monto de línea para PDF: total de la venta, no el precio mensual suelto. */
 function precioLineaOrden(v: RegistroVenta): number {
+  const meses = Math.max(1, Number(v.mesesRenta) || 1);
+  const baseMensual = Number(v.precioBaseMensualOrden);
+  const productoMensual = round2(Number(v.productoPrecioMensual) || 0);
+  const incluirProducto = v.productoIncluidoEnOrden !== false;
+
+  // Si la orden trae desglose base/producto, usarlo para reflejar exactamente
+  // la decisión de "sumar producto en esta orden".
+  if (Number.isFinite(baseMensual) && baseMensual >= 0) {
+    const mensual = round2(
+      baseMensual + (incluirProducto ? productoMensual : 0),
+    );
+    return round2(mensual * meses);
+  }
+
   const imp = round2(Number(v.importeTotal) || 0);
   const pt = round2(Number(v.precioTotal) || 0);
   if (imp > 0) return imp;
   if (pt > 0) return pt;
   const pg = round2(Number(v.precioGeneral) || 0);
-  const meses = Math.max(1, Number(v.mesesRenta) || 1);
   return round2(pg * meses);
 }
 
@@ -114,20 +127,22 @@ function drawBankBox(
 ) {
   const pad = 3;
   const lines: string[] = [];
-  const t = (config.bancoTitular ?? "").trim();
-  const b = (config.bancoNombre ?? "").trim();
-  const tar = (config.bancoTarjeta ?? "").trim();
-  const cta = (config.bancoCuenta ?? "").trim();
-  const cl = (config.bancoClabe ?? "").trim();
-  if (t) lines.push(t);
-  if (b) lines.push(`Banco: ${b}`);
-  if (tar) lines.push(`Número de tarjeta: ${tar}`);
-  if (cta) lines.push(`Número de cuenta: ${cta}`);
-  if (cl) lines.push(`CLABE: ${cl}`);
+  const nombre = (config.nombreEmpresa ?? "").trim();
+  const rfc = (config.rfc ?? "").trim();
+  const email = (config.email ?? "").trim();
+  const tel = (config.telefono ?? "").trim();
+  const dir = (config.direccion ?? "").trim();
+  const web = (config.sitioWeb ?? "").trim();
+  if (nombre) lines.push(nombre);
+  if (rfc) lines.push(`RFC: ${rfc}`);
+  if (email) lines.push(`Email: ${email}`);
+  if (tel) lines.push(`Teléfono: ${tel}`);
+  if (dir) lines.push(`Dirección: ${dir}`);
+  if (web) lines.push(`Sitio web: ${web}`);
   if (lines.length === 0) {
     lines.push(
-      "Datos bancarios pendientes.",
-      "Configúralos en la ficha de empresa (campos opcionales en BD) o complétalos manualmente.",
+      "Datos de empresa pendientes.",
+      "Configúralos en la sección de Configuración para que aparezcan en el PDF.",
     );
   }
   const lineH = 4;
@@ -137,7 +152,7 @@ function drawBankBox(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
   doc.setTextColor(...COL_BLUE);
-  doc.text("DATOS BANCARIOS", x + pad, y + pad + 3.5);
+  doc.text("DATOS DE LA EMPRESA", x + pad, y + pad + 3.5);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(25, 25, 25);
@@ -320,14 +335,28 @@ export async function exportarPDFOrden(
     const ids = venta.pantallasIds ?? [];
     const firstId = ids[0];
     const p0 = firstId ? pMap.get(firstId) : undefined;
-    const titulo = (p0?.nombre ?? ids[0] ?? "SERVICIO").toUpperCase();
+    const titulo = (p0?.nombre ?? "SERVICIO").toUpperCase();
     const mesesV = Number(venta.mesesRenta) || 1;
     const fi = new Date(venta.fechaInicio).toLocaleDateString("es-MX");
     const ff = new Date(venta.fechaFin).toLocaleDateString("es-MX");
+    const prod = (venta.productoNombre ?? "").trim();
+    const precioProd = round2(Number(venta.productoPrecioMensual) || 0);
+    const prodIncluido = venta.productoIncluidoEnOrden !== false;
     const precio = precioLineaOrden(venta);
+    const lineaProducto =
+      precioProd > 0
+        ? prodIncluido
+          ? `Precio de producto (sumado): ${fmtMoney(precioProd)}`
+          : `Precio de producto (no sumado): ${fmtMoney(precioProd)}`
+        : "Precio de producto: $0.00";
     descByRow.set(idx - 1, {
       title: titulo,
-      details: [`Periodo: ${fi} - ${ff}`, `Pantallas: ${ids.length}`],
+      details: [
+        `Producto: ${prod || "Sin producto"}`,
+        lineaProducto,
+        `Periodo: ${fi} - ${ff}`,
+        `Pantallas: ${ids.length}`,
+      ],
     });
     tableBody.push([String(idx), " ", `${mesesV} Mes`, fmtMoney(precio)]);
   }

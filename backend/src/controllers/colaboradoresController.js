@@ -11,11 +11,11 @@ export async function listar(_req, res) {
 }
 
 export async function crear(req, res) {
-  const body = req.body || {};
-  const userId = req.user.id;
-  const result = await colaboradoresService.crear(body, userId);
-  if (result.error) return res.status(400).json({ error: result.error });
   try {
+    const body = req.body || {};
+    const userId = req.user?.id;
+    const result = await colaboradoresService.crear(body, userId);
+    if (result.error) return res.status(400).json({ error: result.error });
     res.status(201).json(result.data);
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });

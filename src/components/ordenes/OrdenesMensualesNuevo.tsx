@@ -36,6 +36,7 @@ interface Props {
   clientes: Colaborador[];
   pantallas: Pantalla[];
   onCrearOrdenEnBackend: (payload: CrearOrdenPayload) => Promise<void>;
+  onEliminarOrden: (ordenId: string) => Promise<void>;
   onRecargarColaboradores?: () => Promise<void>;
 }
 
@@ -47,6 +48,7 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
   clientes,
   pantallas,
   onCrearOrdenEnBackend,
+  onEliminarOrden,
   onRecargarColaboradores,
 }) => {
   const hoy = new Date();
@@ -143,6 +145,7 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
           usuarioActual={usuarioActual}
           expandidoId={expandidoId}
           onToggle={(id) => setExpandido(expandidoId === id ? null : id)}
+          onEliminarOrden={onEliminarOrden}
         />
       </div>
 

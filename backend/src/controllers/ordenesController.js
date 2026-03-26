@@ -74,3 +74,18 @@ export async function crearManual(req, res) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
   }
 }
+
+export async function eliminar(req, res) {
+  if (req.user.rol !== "admin") {
+    return res.status(403).json({ error: "Solo admin puede eliminar órdenes" });
+  }
+  try {
+    await ordenesService.eliminar(req.params.id);
+    res.status(204).send();
+  } catch (e) {
+    if (e.message === "Orden no encontrada") {
+      return res.status(404).json({ error: e.message });
+    }
+    res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
+  }
+}

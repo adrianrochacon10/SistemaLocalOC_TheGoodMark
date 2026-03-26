@@ -132,6 +132,7 @@ export const Dashboard: React.FC = () => {
             usuarios={datos.usuarios}
             usuarioActual={usuarioActual}
             onRegistrarVenta={acciones.handleRegistrarVentaConSupabase}
+            onActualizarVenta={acciones.handleActualizarVentaConSupabase}
             onEliminarVenta={acciones.handleEliminarVenta}
             errorExterno={errorVenta}
           />
@@ -146,6 +147,7 @@ export const Dashboard: React.FC = () => {
             clientes={datos.clientes}
             pantallas={datos.pantallas}
             onCrearOrdenEnBackend={acciones.handleCrearOrdenManual}
+            onEliminarOrden={acciones.handleEliminarOrden}
             onRecargarColaboradores={acciones.refetchClientes}
           />
         )}

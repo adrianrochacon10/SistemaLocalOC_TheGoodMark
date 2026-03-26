@@ -16,6 +16,7 @@ interface Props {
   usuarioActual: Usuario;
   expandido: boolean;
   onToggle: () => void;
+  onEliminarOrden: (ordenId: string) => Promise<void>;
 }
 
 const MESES = [
@@ -41,8 +42,10 @@ export const OrdenCard: React.FC<Props> = ({
   usuarioActual,
   expandido,
   onToggle,
+  onEliminarOrden,
 }) => {
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const handlePDF = () => {
     void (async () => {
@@ -69,6 +72,29 @@ export const OrdenCard: React.FC<Props> = ({
   const nombreColaborador = orden.colaboradorId
     ? clientes.find((c) => c.id === orden.colaboradorId)?.nombre
     : undefined;
+  const esAdmin = usuarioActual.rol === "admin";
+
+  const handleEliminar = () => {
+    if (!esAdmin || deleteBusy) return;
+    const ok = window.confirm(
+      "¿Eliminar esta orden? También se desasociará de sus ventas.",
+    );
+    if (!ok) return;
+    void (async () => {
+      setDeleteBusy(true);
+      try {
+        await onEliminarOrden(orden.id);
+      } catch (e) {
+        alert(
+          e instanceof Error
+            ? e.message
+            : "No se pudo eliminar la orden. Intenta de nuevo.",
+        );
+      } finally {
+        setDeleteBusy(false);
+      }
+    })();
+  };
 
   return (
     <div className={`orden-card ${expandido ? "expandido" : ""}`}>
@@ -110,8 +136,11 @@ export const OrdenCard: React.FC<Props> = ({
               );
               const nombresP =
                 (venta.pantallasIds ?? [])
-                  .map((id) => pantallas.find((p) => p.id === id)?.nombre ?? id)
+                  .map((id) => pantallas.find((p) => p.id === id)?.nombre ?? "Pantalla")
                   .join(", ") || "—";
+              const productoTxt = venta.productoNombre?.trim() || "Sin producto";
+              const importeLinea =
+                Number(venta.importeTotal ?? venta.precioTotal ?? venta.precioGeneral ?? 0) || 0;
               return (
                 <div key={venta.id} className="detalle-item">
                   <p>
@@ -119,6 +148,7 @@ export const OrdenCard: React.FC<Props> = ({
                       {socio?.nombre ?? "Colaborador"} — {nombresP}
                     </strong>
                   </p>
+                  <p>Producto: {productoTxt}</p>
                   <p>Vendido a: {venta.vendidoA}</p>
                   <p>
                     Período:{" "}
@@ -127,9 +157,7 @@ export const OrdenCard: React.FC<Props> = ({
                   </p>
                   <p>
                     Importe: $
-                    {(venta.precioGeneral ?? venta.importeTotal ?? 0).toFixed(
-                      2,
-                    )}
+                    {importeLinea.toFixed(2)}
                   </p>
                 </div>
               );
@@ -157,6 +185,16 @@ export const OrdenCard: React.FC<Props> = ({
           >
             {pdfBusy ? "Generando PDF…" : "📥 Descargar PDF"}
           </button>
+          {esAdmin ? (
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              disabled={deleteBusy}
+              onClick={handleEliminar}
+            >
+              {deleteBusy ? "Eliminando…" : "🗑️ Eliminar orden"}
+            </button>
+          ) : null}
         </div>
       )}
     </div>

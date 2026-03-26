@@ -1,18 +1,21 @@
 import React from "react";
-import { Colaborador, AsignacionPantalla } from "../../../types";
+import { Colaborador, AsignacionPantalla, Usuario } from "../../../types";
 
 interface FiltrosVentasProps {
   busquedaVenta: string;
   filtroEstado: string;
   filtroCliente: string;
+  filtroVendedor: string;
   filtroMes: number;
   filtroAnio: number;
   aniosDisponibles: number[];
   colaboradores: Colaborador[];
+  usuarios: Usuario[];
   asignaciones: AsignacionPantalla[];
   onBusqueda: (valor: string) => void;
   onFiltroEstado: (estado: string) => void;
   onFiltroCliente: (clienteId: string) => void;
+  onFiltroVendedor: (vendedorId: string) => void;
   onFiltroMes: (mes: number) => void;
   onFiltroAnio: (anio: number) => void;
   onNuevaVenta: () => void;
@@ -46,14 +49,17 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
   busquedaVenta,
   filtroEstado,
   filtroCliente,
+  filtroVendedor,
   filtroMes,
   filtroAnio,
   aniosDisponibles,
   colaboradores,
+  usuarios,
   asignaciones,
   onBusqueda,
   onFiltroEstado,
   onFiltroCliente,
+  onFiltroVendedor,
   onFiltroMes,
   onFiltroAnio,
   onNuevaVenta,
@@ -134,6 +140,22 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
                   {c.nombre}
                 </option>
               ))}
+          </select>
+        </div>
+
+        <div className="filtro-grupo">
+          <label>Vendedor:</label>
+          <select
+            value={filtroVendedor}
+            onChange={(e) => onFiltroVendedor(e.target.value)}
+            className="select-filtro"
+          >
+            <option value="Todos">— Todos los vendedores —</option>
+            {usuarios.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.nombre}
+              </option>
+            ))}
           </select>
         </div>
 

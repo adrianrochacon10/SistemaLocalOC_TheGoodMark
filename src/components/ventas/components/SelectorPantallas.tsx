@@ -23,8 +23,12 @@ export const SelectorPantallas: React.FC<SelectorPantallasProps> = ({
 
     <div className="pantallas-checkbox-group">
       {pantallasDelCliente.map((asignacion) => {
-        const pantalla = pantallas.find((p) => p.id === asignacion.pantallaId);
+        const pantalla = pantallas.find(
+          (p) => String(p.id) === String(asignacion.pantallaId),
+        );
         const isSelected = pantallasSeleccionadas.includes(asignacion.pantallaId);
+        const nombrePantalla =
+          pantalla?.nombre?.trim() || "Pantalla sin nombre";
         return (
           <label
             key={asignacion.pantallaId}
@@ -37,7 +41,7 @@ export const SelectorPantallas: React.FC<SelectorPantallasProps> = ({
             />
             <span className="checkbox-visual"></span>
             <span className="checkbox-label">
-              <span className="pantalla-nombre">{pantalla?.nombre}</span>
+              <span className="pantalla-nombre">{nombrePantalla}</span>
               {pantalla?.ubicacion && (
                 <span className="pantalla-mini-ubicacion">{pantalla.ubicacion}</span>
               )}

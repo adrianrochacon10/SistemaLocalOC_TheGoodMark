@@ -1,5 +1,12 @@
 import type { OrdenDeCompra, RegistroVenta } from "../types";
 
+function leerPrecioProducto(producto: any): number {
+  const n = Number(
+    producto?.precio ?? producto?.precio_unitario ?? producto?.precio_por_mes ?? 0,
+  );
+  return Number.isFinite(n) ? n : 0;
+}
+
 /** Fila de `ventas` desde el API (p. ej. GET /api/ordenes/ventas). */
 export function mapVentaFromApi(row: any): RegistroVenta {
   const pantallasIds: string[] =
@@ -14,6 +21,13 @@ export function mapVentaFromApi(row: any): RegistroVenta {
     })),
     colaboradorId: row.colaborador_id ?? "",
     productoId: row.producto_id ?? undefined,
+    productoNombre:
+      row.producto?.nombre ??
+      row.colaborador?.producto?.nombre ??
+      undefined,
+    productoPrecioMensual: leerPrecioProducto(
+      row.producto ?? row.colaborador?.producto,
+    ),
     vendidoA:
       row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
     precioGeneral:
@@ -83,6 +97,15 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
           sinDescuento: false,
         })),
         colaboradorId: colaboradorId || "",
+        productoNombre: line.producto_nombre ?? undefined,
+        productoPrecioMensual: Number(line.producto_precio_mensual ?? 0) || 0,
+        productoIncluidoEnOrden:
+          line.producto_incluido === true
+            ? true
+            : line.producto_incluido === false
+              ? false
+              : undefined,
+        precioBaseMensualOrden: Number(line.precio_base_mensual ?? imp) || imp,
         vendidoA: line.vendido_a ?? "",
         precioGeneral: imp,
         cantidad: 1,

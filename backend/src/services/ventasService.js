@@ -1,8 +1,17 @@
 import { supabase } from "../config/supabase.js";
-import { sendEmail } from "../lib/email.js";
 
 const SELECT_VENTAS =
-  "*, colaborador:colaboradores(id,nombre,email,telefono,contacto,tipo_pago:tipo_pago(id,nombre),pantalla:pantallas(id,nombre),producto:productos(id,nombre,precio)), tipo_pago(id,nombre), orden:orden_de_compra(id,mes,anio,subtotal,iva,total)";
+  "*, colaborador:colaboradores(id,nombre,email,telefono,contacto,tipo_pago:tipo_pago(id,nombre),pantalla:pantallas(id,nombre),producto:productos(id,nombre)), tipo_pago(id,nombre), orden:orden_de_compra(id,mes,anio,subtotal,iva,total)";
+
+function leerPrecioProducto(producto) {
+  const raw =
+    producto?.precio ??
+    producto?.precio_unitario ??
+    producto?.precio_por_mes ??
+    0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
 
 export async function listar() {
   const { data, error } = await supabase
@@ -68,12 +77,12 @@ export async function crear(body, vendedorId) {
   if (precioPorMes == null) {
     const { data: producto, error: errProd } = await supabase
       .from("productos")
-      .select("precio")
+      .select("*")
       .eq("id", colaborador.producto_id)
       .single();
     if (errProd || !producto)
       return { error: "Producto del colaborador no encontrado" };
-    precioPorMes = Number(producto.precio);
+    precioPorMes = leerPrecioProducto(producto);
   }
 
   const precioTotal = Math.round(precioPorMes * duracionMeses * 100) / 100;
@@ -107,6 +116,7 @@ export async function crear(body, vendedorId) {
       : body.pantalla_id
         ? [body.pantalla_id]
         : [],
+    notas: body.notas ?? null,
   };
 
   console.log("=== INSERT PAYLOAD vendido_a ===", insertPayload.vendido_a);
@@ -116,68 +126,6 @@ export async function crear(body, vendedorId) {
     .select(SELECT_VENTAS)
     .single();
   if (error) throw new Error(error.message);
-
-  try {
-    const n = (x) => (x == null || Number.isNaN(Number(x)) ? 0 : Number(x));
-    const { data: perfilesAdmins } = await supabase
-      .from("perfiles")
-      .select("email")
-      .eq("rol", "admin");
-    const { data: perfilVendedor } = await supabase
-      .from("perfiles")
-      .select("email")
-      .eq("id", vendedorId)
-      .single();
-
-    const destinatarios = new Set();
-    for (const p of perfilesAdmins || [])
-      if (p.email) destinatarios.add(p.email);
-    if (perfilVendedor?.email) destinatarios.add(perfilVendedor.email);
-    if (colaborador?.email) destinatarios.add(colaborador.email);
-
-    const asunto = `Nueva venta registrada - ${data?.client_name || data?.colaborador?.nombre || "Sin nombre"}`;
-    const texto = [
-      "Se ha registrado una nueva venta en The Good Mark.",
-      "",
-      `Cliente (colaborador): ${data?.client_name || "N/D"}`,
-      `Vendido a: ${data?.vendido_a || "N/D"}`, // ✅
-      `Pantalla: ${data?.colaborador?.pantalla?.nombre || "N/D"}`,
-      `Producto: ${data?.colaborador?.producto?.nombre || "N/D"}`,
-      `Precio por mes: $${n(data?.precio_por_mes).toFixed(2)}`,
-      `Costos: $${n(data?.costos).toFixed(2)}`,
-      `Utilidad neta: $${n(data?.utilidad_neta).toFixed(2)}`,
-      `Precio total: $${n(data?.precio_total).toFixed(2)}`,
-      `Comisiones: $${n(data?.comisiones).toFixed(2)}`,
-      `Descuento: $${n(data?.descuento).toFixed(2)}`,
-      `Estado: ${data?.estado_venta}`,
-      `Fechas: ${data?.fecha_inicio} al ${data?.fecha_fin}`,
-      `Meses: ${data?.duracion_meses}`,
-    ].join("\n");
-
-    const html = `
-      <p>Se ha registrado una nueva venta en <strong>The Good Mark</strong>.</p>
-      <ul>
-        <li><strong>Cliente (colaborador):</strong> ${data?.client_name || "N/D"}</li>
-        <li><strong>Vendido a:</strong> ${data?.vendido_a || "N/D"}</li>
-        <li><strong>Pantalla:</strong> ${data?.colaborador?.pantalla?.nombre || "N/D"}</li>
-        <li><strong>Producto:</strong> ${data?.colaborador?.producto?.nombre || "N/D"}</li>
-        <li><strong>Precio por mes:</strong> $${n(data?.precio_por_mes).toFixed(2)}</li>
-        <li><strong>Costos:</strong> $${n(data?.costos).toFixed(2)}</li>
-        <li><strong>Utilidad neta:</strong> $${n(data?.utilidad_neta).toFixed(2)}</li>
-        <li><strong>Precio total:</strong> $${n(data?.precio_total).toFixed(2)}</li>
-        <li><strong>Comisiones:</strong> $${n(data?.comisiones).toFixed(2)}</li>
-        <li><strong>Descuento:</strong> $${n(data?.descuento).toFixed(2)}</li>
-        <li><strong>Estado:</strong> ${data?.estado_venta}</li>
-        <li><strong>Fechas:</strong> ${data?.fecha_inicio} al ${data?.fecha_fin}</li>
-        <li><strong>Meses:</strong> ${data?.duracion_meses}</li>
-      </ul>
-    `;
-
-    for (const email of destinatarios)
-      await sendEmail(email, asunto, texto, html);
-  } catch (e) {
-    console.error("[VENTAS] Error enviando notificaciones:", e?.message || e);
-  }
 
   return { data };
 }
@@ -212,8 +160,7 @@ export async function actualizar(id, body) {
   if (body.estado_venta !== undefined) payload.estado_venta = body.estado_venta;
   else if (body.estado !== undefined) payload.estado_venta = body.estado;
   if (body.vendido_a !== undefined) payload.vendido_a = body.vendido_a; // ✅
-  if (body.pantalla_id !== undefined)
-    payload.pantalla_id = body.pantalla_id ?? null;
+  if (body.notas !== undefined) payload.notas = body.notas;
   if (body.pantallas_ids !== undefined) {
     payload.pantallas_ids = Array.isArray(body.pantallas_ids)
       ? body.pantallas_ids
@@ -239,12 +186,12 @@ export async function actualizar(id, body) {
     if (precioPorMes == null) {
       const { data: producto, error: errProd } = await supabase
         .from("productos")
-        .select("precio")
+        .select("*")
         .eq("id", colaborador.producto_id)
         .single();
       if (errProd || !producto)
         throw new Error("Producto del colaborador no encontrado");
-      precioPorMes = Number(producto.precio);
+      precioPorMes = leerPrecioProducto(producto);
     }
   }
 
@@ -326,12 +273,12 @@ export async function renovar(id, body) {
   if (precioPorMes == null) {
     const { data: producto, error: errProd } = await supabase
       .from("productos")
-      .select("precio")
+      .select("*")
       .eq("id", colaborador.producto_id)
       .single();
     if (errProd || !producto)
       return { error: "Producto del colaborador no encontrado" };
-    precioPorMes = Number(producto.precio);
+    precioPorMes = leerPrecioProducto(producto);
   }
 
   const costos = venta.costos ?? 0;
@@ -383,4 +330,18 @@ export async function renovar(id, body) {
     .single();
   if (error) throw new Error(error.message);
   return { data };
+}
+
+export async function eliminar(id) {
+  const { data: venta, error: errVenta } = await supabase
+    .from("ventas")
+    .select("id,orden_de_compra_id")
+    .eq("id", id)
+    .single();
+  if (errVenta || !venta) throw new Error("Venta no encontrada");
+
+  const { error } = await supabase.from("ventas").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+
+  return { ok: true };
 }

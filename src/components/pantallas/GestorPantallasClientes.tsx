@@ -35,6 +35,7 @@ interface GestorPantallasClientesProps {
       producto_ids?: string[];
       es_porcentaje?: boolean;
       porcentaje?: number;
+      codigo_edicion?: string;
     },
   ) => void | Promise<Colaborador | void>;
   onAsignarPantalla: (a: AsignacionPantalla) => void;
@@ -64,7 +65,16 @@ export const GestorPantallasClientes: React.FC<GestorPantallasClientesProps> = (
 
   return (
     <div className="gestor-pantallas-clientes">
-      <h2>Gestión de Colaboradores</h2>
+      <div className="gestor-colab-topbar">
+        <h2>Gestión de Colaboradores</h2>
+        <button
+          className="btn btn-flotante-mini"
+          onClick={() => gestor.setMostrarModal(true)}
+        >
+          <span style={{ fontSize: "1.1em", marginRight: 6 }}>＋</span>
+          Agregar Colaborador
+        </button>
+      </div>
 
       <ColaboradorList
         clientes={clientes}
@@ -77,6 +87,7 @@ export const GestorPantallasClientes: React.FC<GestorPantallasClientesProps> = (
         onEliminar={gestor.handleEliminar}
         canEliminar={profile?.rol === "admin"}
         canCrear={true}
+        mostrarBotonHeader={false}
       />
 
       {gestor.mostrarModal && (

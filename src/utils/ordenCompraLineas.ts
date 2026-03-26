@@ -4,6 +4,10 @@ export type DetalleLineaOrden = {
   venta_id: string;
   pantallas_seleccionadas: string[];
   nombres_pantallas: string;
+  producto_nombre?: string;
+  producto_precio_mensual?: number;
+  producto_incluido?: boolean;
+  precio_base_mensual?: number;
   importe: number;
   vendido_a: string;
   fecha_inicio: string;
@@ -40,12 +44,31 @@ export function importeVentaSeleccion(
 
   const sumSel = sel.reduce((s, id) => s + (precios.get(id) ?? 0), 0);
   const sumAll = ids.reduce((s, id) => s + (precios.get(id) ?? 0), 0);
-  const pg = Number(venta.precioGeneral) || 0;
+  const pgBase = Number(venta.precioBaseMensualOrden ?? venta.precioGeneral) || 0;
+  const pg =
+    pgBase > 0
+      ? pgBase
+      : Number(venta.precioTotal ?? venta.importeTotal ?? 0) /
+        Math.max(1, Number(venta.mesesRenta) || 1);
 
+  let mensualBase = 0;
   if (sumAll > 0 && sumSel > 0) {
-    return round2((pg * sumSel) / sumAll);
+    mensualBase = round2((pg * sumSel) / sumAll);
+  } else {
+    mensualBase = round2((pg * sel.length) / ids.length);
   }
-  return round2((pg * sel.length) / ids.length);
+
+  // Si el usuario marcó "sumar producto en esta orden", se agrega su precio mensual
+  // en la misma proporción de pantallas seleccionadas de la venta.
+  if (venta.productoIncluidoEnOrden) {
+    const precioProducto = Number(venta.productoPrecioMensual ?? 0) || 0;
+    if (precioProducto > 0) {
+      const ratio = sumAll > 0 && sumSel > 0 ? sumSel / sumAll : sel.length / ids.length;
+      return round2(mensualBase + precioProducto * ratio);
+    }
+  }
+
+  return mensualBase;
 }
 
 export function nombresPantallas(
@@ -53,7 +76,7 @@ export function nombresPantallas(
   pantallas: Pantalla[],
 ): string {
   return ids
-    .map((id) => pantallas.find((p) => p.id === id)?.nombre ?? id)
+    .map((id) => pantallas.find((p) => p.id === id)?.nombre ?? "Pantalla")
     .join(", ");
 }
 
@@ -68,8 +91,13 @@ export function construirDetalleLineas(
   for (const v of ventas) {
     const sel = seleccion.get(String(v.id));
     if (!sel || sel.length === 0) continue;
-    const imp = importeVentaSeleccion(v, sel, precios);
-    if (imp <= 0) continue;
+    const imp = Math.max(0, importeVentaSeleccion(v, sel, precios));
+    const productoMensual = Number(v.productoPrecioMensual ?? 0) || 0;
+    const productoIncluido = Boolean(v.productoIncluidoEnOrden);
+    const baseMensual = Math.max(
+      0,
+      Number(v.precioBaseMensualOrden ?? (v.precioGeneral ?? 0)),
+    );
     const fi = new Date(v.fechaInicio);
     const ff = new Date(v.fechaFin);
     lineas.push({
@@ -78,6 +106,10 @@ export function construirDetalleLineas(
         (v.pantallasIds ?? []).includes(id),
       ),
       nombres_pantallas: nombresPantallas(sel, pantallas),
+      producto_nombre: v.productoNombre ?? undefined,
+      producto_precio_mensual: productoMensual,
+      producto_incluido: productoIncluido,
+      precio_base_mensual: baseMensual,
       importe: imp,
       vendido_a: v.vendidoA ?? "",
       fecha_inicio: fi.toISOString().slice(0, 10),

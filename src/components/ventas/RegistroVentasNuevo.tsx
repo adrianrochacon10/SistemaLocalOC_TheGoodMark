@@ -24,6 +24,7 @@ interface RegistroVentasNuevoProps {
   usuarios: Usuario[];
   usuarioActual: Usuario;
   onRegistrarVenta: (venta: RegistroVenta) => void;
+  onActualizarVenta: (venta: RegistroVenta) => Promise<void> | void;
   onEliminarVenta: (ventaId: string) => void;
   errorExterno: string | null;
 }
@@ -38,6 +39,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   ventasRegistradas,
   usuarioActual,
   onRegistrarVenta,
+  onActualizarVenta,
   onEliminarVenta,
   errorExterno,
 }) => {
@@ -85,6 +87,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
           productos={productos}
           asignacionesProductos={asignacionProductos}
           onRegistrarVenta={onRegistrarVenta}
+          onActualizarVenta={onActualizarVenta}
           onCerrar={handleCerrarModal}
           ventaInicial={ventaEditando}
           usuarios={usuarios}

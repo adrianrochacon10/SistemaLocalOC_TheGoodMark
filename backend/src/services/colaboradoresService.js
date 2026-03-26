@@ -1,7 +1,7 @@
 import { supabase } from "../config/supabase.js";
 
 const SELECT_COLABORADOR =
-  "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre), producto:productos(id, nombre, precio)";
+  "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre), producto:productos(id, nombre)";
 
 const toIdArray = (value) => {
   if (Array.isArray(value))
@@ -38,7 +38,7 @@ async function enrichRelaciones(colaborador) {
     productoIds.length
       ? supabase
           .from("productos")
-          .select("id,nombre,precio")
+          .select("id,nombre")
           .in("id", productoIds)
       : Promise.resolve({
           data: colaborador?.producto ? [colaborador.producto] : [],
@@ -186,7 +186,23 @@ export async function actualizar(id, body, userId) {
     .single();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Colaborador no encontrado");
-  return enrichRelaciones(data);
+  const enriquecido = await enrichRelaciones(data);
+
+  const pIds =
+    payload.pantalla_ids !== undefined
+      ? payload.pantalla_ids
+      : Array.isArray(enriquecido.pantalla_ids)
+        ? enriquecido.pantalla_ids
+        : [];
+  const prodIds =
+    payload.producto_ids !== undefined
+      ? payload.producto_ids
+      : Array.isArray(enriquecido.producto_ids)
+        ? enriquecido.producto_ids
+        : [];
+  await sincronizarAsignaciones(id, pIds, prodIds);
+
+  return enriquecido;
 }
 
 export async function obtenerPorId(id) {
@@ -244,17 +260,6 @@ export async function eliminar(id) {
     .delete({ count: "exact" })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("Colaborador no encontrado");
-  const enriquecido = await enrichRelaciones(data);
-
-  // ← Agregar estas líneas
-  const pIds = Array.isArray(payload.pantalla_ids) ? payload.pantalla_ids : [];
-  const prodIds = Array.isArray(payload.producto_ids)
-    ? payload.producto_ids
-    : [];
-  if (pIds.length > 0 || prodIds.length > 0) {
-    await sincronizarAsignaciones(id, pIds, prodIds);
-  }
-
-  return enriquecido;
+  if (!count) throw new Error("Colaborador no encontrado");
+  return { ok: true };
 }
