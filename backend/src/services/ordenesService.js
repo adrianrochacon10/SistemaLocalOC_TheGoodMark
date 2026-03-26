@@ -18,7 +18,7 @@ async function generadoPorSeguro(userId) {
 
 const SELECT_ORDENES = "*, colaborador:colaboradores(id,nombre)";
 const SELECT_VENTAS =
-  "*, colaborador:colaboradores(id,nombre,pantalla:pantallas(id,nombre),producto:productos(id,nombre,precio))";
+  "*, colaborador:colaboradores(id,nombre,pantalla:pantallas(id,nombre),producto:productos(id,nombre))";
 
 /** Primer y último día del mes calendario (mes 1–12). */
 function boundsMesCalendario(anio, mes) {
@@ -59,14 +59,21 @@ export async function listar(mes, anio) {
   let q = supabase.from("orden_de_compra").select(SELECT_ORDENES);
   if (mes && mes >= 1 && mes <= 12) q = q.eq("mes", mes);
   if (anio) q = q.eq("anio", anio);
-  const { data: ordenes, error } = await q.order("anio", { ascending: false }).order("mes", { ascending: false });
+  const { data: ordenes, error } = await q
+    .order("anio", { ascending: false })
+    .order("mes", { ascending: false });
   if (error) throw new Error(error.message);
   if (!ordenes?.length) return [];
 
   const ordenesConVentas = await Promise.all(
     ordenes.map(async (orden) => {
       let ids = orden.ventas_ids;
-      if (typeof ids === "string") try { ids = JSON.parse(ids); } catch { ids = []; }
+      if (typeof ids === "string")
+        try {
+          ids = JSON.parse(ids);
+        } catch {
+          ids = [];
+        }
       ids = Array.isArray(ids) ? ids.filter(Boolean) : [];
       if (ids.length === 0) return { ...orden, ventas: [] };
       const { data: ventas } = await supabase
@@ -75,7 +82,7 @@ export async function listar(mes, anio) {
         .in("id", ids)
         .order("fecha_inicio");
       return { ...orden, ventas: ventas ?? [] };
-    })
+    }),
   );
   return ordenesConVentas;
 }
@@ -96,7 +103,8 @@ export async function listarVentasPorMes(mes, anio) {
 export async function generarOrden(mes, anio, userId) {
   const m = Number(mes);
   const a = Number(anio);
-  if (!m || m < 1 || m > 12 || !a) return { error: "mes (1-12) y anio son obligatorios" };
+  if (!m || m < 1 || m > 12 || !a)
+    return { error: "mes (1-12) y anio son obligatorios" };
   const genPor = await generadoPorSeguro(userId);
   const { inicio, finStr } = boundsMesCalendario(a, m);
 
@@ -161,7 +169,13 @@ export async function generarOrden(mes, anio, userId) {
       .select(SELECT_ORDENES)
       .single());
 
-    if (errInsert && genPor && String(errInsert.message || "").toLowerCase().includes("generado")) {
+    if (
+      errInsert &&
+      genPor &&
+      String(errInsert.message || "")
+        .toLowerCase()
+        .includes("generado")
+    ) {
       ({ data: orden, error: errInsert } = await supabase
         .from("orden_de_compra")
         .insert(baseInsert)
@@ -185,11 +199,17 @@ export async function generarOrden(mes, anio, userId) {
 /**
  * Igual que generarOrden pero solo para un colaborador (ventas del mes que lo tocan).
  */
-export async function generarOrdenColaborador(mes, anio, colaborador_id, userId) {
+export async function generarOrdenColaborador(
+  mes,
+  anio,
+  colaborador_id,
+  userId,
+) {
   const m = Number(mes);
   const a = Number(anio);
   const cid = colaborador_id;
-  if (!m || m < 1 || m > 12 || !a) return { error: "mes (1-12) y anio son obligatorios" };
+  if (!m || m < 1 || m > 12 || !a)
+    return { error: "mes (1-12) y anio son obligatorios" };
   if (!cid) return { error: "colaborador_id es obligatorio" };
 
   const genPor = await generadoPorSeguro(userId);
@@ -242,7 +262,13 @@ export async function generarOrdenColaborador(mes, anio, colaborador_id, userId)
     .select(SELECT_ORDENES)
     .single());
 
-  if (errInsert && genPor && String(errInsert.message || "").toLowerCase().includes("generado")) {
+  if (
+    errInsert &&
+    genPor &&
+    String(errInsert.message || "")
+      .toLowerCase()
+      .includes("generado")
+  ) {
     ({ data: orden, error: errInsert } = await supabase
       .from("orden_de_compra")
       .insert(baseInsert)
@@ -280,14 +306,16 @@ export async function crearManual({
   const m = Number(mes);
   const a = Number(anio);
   if (!cid) return { error: "colaborador_id es obligatorio" };
-  if (!m || m < 1 || m > 12 || !a) return { error: "mes (1-12) y anio son obligatorios" };
+  if (!m || m < 1 || m > 12 || !a)
+    return { error: "mes (1-12) y anio son obligatorios" };
 
   const genPor = await generadoPorSeguro(userId);
 
   const ventasIds = Array.isArray(ventas_ids)
     ? ventas_ids.map((x) => String(x).trim()).filter(Boolean)
     : [];
-  if (ventasIds.length === 0) return { error: "Selecciona al menos una venta o pantalla" };
+  if (ventasIds.length === 0)
+    return { error: "Selecciona al menos una venta o pantalla" };
 
   const sub = round2(subtotal);
   const iv = round2(iva);
@@ -303,10 +331,13 @@ export async function crearManual({
     .in("id", ventasIds);
   if (errV) throw new Error(errV.message);
   const list = ventasRows ?? [];
-  if (list.length !== ventasIds.length) return { error: "Una o más ventas no existen" };
+  if (list.length !== ventasIds.length)
+    return { error: "Una o más ventas no existen" };
   for (const v of list) {
     if (String(v.colaborador_id) !== String(cid)) {
-      return { error: "Todas las ventas deben pertenecer al colaborador seleccionado" };
+      return {
+        error: "Todas las ventas deben pertenecer al colaborador seleccionado",
+      };
     }
   }
 
@@ -387,7 +418,12 @@ export async function crearManual({
   if (errOrd) throw new Error(errOrd.message);
 
   let ids = ordenFull.ventas_ids;
-  if (typeof ids === "string") try { ids = JSON.parse(ids); } catch { ids = []; }
+  if (typeof ids === "string")
+    try {
+      ids = JSON.parse(ids);
+    } catch {
+      ids = [];
+    }
   ids = Array.isArray(ids) ? ids.filter(Boolean) : [];
   let ventas = [];
   if (ids.length > 0) {

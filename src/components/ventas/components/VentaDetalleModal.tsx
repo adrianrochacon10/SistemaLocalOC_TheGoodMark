@@ -68,12 +68,22 @@ export const VentaDetalleModal: React.FC<Props> = ({
             <div className="vd-row-grid">
               <div className="vd-dato">
                 <span className="vd-dato-label">Colaborador</span>
-                <span className="vd-dato-valor">{colaborador?.nombre ?? "—"}</span>
+                <span className="vd-dato-valor">
+                  {colaborador?.nombre ?? "—"}
+                </span>
               </div>
               <div className="vd-dato">
                 <span className="vd-dato-label">Vendedor asignado</span>
                 <span className="vd-dato-valor">
                   {vendedor?.nombre ?? "Sin asignar"}
+                </span>
+              </div>
+              <div className="vd-dato">
+                <span className="vd-dato-label">Vendido a</span>
+                <span className="vd-dato-valor">
+                  {venta.vendidoA && venta.vendidoA !== "-"
+                    ? venta.vendidoA
+                    : "—"}
                 </span>
               </div>
             </div>
