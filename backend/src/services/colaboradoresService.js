@@ -1,7 +1,7 @@
 import { supabase } from "../config/supabase.js";
 
 const SELECT_COLABORADOR =
-  "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre), producto:productos(id, nombre, precio)";
+  "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre), producto:productos(id, nombre)";
 
 const toIdArray = (value) => {
   if (Array.isArray(value))
@@ -36,10 +36,7 @@ async function enrichRelaciones(colaborador) {
           error: null,
         }),
     productoIds.length
-      ? supabase
-          .from("productos")
-          .select("id,nombre,precio")
-          .in("id", productoIds)
+      ? supabase.from("productos").select("id,nombre").in("id", productoIds)
       : Promise.resolve({
           data: colaborador?.producto ? [colaborador.producto] : [],
           error: null,
@@ -63,14 +60,12 @@ async function sincronizarAsignaciones(
   pantallaIds = [],
   productoIds = [],
 ) {
-  // Borrar asignaciones anteriores de este colaborador
   await supabase.from("asignaciones").delete().eq("cliente_id", colaboradorId);
   await supabase
     .from("asignaciones_productos")
     .delete()
     .eq("cliente_id", colaboradorId);
 
-  // Insertar nuevas asignaciones de pantallas
   if (pantallaIds.length > 0) {
     const rows = pantallaIds.map((pid) => ({
       cliente_id: colaboradorId,
@@ -80,7 +75,6 @@ async function sincronizarAsignaciones(
     await supabase.from("asignaciones").insert(rows);
   }
 
-  // Insertar nuevas asignaciones de productos
   if (productoIds.length > 0) {
     const rows = productoIds.map((pid) => ({
       cliente_id: colaboradorId,
@@ -116,6 +110,7 @@ export async function crear(body, userId) {
   const pantallaId = pantallaIds[0] ?? null;
   const productoIds = toIdArray(body.producto_ids ?? body.producto_id);
   const productoId = productoIds[0] ?? null;
+
   if (!body.nombre?.trim()) return { error: "Nombre es obligatorio" };
   if (!tipoPagoId)
     return { error: "Tipo de pago es obligatorio (tipo_pago_id en el body)" };
@@ -144,7 +139,6 @@ export async function crear(body, userId) {
   if (error) throw new Error(error.message);
 
   const enriquecido = await enrichRelaciones(data);
-
   await sincronizarAsignaciones(data.id, pantallaIds, productoIds);
 
   return { data: enriquecido };
@@ -186,7 +180,18 @@ export async function actualizar(id, body, userId) {
     .single();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Colaborador no encontrado");
-  return enrichRelaciones(data);
+
+  const enriquecido = await enrichRelaciones(data);
+
+  const pIds = Array.isArray(payload.pantalla_ids) ? payload.pantalla_ids : [];
+  const prodIds = Array.isArray(payload.producto_ids)
+    ? payload.producto_ids
+    : [];
+  if (pIds.length > 0 || prodIds.length > 0) {
+    await sincronizarAsignaciones(id, pIds, prodIds);
+  }
+
+  return enriquecido;
 }
 
 export async function obtenerPorId(id) {
@@ -201,7 +206,6 @@ export async function obtenerPorId(id) {
 }
 
 export async function eliminar(id) {
-  // 1) Desvincular y eliminar órdenes relacionadas al colaborador
   const { data: ordenes, error: errOrdenes } = await supabase
     .from("orden_de_compra")
     .select("id")
@@ -223,14 +227,12 @@ export async function eliminar(id) {
     if (errDeleteOrdenes) throw new Error(errDeleteOrdenes.message);
   }
 
-  // 2) Eliminar ventas ligadas al colaborador para liberar FKs
   const { error: errDeleteVentas } = await supabase
     .from("ventas")
     .delete()
     .eq("colaborador_id", id);
   if (errDeleteVentas) throw new Error(errDeleteVentas.message);
 
-  // 3) Limpiar códigos de edición asociados al colaborador
   const { error: errDeleteCodigos } = await supabase
     .from("codigos_edicion")
     .delete()
@@ -238,23 +240,10 @@ export async function eliminar(id) {
     .eq("entidad_id", id);
   if (errDeleteCodigos) throw new Error(errDeleteCodigos.message);
 
-  // 4) Eliminar colaborador
   const { error, count } = await supabase
     .from("colaboradores")
     .delete({ count: "exact" })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("Colaborador no encontrado");
-  const enriquecido = await enrichRelaciones(data);
-
-  // ← Agregar estas líneas
-  const pIds = Array.isArray(payload.pantalla_ids) ? payload.pantalla_ids : [];
-  const prodIds = Array.isArray(payload.producto_ids)
-    ? payload.producto_ids
-    : [];
-  if (pIds.length > 0 || prodIds.length > 0) {
-    await sincronizarAsignaciones(id, pIds, prodIds);
-  }
-
-  return enriquecido;
+  if (count === 0) throw new Error("Colaborador no encontrado");
 }
