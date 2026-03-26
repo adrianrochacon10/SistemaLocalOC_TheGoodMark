@@ -12,7 +12,7 @@ export async function listar(_req, res) {
 
 export async function crear(req, res) {
   const body = req.body || {};
-  const vendedorId = req.user.id;
+  const vendedorId = req.user?.id ?? body.vendedor_id ?? null;
   const result = await ventasService.crear(body, vendedorId);
   if (result.error) return res.status(400).json({ error: result.error });
   try {
@@ -25,7 +25,7 @@ export async function crear(req, res) {
 export async function actualizar(req, res) {
   const { id } = req.params;
   const body = req.body || {};
-  if (req.user.rol === "vendedor") {
+  if (req.user.rol !== "admin") {
     const codigo = body.codigo_edicion;
     const resultado = await validarYConsumirCodigo(codigo, req.user.id, "venta", id);
     if (!resultado.ok) return res.status(400).json({ error: resultado.error });

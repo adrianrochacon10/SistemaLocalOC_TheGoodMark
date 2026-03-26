@@ -1,7 +1,12 @@
 import { supabase } from "../config/supabase.js";
 
 const SELECT_COLABORADOR =
-  "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre), producto:productos(id, nombre)";
+  "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre), producto:productos(*)";
+
+const leerPrecioProducto = (p) => {
+  const n = Number(p?.precio ?? p?.precio_unitario ?? p?.precio_por_mes ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
 
 const toIdArray = (value) => {
   if (Array.isArray(value))
@@ -38,7 +43,7 @@ async function enrichRelaciones(colaborador) {
     productoIds.length
       ? supabase
           .from("productos")
-          .select("id,nombre")
+          .select("*")
           .in("id", productoIds)
       : Promise.resolve({
           data: colaborador?.producto ? [colaborador.producto] : [],
@@ -54,7 +59,10 @@ async function enrichRelaciones(colaborador) {
     pantalla_ids: pantallaIds,
     producto_ids: productoIds,
     pantallas: pantallasRes.data ?? [],
-    productos: productosRes.data ?? [],
+    productos: (productosRes.data ?? []).map((p) => ({
+      ...p,
+      precio: leerPrecioProducto(p),
+    })),
   };
 }
 

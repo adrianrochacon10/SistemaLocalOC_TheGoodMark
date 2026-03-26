@@ -25,7 +25,7 @@ export async function crear(req, res) {
 export async function actualizar(req, res) {
   const { id } = req.params;
   const body = req.body || {};
-  if (req.user.rol === "vendedor") {
+  if (req.user.rol !== "admin") {
     const codigo = body.codigo_edicion;
     const resultado = await validarYConsumirCodigo(codigo, req.user.id, "colaborador", id);
     if (!resultado.ok) return res.status(400).json({ error: resultado.error });

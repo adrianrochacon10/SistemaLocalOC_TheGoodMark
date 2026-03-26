@@ -20,7 +20,6 @@ export function useConfiguracion(profile: any, session: Session | null) {
 
   // Cargar desde backend
   useEffect(() => {
-    if (!profile) return;
     const cargar = async () => {
       try {
         const data = await backendApi.get("/api/configuracion");
@@ -73,7 +72,6 @@ export function useConfiguracion(profile: any, session: Session | null) {
   }, []);
 
   const refetchOrdenes = useCallback(async () => {
-    if (!profile || !session?.access_token) return;
     const data = await backendApi.get("/api/ordenes");
     if (Array.isArray(data)) {
       setOrdenes(data.map(mapOrdenFromApi));

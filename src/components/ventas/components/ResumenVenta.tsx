@@ -17,9 +17,12 @@ interface ResumenVentaProps {
   montoSocio: number;
   aplicarDescuento: boolean;
   costos?: number;
-  comision?: number;
+  comisionPorcentaje?: number;
   pagoConsiderar?: number;
   tipoComision?: string;
+  productoNombre?: string;
+  precioProductos?: number;
+  gastosAdicionales?: number;
 }
 
 export const ResumenVenta: React.FC<ResumenVentaProps> = ({
@@ -35,14 +38,18 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   montoSocio,
   aplicarDescuento,
   costos = 0,
-  comision = 0,
+  comisionPorcentaje = 0,
   pagoConsiderar = 0,
   tipoComision = "",
+  productoNombre = "",
+  precioProductos = 0,
+  gastosAdicionales = 0,
 }) => {
   // ── Derivados ──────────────────────────────────────────────
   const totalBruto = precioGeneral * mesesRenta;
   const totalCostos = costos * mesesRenta;
-  const totalComision = comision * mesesRenta;
+  const totalComision = (totalBruto * (Number(comisionPorcentaje || 0) / 100));
+  const totalGastosAdicionales = gastosAdicionales;
   const totalPagoConsiderar =
     tipoComision === "consideracion" ? pagoConsiderar * mesesRenta : 0;
   const totalMontoSocio = aplicarDescuento ? montoSocio * mesesRenta : 0;
@@ -52,6 +59,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
     totalBruto -
     totalCostos -
     totalComision -
+    totalGastosAdicionales -
     totalPagoConsiderar -
     totalMontoSocio;
 
@@ -63,7 +71,9 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
         <div className="resumen-item">
           <span className="label">Pantallas:</span>
           <span className="valor">
-            {pantallasActuales.map((p) => p.nombre).join(", ")}
+            {pantallasActuales.length > 0
+              ? pantallasActuales.map((p) => p.nombre).join(", ")
+              : "Sin pantallas seleccionadas"}
           </span>
         </div>
 
@@ -79,7 +89,10 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
             {pantallasSeleccionadas.length !== 1 ? "s" : ""}
           </span>
         </div>
-
+        <div className="resumen-item">
+          <span className="label">Productos:</span>
+          <span className="valor">{productoNombre || "Sin producto"}</span>
+        </div>
         <div className="resumen-item">
           <span className="label">Vendido a:</span>
           <span className="valor">{vendidoA || "-"}</span>
@@ -107,13 +120,11 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
           {/* ── TOTAL BRUTO — siempre precio lleno ── */}
           <div className="resumen-fin-bloque">
             <div className="resumen-fin-row resumen-fin-principal">
-              <span>
-                Total ({mesesRenta} {mesesRenta === 1 ? "mes" : "meses"})
-              </span>
+              <span>Precio de la venta</span>
               <span>{formatearMoneda(totalBruto)}</span>
             </div>
             <div className="resumen-fin-row resumen-fin-sub">
-              <span>↳ Precio por mes</span>
+              <span>Precio de la venta por mes</span>
               <span>{formatearMoneda(precioGeneral)}</span>
             </div>
           </div>
@@ -126,12 +137,12 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
                   Pago a Considerar ({mesesRenta}{" "}
                   {mesesRenta === 1 ? "mes" : "meses"})
                 </span>
-                <span>− {formatearMoneda(totalPagoConsiderar)}</span>
+                <span>{formatearMoneda(totalPagoConsiderar)}</span>
               </div>
               <div className="resumen-fin-row resumen-fin-sub">
                 <span>↳ Pago por mes</span>
                 <span>
-                  − {formatearMoneda(totalPagoConsiderar / (mesesRenta || 1))}
+                  {formatearMoneda(totalPagoConsiderar / (mesesRenta || 1))}
                 </span>
               </div>
             </div>
@@ -139,18 +150,27 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
 
           {/* ── COSTOS ── */}
           {totalCostos > 0 && (
-            <div className="resumen-fin-bloque resumen-fin-bloque-negativo">
-              <div className="resumen-fin-row resumen-fin-principal resumen-fin-negativo">
+            <div className="resumen-fin-bloque">
+              <div className="resumen-fin-row resumen-fin-principal">
                 <span>
                   Costos ({mesesRenta} {mesesRenta === 1 ? "mes" : "meses"})
                 </span>
-                <span>− {formatearMoneda(totalCostos)}</span>
+                <span>{formatearMoneda(totalCostos)}</span>
               </div>
               <div className="resumen-fin-row resumen-fin-sub">
                 <span>↳ Costo por mes</span>
                 <span>
-                  − {formatearMoneda(totalCostos / (mesesRenta || 1))}
+                  {formatearMoneda(totalCostos / (mesesRenta || 1))}
                 </span>
+              </div>
+            </div>
+          )}
+
+          {totalGastosAdicionales > 0 && (
+            <div className="resumen-fin-bloque resumen-fin-bloque-negativo">
+              <div className="resumen-fin-row resumen-fin-principal resumen-fin-negativo">
+                <span>Gastos adicionales</span>
+                <span>{formatearMoneda(totalGastosAdicionales)}</span>
               </div>
             </div>
           )}
@@ -165,7 +185,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
                 <span>− {formatearMoneda(totalComision)}</span>
               </div>
               <div className="resumen-fin-row resumen-fin-sub">
-                <span>↳ Comisión por mes</span>
+                <span>↳ Comisión por mes ({comisionPorcentaje}%)</span>
                 <span>
                   − {formatearMoneda(totalComision / (mesesRenta || 1))}
                 </span>
@@ -181,7 +201,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
                   Monto socio ({mesesRenta} {mesesRenta === 1 ? "mes" : "meses"}
                   )
                 </span>
-                <span>− {formatearMoneda(totalMontoSocio)}</span>
+                <span>{formatearMoneda(totalMontoSocio)}</span>
               </div>
               <div className="resumen-fin-row resumen-fin-sub">
                 <span>↳ Porcentaje</span>
@@ -189,7 +209,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
               </div>
               <div className="resumen-fin-row resumen-fin-sub">
                 <span>↳ Monto socio por mes</span>
-                <span>− {formatearMoneda(montoSocio)}</span>
+                <span>{formatearMoneda(montoSocio)}</span>
               </div>
             </div>
           )}

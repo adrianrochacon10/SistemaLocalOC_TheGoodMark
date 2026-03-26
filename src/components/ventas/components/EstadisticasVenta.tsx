@@ -9,19 +9,22 @@ interface EstadisticasVentasProps {
 
 export const EstadisticasVentas: React.FC<EstadisticasVentasProps> = ({
   ventasFiltradas,
-}) => (
-  <div className="estadisticas">
-    <div className="stat-card">
-      <span className="stat-number">{ventasFiltradas.length}</span>
-      <span className="stat-label">Ventas del mes</span>
+}) => {
+  const aceptadas = ventasFiltradas.filter((v) => v.estadoVenta === "Aceptado");
+  const ingresosAceptados = aceptadas.reduce(
+    (sum, v) => sum + (v.precioGeneral ?? v.importeTotal ?? 0),
+    0,
+  );
+  return (
+    <div className="estadisticas">
+      <div className="stat-card">
+        <span className="stat-number">{ventasFiltradas.length}</span>
+        <span className="stat-label">Ventas del mes</span>
+      </div>
+      <div className="stat-card">
+        <span className="stat-number">{formatearMoneda(ingresosAceptados)}</span>
+        <span className="stat-label">Ingresos totales (aceptadas)</span>
+      </div>
     </div>
-    <div className="stat-card">
-      <span className="stat-number">
-        {formatearMoneda(
-          ventasFiltradas.reduce((sum, v) => sum + (v.precioGeneral ?? v.importeTotal ?? 0), 0),
-        )}
-      </span>
-      <span className="stat-label">Ingresos totales</span>
-    </div>
-  </div>
-);
+  );
+};

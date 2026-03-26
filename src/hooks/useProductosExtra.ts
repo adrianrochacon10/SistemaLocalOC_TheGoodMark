@@ -25,7 +25,9 @@ export function useProductosExtra(profile: any, session: Session | null) {
                 (p: any): Producto => ({
                   id: p.id,
                   nombre: p.nombre,
-                  precio: Number(p.precio) || 0,
+                  precio:
+                    Number(p.precio ?? p.precio_unitario ?? p.precio_por_mes ?? 0) ||
+                    0,
                   activo: p.activo ?? true,
                   fechaCreacion: p.fecha_creacion
                     ? new Date(p.fecha_creacion)

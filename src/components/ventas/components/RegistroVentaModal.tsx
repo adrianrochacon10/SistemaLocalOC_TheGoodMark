@@ -65,9 +65,18 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const [precioGeneral, setPrecioGeneral] = useState<number>(
     ventaInicial?.precioGeneral ?? 0,
   );
-  const [productoSeleccionado, setProductoSeleccionado] = useState<string>(
-    ventaInicial?.productoId ?? "",
+  const [precioGeneralEditadoManualmente, setPrecioGeneralEditadoManualmente] =
+    useState<boolean>(false);
+  const [precioVentaPorMesOverride, setPrecioVentaPorMesOverride] = useState<
+    number | null
+  >(null);
+  const [productosSeleccionados, setProductosSeleccionados] = useState<string[]>(
+    ventaInicial?.productoIds ??
+      (ventaInicial?.productoId ? [String(ventaInicial.productoId)] : []),
   );
+  const [precioVentaProductoMap, setPrecioVentaProductoMap] = useState<
+    Record<string, number>
+  >({});
   const [porcentajeSocio, setPorcentajeSocio] = useState<number>(30);
   const [montoSocio, setMontoSocio] = useState<number>(0);
   const [aplicarDescuento, setAplicarDescuento] = useState<boolean>(false);
@@ -80,16 +89,32 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     ventaInicial ? (ventaInicial.costos ?? 0) / mesesIniciales : 0,
   );
   const [comision, setComision] = useState<number>(
-    ventaInicial ? (ventaInicial.comision ?? 0) / mesesIniciales : 0,
+    ventaInicial?.comisionPorcentaje ??
+      (ventaInicial && ventaInicial.precioGeneral > 0
+        ? (((ventaInicial.comision ?? 0) / mesesIniciales) / ventaInicial.precioGeneral) *
+          100
+        : 0),
+  );
+  const [gastosAdicionales, setGastosAdicionales] = useState<number>(
+    ventaInicial?.gastosAdicionales ?? 0,
   );
   const [pagoConsiderar, setPagoConsiderar] = useState<number>(
     ventaInicial?.pagoConsiderar ?? 0,
   ); // ← nuevo
   const [notas, setNotas] = useState<string>(ventaInicial?.notas ?? "");
+  const [fuenteOrigen, setFuenteOrigen] = useState<string>(
+    ventaInicial?.fuenteOrigen ?? "",
+  );
   const [codigoEdicion, setCodigoEdicion] = useState<string>("");
 
   const [error, setError] = useState<string>("");
   const [exito, setExito] = useState<string>("");
+
+  const toNumberSafe = (value: string, fallback = 0): number => {
+    if (value === "") return 0;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
 
   // ── Derivados ─────────────────────────────────────────────────────────
   const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId);
@@ -155,17 +180,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     return Array.from(map.values());
   }, [clienteSeleccionado, clientes, productos]);
 
-  const opcionesProductos = useMemo(
-    () => [
-      { value: "", label: "Sin producto" },
-      ...productosDelCliente.map((p) => ({
-        value: p.id,
-        label: p.nombre,
-      })),
-    ],
-    [productosDelCliente],
-  );
-
   const pantallasCatalogo = useMemo(() => {
     const c = clientes.find((x) => x.id === clienteSeleccionado) as
       | (Colaborador & {
@@ -227,11 +241,25 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   }, [clienteSeleccionado, asignaciones, clientes]);
 
   const clienteActual = clientes.find((c) => c.id === clienteSeleccionado);
-  const productoActual = productosDelCliente.find(
-    (p) => String(p.id) === String(productoSeleccionado),
+  const soloUnProductoSinPantallas =
+    productosSeleccionados.length === 1 && pantallasSeleccionadas.length === 0;
+  const precioPorMesEditable = mesesRenta > 1;
+  const productosActuales = productosDelCliente.filter((p) =>
+    productosSeleccionados.includes(String(p.id)),
   );
-  const precioProductoSeleccionado = Number(productoActual?.precio ?? 0) || 0;
-  const precioMensualFinal = Number(precioGeneral || 0) + precioProductoSeleccionado;
+  const precioProductosSeleccionados = productosActuales.reduce(
+    (sum, p) => sum + (Number(precioVentaProductoMap[String(p.id)] ?? p.precio ?? 0) || 0),
+    0,
+  );
+  const precioMensualCalculado = soloUnProductoSinPantallas
+    ? Number(precioGeneral || 0)
+    : Number(precioGeneral || 0) + Number(precioProductosSeleccionados || 0);
+  const precioMensualFinal = !precioPorMesEditable
+    ? precioMensualCalculado
+    : precioVentaPorMesOverride == null
+      ? precioMensualCalculado
+      : precioVentaPorMesOverride;
+  const comisionMensual = (precioMensualFinal * (Number(comision || 0) / 100));
   const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
   const tieneConsideracion = clienteActual?.tipoComision === "consideracion";
   const pantallasActuales = pantallasSeleccionadas
@@ -240,7 +268,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const fechaFin = calcularFechaFin(fechaInicio, mesesRenta);
   const totalVenta = precioMensualFinal * mesesRenta;
   const costosTotales = costos * mesesRenta;
-  const comisionTotal = comision * mesesRenta;
 
   useEffect(() => {
     if (clienteActual && typeof clienteActual.porcentajeSocio === "number") {
@@ -260,17 +287,83 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
 
   useEffect(() => {
     if (!clienteSeleccionado) {
-      setProductoSeleccionado("");
+      setProductosSeleccionados([]);
       return;
     }
+    setProductosSeleccionados((prev) =>
+      prev.filter((pid) => productosDelCliente.some((p) => String(p.id) === String(pid))),
+    );
+  }, [clienteSeleccionado, productosDelCliente]);
+
+  useEffect(() => {
+    // Si la venta se arma solo con 1 producto (sin pantallas),
+    // autocompleta el precio base con el precio del producto, pero sin bloquear edición.
     if (
-      productoSeleccionado &&
-      productosDelCliente.some((p) => p.id === productoSeleccionado)
+      !precioGeneralEditadoManualmente &&
+      pantallasSeleccionadas.length === 0 &&
+      productosSeleccionados.length === 1
     ) {
-      return;
+      const unicoId = String(productosSeleccionados[0]);
+      const precioProducto =
+        Number(
+          precioVentaProductoMap[unicoId] ??
+            productosDelCliente.find((p) => String(p.id) === unicoId)?.precio ??
+            0,
+        ) || 0;
+      setPrecioGeneral(precioProducto);
     }
-    setProductoSeleccionado("");
-  }, [clienteSeleccionado, productoSeleccionado, productosDelCliente]);
+  }, [
+    pantallasSeleccionadas.length,
+    productosSeleccionados,
+    productosDelCliente,
+    precioVentaProductoMap,
+    precioGeneralEditadoManualmente,
+  ]);
+
+  useEffect(() => {
+    if (!soloUnProductoSinPantallas) return;
+    const unicoId = String(productosSeleccionados[0] ?? "");
+    const precioProducto =
+      Number(
+        precioVentaProductoMap[unicoId] ??
+          productosDelCliente.find((p) => String(p.id) === unicoId)?.precio ??
+          0,
+      ) || 0;
+    setPrecioGeneral(precioProducto);
+  }, [
+    soloUnProductoSinPantallas,
+    productosSeleccionados,
+    productosDelCliente,
+    precioVentaProductoMap,
+  ]);
+
+  useEffect(() => {
+    setPrecioVentaProductoMap((prev) => {
+      const next: Record<string, number> = { ...prev };
+      for (const p of productosDelCliente) {
+        const id = String(p.id);
+        if (next[id] == null || Number.isNaN(Number(next[id]))) {
+          next[id] = Number(p.precio ?? 0) || 0;
+        }
+      }
+      return next;
+    });
+  }, [productosDelCliente]);
+
+  const toggleProducto = (productoId: string) => {
+    setProductosSeleccionados((prev) =>
+      prev.includes(productoId)
+        ? prev.filter((id) => id !== productoId)
+        : [...prev, productoId],
+    );
+  };
+
+  const setPrecioProductoVenta = (productoId: string, value: number) => {
+    setPrecioVentaProductoMap((prev) => ({
+      ...prev,
+      [productoId]: value >= 0 ? value : 0,
+    }));
+  };
 
   const togglePantalla = (pantallaId: string) => {
     const yaSeleccionada = itemsVenta.some((i) => i.pantallaId === pantallaId);
@@ -288,16 +381,21 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setFechaInicio("");
     setMesesRenta(1);
     setPrecioGeneral(0);
-    setProductoSeleccionado("");
+    setProductosSeleccionados([]);
+    setPrecioVentaProductoMap({});
+    setPrecioGeneralEditadoManualmente(false);
+    setPrecioVentaPorMesOverride(null);
     setEstadoVenta("Prospecto");
     setAplicarDescuento(false);
     setCostos(0);
     setError("");
     setExito("");
     setComision(0);
+    setGastosAdicionales(0);
     setPagoConsiderar(0);
     setNotas("");
     setCodigoEdicion("");
+    setFuenteOrigen("");
   };
 
   // ── Registrar ─────────────────────────────────────────────────────────
@@ -308,8 +406,8 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       setError("Selecciona un cliente");
       return;
     }
-    if (itemsVenta.length === 0) {
-      setError("Selecciona al menos una pantalla");
+    if (itemsVenta.length === 0 && productosSeleccionados.length === 0) {
+      setError("Selecciona al menos una pantalla o un producto");
       return;
     }
     if (!vendidoA.trim()) {
@@ -324,8 +422,8 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       setError("La duración debe ser al menos 1 mes");
       return;
     }
-    if (precioGeneral <= 0) {
-      setError("El precio base debe ser mayor a 0");
+    if (precioGeneral < 0) {
+      setError("El costo de la venta no puede ser negativo");
       return;
     }
     if (ventaInicial && usuarioActual.rol === "vendedor" && !codigoEdicion.trim()) {
@@ -338,9 +436,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       pantallasIds: itemsVenta.map((i) => i.pantallaId),
       itemsVenta,
       colaboradorId: clienteSeleccionado,
-      productoId: productoSeleccionado || undefined,
-      productoNombre: productoActual?.nombre ?? undefined,
-      productoPrecioMensual: precioProductoSeleccionado || 0,
+      productoId: productosSeleccionados[0] || undefined,
+      productoIds: productosSeleccionados,
+      productoNombre:
+        productosActuales.map((p) => p.nombre).join(", ").trim() || undefined,
+      productoPrecioMensual: precioProductosSeleccionados || 0,
+      fuenteOrigen: fuenteOrigen.trim() || undefined,
       vendidoA: vendidoA.trim(),
       precioGeneral: precioMensualFinal,
       cantidad: 1,
@@ -358,7 +459,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       estadoVenta,
       vendedorId: usuarioActual.id,
       costos: costosTotales,
-      comision: comisionTotal,
+      comision: comisionMensual * mesesRenta,
+      comisionPorcentaje: Number(comision || 0),
+      gastosAdicionales: Number(gastosAdicionales || 0),
       pagoConsiderar: tieneConsideracion
         ? pagoConsiderar * mesesRenta
         : undefined,
@@ -414,40 +517,77 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
             options={opcionesClientes}
           />
 
-          {pantallasDelCliente.length > 0 && (
+          {clienteSeleccionado && (
             <>
-              <SelectorPantallas
-                pantallasDelCliente={pantallasDelCliente}
-                pantallasSeleccionadas={pantallasSeleccionadas}
-                pantallas={pantallasCatalogo}
-                onToggle={togglePantalla}
-              />
+              {pantallasDelCliente.length > 0 ? (
+                <SelectorPantallas
+                  pantallasDelCliente={pantallasDelCliente}
+                  pantallasSeleccionadas={pantallasSeleccionadas}
+                  pantallas={pantallasCatalogo}
+                  onToggle={togglePantalla}
+                />
+              ) : (
+                <div className="hint-text">Sin pantallas asociadas. Puedes registrar solo productos.</div>
+              )}
+              <div className="form-group">
+                <label className="label-pantallas">
+                  Productos seleccionados:{" "}
+                  <span className="badge-cantidad">{productosSeleccionados.length}</span>
+                </label>
+                <div className="pantallas-checkbox-group">
+                  {productosDelCliente.map((p) => {
+                    const selected = productosSeleccionados.includes(String(p.id));
+                    return (
+                      <label
+                        key={p.id}
+                        className={`checkbox-item ${selected ? "selected" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleProducto(String(p.id))}
+                        />
+                        <span className="checkbox-visual"></span>
+                        <span className="checkbox-label">
+                          <span className="pantalla-nombre">{p.nombre}</span>
+                          <span className="pantalla-mini-ubicacion">
+                            Catálogo: ${Number(p.precio ?? 0).toLocaleString("es-MX", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>
+                          {selected ? (
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={Number(precioVentaProductoMap[String(p.id)] ?? p.precio ?? 0)}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) =>
+                                setPrecioProductoVenta(
+                                  String(p.id),
+                                  toNumberSafe(e.target.value, Number(p.precio ?? 0) || 0),
+                                )
+                              }
+                              className="form-input"
+                              style={{ marginTop: 6 }}
+                              placeholder="Precio de venta"
+                            />
+                          ) : null}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
               <InputField
                 label="Vendido a (Nombre del receptor) *"
                 value={vendidoA}
                 onChange={setVendidoA}
                 placeholder="Ej: ABC Company, Juan Pérez, Empresa XYZ"
               />
-              <SelectField
-                label="Producto"
-                value={productoSeleccionado}
-                onChange={(v: any) => {
-                  const id = String(v ?? "");
-                  setProductoSeleccionado(id);
-                  const prod = productosDelCliente.find((p) => p.id === id);
-                  if (prod && precioGeneral <= 0 && Number(prod.precio) > 0) {
-                    setPrecioGeneral(Number(prod.precio));
-                  }
-                }}
-                placeholder={
-                  "-- Seleccionar producto (opcional) --"
-                }
-                className="select-lg"
-                options={opcionesProductos}
-              />
-              {productoSeleccionado && precioProductoSeleccionado > 0 && (
+              {productosSeleccionados.length > 0 && precioProductosSeleccionados > 0 && (
                 <div className="hint-text">
-                  Se suma producto: {precioProductoSeleccionado.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por mes
+                  Productos adicionales: {precioProductosSeleccionados.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por mes
                 </div>
               )}
               <InputField
@@ -455,6 +595,16 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 value={nombreVendedorActual}
                 onChange={() => {}}
                 readOnly
+              />
+              <SelectField
+                label="Fuente / Origen"
+                value={fuenteOrigen}
+                onChange={(v: any) => setFuenteOrigen(String(v ?? ""))}
+                className="select-lg"
+                options={[
+                  { value: "", label: "-- Seleccionar --" },
+                  { value: "Redes Sociales", label: "Redes Sociales" },
+                ]}
               />
               <SelectField
                 label="Estado de la venta *"
@@ -479,48 +629,50 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 <InputField
                   label="Duración (meses) *"
                   value={mesesRenta || ""}
-                  onChange={(v: any) =>
-                    setMesesRenta(v === "" ? 0 : parseInt(v) || 0)
-                  }
+                  onChange={(v: any) => setMesesRenta(Math.max(0, parseInt(v, 10) || 0))}
                   type="number"
                   min={1}
                 />
               </div>
               <InputField
-                label="Precio Base por Mes *"
+                label="Precio de la venta"
                 value={precioGeneral || ""}
                 onChange={(v: any) =>
-                  setPrecioGeneral(v === "" ? 0 : parseFloat(v) || 0)
+                  {
+                    setPrecioGeneralEditadoManualmente(true);
+                    setPrecioGeneral((prev) => toNumberSafe(v, prev));
+                  }
+                }
+                type="number"
+                min={0}
+                step={0.01}
+                placeholder="0.00"
+                readOnly={soloUnProductoSinPantallas}
+              />
+              <InputField
+                label="Precio de la venta (por mes)"
+                value={precioMensualFinal || 0}
+                onChange={(v: any) => {
+                  if (!precioPorMesEditable) return;
+                  const totalMensualIngresado = toNumberSafe(v, precioMensualFinal);
+                  setPrecioVentaPorMesOverride(totalMensualIngresado);
+                }}
+                type="number"
+                min={0}
+                step={0.01}
+                readOnly={!precioPorMesEditable}
+              />
+              <InputField
+                label="Gastos adicionales"
+                value={gastosAdicionales || ""}
+                onChange={(v: any) =>
+                  setGastosAdicionales((prev) => toNumberSafe(v, prev))
                 }
                 type="number"
                 min={0}
                 step={0.01}
                 placeholder="0.00"
               />
-              {precioProductoSeleccionado > 0 && (
-                <div className="hint-text">
-                  Total mensual (base + producto): {precioMensualFinal.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-              )}
-              <div className="form-group">
-                <label>Notas</label>
-                <input
-                  type="text"
-                  value={notas}
-                  onChange={(e) => setNotas(e.target.value)}
-                  placeholder="Notas internas (opcional)"
-                  className="form-input"
-                  maxLength={300}
-                />
-              </div>
-              {ventaInicial && usuarioActual.rol === "vendedor" && (
-                <InputField
-                  label="Código de edición *"
-                  value={codigoEdicion}
-                  onChange={setCodigoEdicion}
-                  placeholder="Ingresa tu código"
-                />
-              )}
 
               {tieneConsideracion && (
                 <div className="form-group">
@@ -533,7 +685,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                       step="0.01"
                       value={pagoConsiderar === 0 ? "" : pagoConsiderar}
                       onChange={(e) =>
-                        setPagoConsiderar(parseFloat(e.target.value) || 0)
+                        setPagoConsiderar((prev) => toNumberSafe(e.target.value, prev))
                       }
                       placeholder="0.00"
                       className="form-input"
@@ -565,37 +717,47 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
 
               {/* ── COMISIÓN ✅ ── */}
               <InputField
-                label="Comisión (por mes)"
+                label="Comisión (%)"
                 value={comision || ""}
                 onChange={(v: any) =>
-                  setComision(v === "" ? 0 : parseFloat(v) || 0)
+                  setComision((prev) => toNumberSafe(v, prev))
                 }
                 type="number"
                 min={0}
                 step={0.01}
-                placeholder="0.00"
+                placeholder="%"
               />
-              {/* ── COSTOS ── */}
-              <div className="form-group">
-                <label>Costos de la venta (por mes)</label>
-                <div className="input-prefix">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={costos === 0 ? "" : costos}
-                    onChange={(e) => setCostos(parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                    className="form-input"
-                  />
+              {comision > 0 && (
+                <div className="hint-text">
+                  Comisión total automática: {(comisionMensual * mesesRenta).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
+              )}
+              {/* Campo de costos ocultado por solicitud de flujo */}
+              <div className="form-group">
+                <label>Notas</label>
+                <input
+                  type="text"
+                  value={notas}
+                  onChange={(e) => setNotas(e.target.value)}
+                  placeholder="Notas internas (opcional)"
+                  className="form-input"
+                  maxLength={300}
+                />
               </div>
+              {ventaInicial && usuarioActual.rol === "vendedor" && (
+                <InputField
+                  label="Código de edición *"
+                  value={codigoEdicion}
+                  onChange={setCodigoEdicion}
+                  placeholder="Ingresa tu código"
+                />
+              )}
               {tieneComisionPorcentaje && (
                 <>{/* bloque comisión porcentaje socio */}</>
               )}
               {fechaInicio &&
                 mesesRenta > 0 &&
-                pantallasSeleccionadas.length > 0 && (
+                (pantallasSeleccionadas.length > 0 || productosSeleccionados.length > 0) && (
                   <ResumenVenta
                     pantallasActuales={pantallasActuales}
                     estadoVenta={estadoVenta}
@@ -611,19 +773,15 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                       tieneComisionPorcentaje && aplicarDescuento
                     }
                     costos={costos}
-                    comision={comision}
+                    comisionPorcentaje={comision}
+                    gastosAdicionales={gastosAdicionales}
+                    productoNombre={productosActuales.map((p) => p.nombre).join(", ")}
+                    precioProductos={precioProductosSeleccionados}
                     pagoConsiderar={pagoConsiderar}
                     tipoComision={clienteActual?.tipoComision}
                   />
                 )}
             </>
-          )}
-
-          {clienteSeleccionado && pantallasDelCliente.length === 0 && (
-            <div className="error-message">
-              Este cliente no tiene pantallas asignadas. Asigna pantallas desde
-              la sección de Gestión.
-            </div>
           )}
         </div>
 

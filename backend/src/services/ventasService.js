@@ -44,6 +44,10 @@ export async function crear(body, vendedorId) {
     return { error: "duracion_meses debe ser > 0" };
 
   const costos = body.costos ?? body.costos_venta ?? body.costo_venta;
+  const gastosAdicionales = Number(body.gastos_adicionales ?? 0);
+  if (!Number.isFinite(gastosAdicionales) || gastosAdicionales < 0) {
+    return { error: "gastos_adicionales debe ser un numero >= 0" };
+  }
   if (costos == null || !Number.isFinite(Number(costos)) || Number(costos) < 0)
     return { error: "costos (ventas) es obligatorio (>= 0)" };
 
@@ -64,6 +68,7 @@ export async function crear(body, vendedorId) {
   const comisiones = Number(
     body.comisiones ?? body.comision ?? body.comision_total ?? 0,
   );
+  const comisionPorcentaje = Number(body.comision_porcentaje ?? 0);
   const descuento = Number(body.descuento ?? 0);
   const renovable = body.renovable ?? false;
 
@@ -86,7 +91,12 @@ export async function crear(body, vendedorId) {
   }
 
   const precioTotal = Math.round(precioPorMes * duracionMeses * 100) / 100;
-  const utilidadNeta = Math.round((precioPorMes - Number(costos)) * 100) / 100;
+  const comisionesCalculadasPorPorcentaje =
+    Number.isFinite(comisionPorcentaje) && comisionPorcentaje > 0
+      ? Math.round((precioTotal * comisionPorcentaje) / 100 * 100) / 100
+      : null;
+  const utilidadNeta =
+    Math.round((precioPorMes - Number(costos) - gastosAdicionales) * 100) / 100;
 
   const insertPayload = {
     colaborador_id: colaboradorId,
@@ -98,14 +108,27 @@ export async function crear(body, vendedorId) {
     duracion_meses: duracionMeses,
     vendedor_id: vendedorId,
     tipo_pago_id: colaborador.tipo_pago_id,
+    producto_id: body.producto_id ?? colaborador.producto_id ?? null,
+    producto_ids: Array.isArray(body.producto_ids)
+      ? body.producto_ids
+      : body.producto_id
+        ? [body.producto_id]
+        : [],
     renovable,
     precio_por_mes: Math.round(precioPorMes * 100) / 100,
     costos: Math.round(Number(costos) * 100) / 100,
     utilidad_neta: utilidadNeta,
+    gastos_adicionales: Math.round(gastosAdicionales * 100) / 100,
     precio_total: precioTotal,
     comisiones:
-      Number.isFinite(comisiones) && comisiones >= 0
-        ? Math.round(comisiones * 100) / 100
+      comisionesCalculadasPorPorcentaje != null
+        ? comisionesCalculadasPorPorcentaje
+        : Number.isFinite(comisiones) && comisiones >= 0
+          ? Math.round(comisiones * 100) / 100
+          : 0,
+    comision_porcentaje:
+      Number.isFinite(comisionPorcentaje) && comisionPorcentaje >= 0
+        ? Math.round(comisionPorcentaje * 100) / 100
         : 0,
     descuento:
       Number.isFinite(descuento) && descuento >= 0
@@ -117,6 +140,7 @@ export async function crear(body, vendedorId) {
         ? [body.pantalla_id]
         : [],
     notas: body.notas ?? null,
+    fuente_origen: body.fuente_origen ?? null,
   };
 
   console.log("=== INSERT PAYLOAD vendido_a ===", insertPayload.vendido_a);
@@ -156,15 +180,30 @@ export async function actualizar(id, body) {
   let costos =
     body.costos ?? body.costos_venta ?? body.costo_venta ?? venta.costos;
   costos = costos != null && costos !== "" ? Number(costos) : null;
+  let gastosAdicionales =
+    body.gastos_adicionales ?? venta.gastos_adicionales ?? 0;
+  gastosAdicionales =
+    gastosAdicionales != null && gastosAdicionales !== ""
+      ? Number(gastosAdicionales)
+      : 0;
 
   if (body.estado_venta !== undefined) payload.estado_venta = body.estado_venta;
   else if (body.estado !== undefined) payload.estado_venta = body.estado;
   if (body.vendido_a !== undefined) payload.vendido_a = body.vendido_a; // ✅
   if (body.notas !== undefined) payload.notas = body.notas;
+  if (body.fuente_origen !== undefined) payload.fuente_origen = body.fuente_origen;
   if (body.pantallas_ids !== undefined) {
     payload.pantallas_ids = Array.isArray(body.pantallas_ids)
       ? body.pantallas_ids
       : [];
+  }
+  if (body.producto_id !== undefined) payload.producto_id = body.producto_id ?? null;
+  if (body.producto_ids !== undefined) {
+    payload.producto_ids = Array.isArray(body.producto_ids)
+      ? body.producto_ids
+      : body.producto_id
+        ? [body.producto_id]
+        : [];
   }
   if (body.fecha_inicio !== undefined) payload.fecha_inicio = body.fecha_inicio;
   if (body.fecha_fin !== undefined) payload.fecha_fin = body.fecha_fin;
@@ -201,6 +240,7 @@ export async function actualizar(id, body) {
     body.costos !== undefined ||
     body.costos_venta !== undefined ||
     body.costo_venta !== undefined ||
+    body.gastos_adicionales !== undefined ||
     body.duracion_meses !== undefined ||
     !!colaboradorId;
 
@@ -213,22 +253,41 @@ export async function actualizar(id, body) {
       throw new Error("precio_por_mes (ventas) debe ser >= 0");
     if (costos == null || !Number.isFinite(costos) || costos < 0)
       throw new Error("costos (ventas) debe ser >= 0");
+    if (!Number.isFinite(gastosAdicionales) || gastosAdicionales < 0)
+      throw new Error("gastos_adicionales debe ser >= 0");
 
     payload.precio_por_mes = Math.round(precioPorMes * 100) / 100;
     payload.costos = Math.round(costos * 100) / 100;
-    payload.utilidad_neta = Math.round((precioPorMes - costos) * 100) / 100;
+    payload.gastos_adicionales = Math.round(gastosAdicionales * 100) / 100;
+    payload.utilidad_neta = Math.round((precioPorMes - costos - gastosAdicionales) * 100) / 100;
     payload.precio_total = Math.round(precioPorMes * duracionMeses * 100) / 100;
   }
 
   if (
     body.comisiones !== undefined ||
     body.comision !== undefined ||
-    body.comision_total !== undefined
+    body.comision_total !== undefined ||
+    body.comision_porcentaje !== undefined
   ) {
     const c = Number(body.comisiones ?? body.comision ?? body.comision_total);
-    if (!Number.isFinite(c) || c < 0)
-      throw new Error("comisiones debe ser un numero >= 0");
-    payload.comisiones = Math.round(c * 100) / 100;
+    const cp = Number(body.comision_porcentaje ?? venta.comision_porcentaje ?? 0);
+    if (!Number.isFinite(cp) || cp < 0)
+      throw new Error("comision_porcentaje debe ser un numero >= 0");
+    payload.comision_porcentaje = Math.round(cp * 100) / 100;
+    const precioTotalBase =
+      Number(payload.precio_total ?? venta.precio_total ?? 0) || 0;
+    if (payload.comision_porcentaje > 0 && precioTotalBase > 0) {
+      payload.comisiones =
+        Math.round((precioTotalBase * payload.comision_porcentaje) / 100 * 100) / 100;
+    } else if (
+      body.comisiones !== undefined ||
+      body.comision !== undefined ||
+      body.comision_total !== undefined
+    ) {
+      if (!Number.isFinite(c) || c < 0)
+        throw new Error("comisiones debe ser un numero >= 0");
+      payload.comisiones = Math.round(c * 100) / 100;
+    }
   }
   if (body.descuento !== undefined) {
     const d = Number(body.descuento);

@@ -21,6 +21,11 @@ export function mapVentaFromApi(row: any): RegistroVenta {
     })),
     colaboradorId: row.colaborador_id ?? "",
     productoId: row.producto_id ?? undefined,
+    productoIds: Array.isArray(row.producto_ids)
+      ? row.producto_ids.map((x: any) => String(x))
+      : row.producto_id
+        ? [String(row.producto_id)]
+        : [],
     productoNombre:
       row.producto?.nombre ??
       row.colaborador?.producto?.nombre ??
@@ -50,6 +55,9 @@ export function mapVentaFromApi(row: any): RegistroVenta {
     usuarioRegistroId: row.usuario_registro_id ?? row.vendedor_id ?? "",
     estadoVenta: "Aceptado",
     tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
+    fuenteOrigen: row.fuente_origen ?? undefined,
+    comisionPorcentaje: Number(row.comision_porcentaje ?? 0) || 0,
+    gastosAdicionales: Number(row.gastos_adicionales ?? 0) || 0,
   };
 }
 

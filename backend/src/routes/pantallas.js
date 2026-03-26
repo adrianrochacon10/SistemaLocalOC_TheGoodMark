@@ -3,11 +3,10 @@ import { requireAuth } from "../middleware/auth.js";
 import * as pantallasController from "../controllers/pantallasController.js";
 
 const router = Router();
-router.use(requireAuth);
 
 router.get("/", pantallasController.listar);
 router.post("/", pantallasController.crear);
-router.patch("/:id", pantallasController.actualizar);
-router.get("/:id", pantallasController.obtenerPorId);
+router.patch("/:id", requireAuth, pantallasController.actualizar);
+router.get("/:id", requireAuth, pantallasController.obtenerPorId);
 
 export default router;

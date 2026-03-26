@@ -346,6 +346,12 @@ export function useGestorColaboradores(props: Props) {
           (x) => x.nombre.trim().toLowerCase() === row.nombre.toLowerCase(),
         );
         if (existente) {
+          if (Number(row.precio) >= 0 && Number(row.precio) !== Number(existente.precio ?? 0)) {
+            await backendApi.patch(`/api/productos/${existente.id}`, {
+              nombre: existente.nombre,
+              precio: Number(row.precio),
+            });
+          }
           productoIds.push(existente.id);
           continue;
         }

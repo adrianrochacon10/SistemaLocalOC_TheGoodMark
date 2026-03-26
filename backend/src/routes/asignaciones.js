@@ -3,7 +3,6 @@ import { requireAuth } from "../middleware/auth.js";
 import { supabase } from "../config/supabase.js";
 
 const router = Router();
-router.use(requireAuth);
 
 // GET todas las asignaciones de pantallas
 router.get("/", async (_req, res) => {
@@ -26,7 +25,7 @@ router.get("/productos", async (_req, res) => {
 });
 
 // POST asignación de pantalla
-router.post("/", async (req, res) => {
+router.post("/", requireAuth, async (req, res) => {
   const { cliente_id, pantalla_id, activa } = req.body;
   const { data, error } = await supabase
     .from("asignaciones")
@@ -38,7 +37,7 @@ router.post("/", async (req, res) => {
 });
 
 // DELETE asignación de pantalla
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAuth, async (req, res) => {
   const { error } = await supabase
     .from("asignaciones")
     .delete()
@@ -48,7 +47,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 // POST asignación de producto
-router.post("/productos", async (req, res) => {
+router.post("/productos", requireAuth, async (req, res) => {
   const { cliente_id, producto_id, activa } = req.body;
   const { data, error } = await supabase
     .from("asignaciones_productos")
@@ -60,7 +59,7 @@ router.post("/productos", async (req, res) => {
 });
 
 // DELETE asignación de producto
-router.delete("/productos/:id", async (req, res) => {
+router.delete("/productos/:id", requireAuth, async (req, res) => {
   const { error } = await supabase
     .from("asignaciones_productos")
     .delete()

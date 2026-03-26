@@ -19,3 +19,15 @@ export async function crear(req, res) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
   }
 }
+
+export async function actualizar(req, res) {
+  try {
+    const { id } = req.params;
+    const { nombre, precio } = req.body || {};
+    const result = await productosService.actualizar(id, nombre, precio);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json(result.data);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
+  }
+}

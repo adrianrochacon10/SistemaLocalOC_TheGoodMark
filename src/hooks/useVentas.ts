@@ -33,6 +33,11 @@ export function useVentas(profile: any, session: Session | null) {
       })),
       colaboradorId: row.colaborador_id ?? row.cliente_id,
       productoId: row.producto_id ?? undefined,
+      productoIds: Array.isArray(row.producto_ids)
+        ? row.producto_ids.map((x: any) => String(x))
+        : row.producto_id
+          ? [String(row.producto_id)]
+          : [],
       productoNombre:
         row.producto?.nombre ??
         row.colaborador?.producto?.nombre ??
@@ -71,7 +76,10 @@ export function useVentas(profile: any, session: Session | null) {
 
       costos: row.costos ?? 0,
       comision: row.comisiones ?? row.comision ?? 0,
+      comisionPorcentaje: Number(row.comision_porcentaje ?? 0) || 0,
+      gastosAdicionales: Number(row.gastos_adicionales ?? 0) || 0,
       pagoConsiderar: row.pago_considerar ?? undefined,
+      fuenteOrigen: row.fuente_origen ?? undefined,
       notas: row.notas ?? undefined,
     };
   };
@@ -83,7 +91,6 @@ export function useVentas(profile: any, session: Session | null) {
 
   // ── Cargar desde backend ──────────────────────────────────────────────
   useEffect(() => {
-    if (!profile || !session?.access_token) return;
     const cargar = async () => {
       try {
         await refetchVentas();
@@ -111,16 +118,12 @@ export function useVentas(profile: any, session: Session | null) {
     console.log("pantallasIds:", venta.pantallasIds);
     console.log("longitud:", venta.pantallasIds.length);
 
-    if (venta.pantallasIds.length === 0) {
-      setErrorVenta("Selecciona al menos una pantalla");
-      return;
-    }
-
     const estadoApi = venta.estadoVenta?.toLowerCase() ?? "prospecto";
 
     const payload = {
       colaborador_id: venta.colaboradorId,
       producto_id: venta.productoId ?? null,
+      producto_ids: venta.productoIds ?? (venta.productoId ? [venta.productoId] : []),
       cantidad: venta.cantidad ?? 1,
       precio_por_mes: venta.precioGeneral ?? 0,
       precio_unitario_manual:
@@ -136,12 +139,15 @@ export function useVentas(profile: any, session: Session | null) {
       pago_considerar: venta.pagoConsiderar ?? 0,
       costos: venta.costos ?? 0,
       comision: venta.comision ?? 0,
+      comision_porcentaje: venta.comisionPorcentaje ?? 0,
+      gastos_adicionales: venta.gastosAdicionales ?? 0,
       costos_mes: venta.costos ?? 0,
       costos_total: (venta.costos ?? 0) * venta.mesesRenta,
       comision_mes: venta.comision ?? 0,
       comision_total: (venta.comision ?? 0) * venta.mesesRenta,
       pantallas_ids: venta.pantallasIds, // ✅ array completo
       notas: venta.notas ?? null,
+      fuente_origen: venta.fuenteOrigen ?? null,
     };
 
     console.log("=== PAYLOAD ENVIADO AL BACKEND ===");
@@ -179,6 +185,7 @@ export function useVentas(profile: any, session: Session | null) {
     const payload: any = {
       colaborador_id: venta.colaboradorId,
       producto_id: venta.productoId ?? null,
+      producto_ids: venta.productoIds ?? (venta.productoId ? [venta.productoId] : []),
       precio_por_mes: venta.precioGeneral ?? 0,
       precio_unitario_manual: venta.precioGeneral ?? 0,
       estado: estadoApi,
@@ -190,8 +197,11 @@ export function useVentas(profile: any, session: Session | null) {
       pago_considerar: venta.pagoConsiderar ?? 0,
       costos: venta.costos ?? 0,
       comision: venta.comision ?? 0,
+      comision_porcentaje: venta.comisionPorcentaje ?? 0,
+      gastos_adicionales: venta.gastosAdicionales ?? 0,
       pantallas_ids: venta.pantallasIds,
       notas: venta.notas ?? null,
+      fuente_origen: venta.fuenteOrigen ?? null,
     };
     if (venta.codigoEdicion) payload.codigo_edicion = venta.codigoEdicion;
 

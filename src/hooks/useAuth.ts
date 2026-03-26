@@ -3,7 +3,7 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
 import { invalidateBackendAuthCache } from "../lib/backendApi";
 
-export type Rol = "admin" | "usuario";
+export type Rol = "admin" | "usuario" | "vendedor";
 
 export interface Perfil {
   id: string;
@@ -20,29 +20,50 @@ export function useAuth() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchProfile = useCallback(async (userId: string, email: string) => {
-    const { data } = await supabase
-      .from("perfiles")
-      .select("id, nombre, rol")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (data) {
+    const fallback = async () => {
+      const metadata = (await supabase.auth.getUser()).data.user?.user_metadata;
+      const rolRaw = String(metadata?.rol ?? "usuario").toLowerCase();
+      const rol: Rol =
+        rolRaw === "admin"
+          ? "admin"
+          : rolRaw === "vendedor"
+            ? "vendedor"
+            : "usuario";
       setProfile({
-        id: data.id,
-        nombre: data.nombre ?? email,
+        id: userId,
+        nombre: metadata?.nombre ?? email.split("@")[0],
         email,
-        rol: (data.rol as Rol) ?? "usuario",
+        rol,
       });
-      return;
-    }
+    };
 
-    const metadata = (await supabase.auth.getUser()).data.user?.user_metadata;
-    setProfile({
-      id: userId,
-      nombre: metadata?.nombre ?? email.split("@")[0],
-      email,
-      rol: metadata?.rol === "admin" ? "admin" : "usuario",
-    });
+    try {
+      const { data } = await supabase
+        .from("perfiles")
+        .select("id, nombre, rol")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (data) {
+        const rolRaw = String(data.rol ?? "usuario").toLowerCase();
+        const rol: Rol =
+          rolRaw === "admin"
+            ? "admin"
+            : rolRaw === "vendedor"
+              ? "vendedor"
+              : "usuario";
+        setProfile({
+          id: data.id,
+          nombre: data.nombre ?? email,
+          email,
+          rol,
+        });
+        return;
+      }
+      await fallback();
+    } catch {
+      await fallback();
+    }
   }, []);
 
   useEffect(() => {
@@ -50,9 +71,11 @@ export function useAuth() {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        fetchProfile(s.user.id, s.user.email ?? "").finally(() =>
-          setLoading(false)
-        );
+        fetchProfile(s.user.id, s.user.email ?? "")
+          .catch(() => {
+            // Evita expulsar al login por un fallo temporal de perfiles.
+          })
+          .finally(() => setLoading(false));
       } else {
         setProfile(null);
         setLoading(false);
@@ -65,7 +88,9 @@ export function useAuth() {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        fetchProfile(s.user.id, s.user.email ?? "");
+        fetchProfile(s.user.id, s.user.email ?? "").catch(() => {
+          // Conserva sesión activa aunque falle consulta de perfil.
+        });
       } else {
         setProfile(null);
       }

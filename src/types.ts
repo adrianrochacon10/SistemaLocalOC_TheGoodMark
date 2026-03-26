@@ -77,11 +77,13 @@ export interface RegistroVenta {
   itemsVenta: ItemVenta[];
   colaboradorId: string;
   productoId?: string | null;
+  productoIds?: string[];
   productoNombre?: string;
   productoPrecioMensual?: number;
   productoIncluidoEnOrden?: boolean;
   precioBaseMensualOrden?: number;
   codigoEdicion?: string;
+  fuenteOrigen?: string;
   vendidoA: string;
   precioGeneral: number;
   cantidad: number;
@@ -98,6 +100,8 @@ export interface RegistroVenta {
   vendedorId?: string;
   costos?: number;
   comision?: number;
+  comisionPorcentaje?: number;
+  gastosAdicionales?: number;
   pagoConsiderar?: number;
   notas?: string;
 }

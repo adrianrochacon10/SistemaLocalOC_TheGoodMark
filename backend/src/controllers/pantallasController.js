@@ -11,7 +11,7 @@ export async function listar(_req, res) {
 
 export async function crear(req, res) {
   const body = req.body || {};
-  const userId = req.user.id;
+  const userId = req.user?.id ?? null;
   if (!body.nombre?.trim()) return res.status(400).json({ error: "Nombre es obligatorio" });
   try {
     const data = await pantallasService.crear(body, userId);

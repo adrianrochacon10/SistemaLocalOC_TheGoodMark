@@ -5,6 +5,7 @@ export interface RegistroVentaPayload {
   pantallas_ids: string[]; // ✅ array de pantallas
   pantalla_id?: string | null; // ✅ opcional, por compatibilidad
   producto_id?: string | null;
+  producto_ids?: string[];
   cantidad?: number;
   precio_unitario_manual?: number | null;
   tipo_pago_id?: string | null;
@@ -18,11 +19,14 @@ export interface RegistroVentaPayload {
   pago_considerar?: number;
   costos?: number;
   comision?: number;
+  comision_porcentaje?: number;
+  gastos_adicionales?: number;
   costos_mes?: number;
   comision_mes?: number;
   costos_total?: number;
   comision_total?: number;
   notas?: string | null;
+  fuente_origen?: string | null;
 }
 
 export async function registrarVenta(payload: RegistroVentaPayload) {
