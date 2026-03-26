@@ -1,8 +1,35 @@
 import { supabase } from "../config/supabase.js";
 import { sendEmail } from "../lib/email.js";
 
+// ✅ Sin precio en el join anidado
 const SELECT_VENTAS =
-  "*, colaborador:colaboradores(id,nombre,email,telefono,contacto,tipo_pago:tipo_pago(id,nombre),pantalla:pantallas(id,nombre),producto:productos(id,nombre,precio)), tipo_pago(id,nombre), orden:orden_de_compra(id,mes,anio,subtotal,iva,total)";
+  "*, colaborador:colaboradores(id,nombre,email,telefono,contacto,tipo_pago:tipo_pago(id,nombre),pantalla:pantallas(id,nombre),producto:productos(id,nombre)), tipo_pago(id,nombre), orden:orden_de_compra(id,mes,anio,subtotal,iva,total)";
+
+// ✅ Helper para enriquecer precio del producto del colaborador
+async function enrichPrecioProducto(ventas) {
+  if (!Array.isArray(ventas)) ventas = [ventas];
+  return Promise.all(
+    ventas.map(async (v) => {
+      const productoId = v?.colaborador?.producto?.id;
+      if (!productoId) return v;
+      const { data } = await supabase
+        .from("productos")
+        .select("precio")
+        .eq("id", productoId)
+        .single();
+      return {
+        ...v,
+        colaborador: {
+          ...v.colaborador,
+          producto: {
+            ...v.colaborador.producto,
+            precio: data?.precio ?? null,
+          },
+        },
+      };
+    }),
+  );
+}
 
 export async function listar() {
   const { data, error } = await supabase
@@ -10,7 +37,7 @@ export async function listar() {
     .select(SELECT_VENTAS)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return enrichPrecioProducto(data ?? []);
 }
 
 export async function crear(body, vendedorId) {
@@ -107,6 +134,7 @@ export async function crear(body, vendedorId) {
       : body.pantalla_id
         ? [body.pantalla_id]
         : [],
+    productos_ids: Array.isArray(body.productos_ids) ? body.productos_ids : [],
   };
 
   console.log("=== INSERT PAYLOAD vendido_a ===", insertPayload.vendido_a);
@@ -116,6 +144,9 @@ export async function crear(body, vendedorId) {
     .select(SELECT_VENTAS)
     .single();
   if (error) throw new Error(error.message);
+
+  // ✅ Enriquecer precio después del insert
+  const [dataEnriquecida] = await enrichPrecioProducto([data]);
 
   try {
     const n = (x) => (x == null || Number.isNaN(Number(x)) ? 0 : Number(x));
@@ -135,41 +166,41 @@ export async function crear(body, vendedorId) {
     if (perfilVendedor?.email) destinatarios.add(perfilVendedor.email);
     if (colaborador?.email) destinatarios.add(colaborador.email);
 
-    const asunto = `Nueva venta registrada - ${data?.client_name || data?.colaborador?.nombre || "Sin nombre"}`;
+    const asunto = `Nueva venta registrada - ${dataEnriquecida?.client_name || dataEnriquecida?.colaborador?.nombre || "Sin nombre"}`;
     const texto = [
       "Se ha registrado una nueva venta en The Good Mark.",
       "",
-      `Cliente (colaborador): ${data?.client_name || "N/D"}`,
-      `Vendido a: ${data?.vendido_a || "N/D"}`, // ✅
-      `Pantalla: ${data?.colaborador?.pantalla?.nombre || "N/D"}`,
-      `Producto: ${data?.colaborador?.producto?.nombre || "N/D"}`,
-      `Precio por mes: $${n(data?.precio_por_mes).toFixed(2)}`,
-      `Costos: $${n(data?.costos).toFixed(2)}`,
-      `Utilidad neta: $${n(data?.utilidad_neta).toFixed(2)}`,
-      `Precio total: $${n(data?.precio_total).toFixed(2)}`,
-      `Comisiones: $${n(data?.comisiones).toFixed(2)}`,
-      `Descuento: $${n(data?.descuento).toFixed(2)}`,
-      `Estado: ${data?.estado_venta}`,
-      `Fechas: ${data?.fecha_inicio} al ${data?.fecha_fin}`,
-      `Meses: ${data?.duracion_meses}`,
+      `Cliente (colaborador): ${dataEnriquecida?.client_name || "N/D"}`,
+      `Vendido a: ${dataEnriquecida?.vendido_a || "N/D"}`,
+      `Pantalla: ${dataEnriquecida?.colaborador?.pantalla?.nombre || "N/D"}`,
+      `Producto: ${dataEnriquecida?.colaborador?.producto?.nombre || "N/D"}`,
+      `Precio por mes: $${n(dataEnriquecida?.precio_por_mes).toFixed(2)}`,
+      `Costos: $${n(dataEnriquecida?.costos).toFixed(2)}`,
+      `Utilidad neta: $${n(dataEnriquecida?.utilidad_neta).toFixed(2)}`,
+      `Precio total: $${n(dataEnriquecida?.precio_total).toFixed(2)}`,
+      `Comisiones: $${n(dataEnriquecida?.comisiones).toFixed(2)}`,
+      `Descuento: $${n(dataEnriquecida?.descuento).toFixed(2)}`,
+      `Estado: ${dataEnriquecida?.estado_venta}`,
+      `Fechas: ${dataEnriquecida?.fecha_inicio} al ${dataEnriquecida?.fecha_fin}`,
+      `Meses: ${dataEnriquecida?.duracion_meses}`,
     ].join("\n");
 
     const html = `
       <p>Se ha registrado una nueva venta en <strong>The Good Mark</strong>.</p>
       <ul>
-        <li><strong>Cliente (colaborador):</strong> ${data?.client_name || "N/D"}</li>
-        <li><strong>Vendido a:</strong> ${data?.vendido_a || "N/D"}</li>
-        <li><strong>Pantalla:</strong> ${data?.colaborador?.pantalla?.nombre || "N/D"}</li>
-        <li><strong>Producto:</strong> ${data?.colaborador?.producto?.nombre || "N/D"}</li>
-        <li><strong>Precio por mes:</strong> $${n(data?.precio_por_mes).toFixed(2)}</li>
-        <li><strong>Costos:</strong> $${n(data?.costos).toFixed(2)}</li>
-        <li><strong>Utilidad neta:</strong> $${n(data?.utilidad_neta).toFixed(2)}</li>
-        <li><strong>Precio total:</strong> $${n(data?.precio_total).toFixed(2)}</li>
-        <li><strong>Comisiones:</strong> $${n(data?.comisiones).toFixed(2)}</li>
-        <li><strong>Descuento:</strong> $${n(data?.descuento).toFixed(2)}</li>
-        <li><strong>Estado:</strong> ${data?.estado_venta}</li>
-        <li><strong>Fechas:</strong> ${data?.fecha_inicio} al ${data?.fecha_fin}</li>
-        <li><strong>Meses:</strong> ${data?.duracion_meses}</li>
+        <li><strong>Cliente (colaborador):</strong> ${dataEnriquecida?.client_name || "N/D"}</li>
+        <li><strong>Vendido a:</strong> ${dataEnriquecida?.vendido_a || "N/D"}</li>
+        <li><strong>Pantalla:</strong> ${dataEnriquecida?.colaborador?.pantalla?.nombre || "N/D"}</li>
+        <li><strong>Producto:</strong> ${dataEnriquecida?.colaborador?.producto?.nombre || "N/D"}</li>
+        <li><strong>Precio por mes:</strong> $${n(dataEnriquecida?.precio_por_mes).toFixed(2)}</li>
+        <li><strong>Costos:</strong> $${n(dataEnriquecida?.costos).toFixed(2)}</li>
+        <li><strong>Utilidad neta:</strong> $${n(dataEnriquecida?.utilidad_neta).toFixed(2)}</li>
+        <li><strong>Precio total:</strong> $${n(dataEnriquecida?.precio_total).toFixed(2)}</li>
+        <li><strong>Comisiones:</strong> $${n(dataEnriquecida?.comisiones).toFixed(2)}</li>
+        <li><strong>Descuento:</strong> $${n(dataEnriquecida?.descuento).toFixed(2)}</li>
+        <li><strong>Estado:</strong> ${dataEnriquecida?.estado_venta}</li>
+        <li><strong>Fechas:</strong> ${dataEnriquecida?.fecha_inicio} al ${dataEnriquecida?.fecha_fin}</li>
+        <li><strong>Meses:</strong> ${dataEnriquecida?.duracion_meses}</li>
       </ul>
     `;
 
@@ -179,7 +210,7 @@ export async function crear(body, vendedorId) {
     console.error("[VENTAS] Error enviando notificaciones:", e?.message || e);
   }
 
-  return { data };
+  return { data: dataEnriquecida };
 }
 
 export async function actualizar(id, body) {
@@ -211,7 +242,7 @@ export async function actualizar(id, body) {
 
   if (body.estado_venta !== undefined) payload.estado_venta = body.estado_venta;
   else if (body.estado !== undefined) payload.estado_venta = body.estado;
-  if (body.vendido_a !== undefined) payload.vendido_a = body.vendido_a; // ✅
+  if (body.vendido_a !== undefined) payload.vendido_a = body.vendido_a;
   if (body.pantalla_id !== undefined)
     payload.pantalla_id = body.pantalla_id ?? null;
   if (body.pantallas_ids !== undefined) {
@@ -298,7 +329,10 @@ export async function actualizar(id, body) {
     .single();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Venta no encontrada");
-  return data;
+
+  // ✅ Enriquecer precio después del update
+  const [dataEnriquecida] = await enrichPrecioProducto([data]);
+  return dataEnriquecida;
 }
 
 export async function renovar(id, body) {
@@ -354,7 +388,7 @@ export async function renovar(id, body) {
   const insertPayload = {
     colaborador_id: venta.colaborador_id,
     client_name: colaborador.nombre,
-    vendido_a: venta.vendido_a ?? null, // ✅ hereda el receptor original
+    vendido_a: venta.vendido_a ?? null,
     estado_venta: "aceptado",
     fecha_inicio: nuevaInicio,
     fecha_fin: nuevaFin,
@@ -382,5 +416,8 @@ export async function renovar(id, body) {
     .select(SELECT_VENTAS)
     .single();
   if (error) throw new Error(error.message);
-  return { data };
+
+  // ✅ Enriquecer precio después de la renovación
+  const [dataEnriquecida] = await enrichPrecioProducto([data]);
+  return { data: dataEnriquecida };
 }
