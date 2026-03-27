@@ -23,14 +23,14 @@ export async function listar() {
 }
 
 export async function crear(body, vendedorId) {
-  console.log("=== BODY RECIBIDO EN BACKEND ===");
-  console.log("pantallas_ids:", body.pantallas_ids);
-  console.log("tipo:", typeof body.pantallas_ids);
-  console.log("es array:", Array.isArray(body.pantallas_ids));
-  console.log("body completo:", JSON.stringify(body, null, 2));
-
   const colaboradorId = body.colaborador_id;
   const estadoVenta = body.estado_venta ?? body.estado;
+  const vendidoA =
+    body.vendido_a ??
+    body.a_quien ??
+    body.a_quein ??
+    body.a_quien_se_vendio ??
+    null;
 
   if (!colaboradorId) return { error: "Colaborador es obligatorio" };
   if (!estadoVenta) return { error: "Estado de venta es obligatorio" };
@@ -90,7 +90,8 @@ export async function crear(body, vendedorId) {
     precioPorMes = leerPrecioProducto(producto);
   }
 
-  const precioTotal = Math.round(precioPorMes * duracionMeses * 100) / 100;
+  const baseTotal = Math.round(precioPorMes * duracionMeses * 100) / 100;
+  const precioTotal = Math.round((baseTotal + gastosAdicionales) * 100) / 100;
   const comisionesCalculadasPorPorcentaje =
     Number.isFinite(comisionPorcentaje) && comisionPorcentaje > 0
       ? Math.round((precioTotal * comisionPorcentaje) / 100 * 100) / 100
@@ -101,14 +102,13 @@ export async function crear(body, vendedorId) {
   const insertPayload = {
     colaborador_id: colaboradorId,
     client_name: colaborador.nombre,
-    vendido_a: body.vendido_a ?? null,
+    vendido_a: vendidoA,
     estado_venta: estadoVenta,
     fecha_inicio: body.fecha_inicio,
     fecha_fin: body.fecha_fin,
     duracion_meses: duracionMeses,
     vendedor_id: vendedorId,
     tipo_pago_id: colaborador.tipo_pago_id,
-    producto_id: body.producto_id ?? colaborador.producto_id ?? null,
     producto_ids: Array.isArray(body.producto_ids)
       ? body.producto_ids
       : body.producto_id
@@ -143,7 +143,6 @@ export async function crear(body, vendedorId) {
     fuente_origen: body.fuente_origen ?? null,
   };
 
-  console.log("=== INSERT PAYLOAD vendido_a ===", insertPayload.vendido_a);
   const { data, error } = await supabase
     .from("ventas")
     .insert(insertPayload)
@@ -189,7 +188,19 @@ export async function actualizar(id, body) {
 
   if (body.estado_venta !== undefined) payload.estado_venta = body.estado_venta;
   else if (body.estado !== undefined) payload.estado_venta = body.estado;
-  if (body.vendido_a !== undefined) payload.vendido_a = body.vendido_a; // ✅
+  if (
+    body.vendido_a !== undefined ||
+    body.a_quien !== undefined ||
+    body.a_quein !== undefined ||
+    body.a_quien_se_vendio !== undefined
+  ) {
+    payload.vendido_a =
+      body.vendido_a ??
+      body.a_quien ??
+      body.a_quein ??
+      body.a_quien_se_vendio ??
+      null;
+  }
   if (body.notas !== undefined) payload.notas = body.notas;
   if (body.fuente_origen !== undefined) payload.fuente_origen = body.fuente_origen;
   if (body.pantallas_ids !== undefined) {
@@ -197,7 +208,6 @@ export async function actualizar(id, body) {
       ? body.pantallas_ids
       : [];
   }
-  if (body.producto_id !== undefined) payload.producto_id = body.producto_id ?? null;
   if (body.producto_ids !== undefined) {
     payload.producto_ids = Array.isArray(body.producto_ids)
       ? body.producto_ids
@@ -260,7 +270,8 @@ export async function actualizar(id, body) {
     payload.costos = Math.round(costos * 100) / 100;
     payload.gastos_adicionales = Math.round(gastosAdicionales * 100) / 100;
     payload.utilidad_neta = Math.round((precioPorMes - costos - gastosAdicionales) * 100) / 100;
-    payload.precio_total = Math.round(precioPorMes * duracionMeses * 100) / 100;
+    const baseTotal = Math.round(precioPorMes * duracionMeses * 100) / 100;
+    payload.precio_total = Math.round((baseTotal + gastosAdicionales) * 100) / 100;
   }
 
   if (
@@ -341,10 +352,11 @@ export async function renovar(id, body) {
   }
 
   const costos = venta.costos ?? 0;
+  const gastosAdicionales = Number(venta.gastos_adicionales ?? 0);
   const utilidadNeta =
-    Math.round((Number(precioPorMes) - Number(costos)) * 100) / 100;
-  const precioTotal =
-    Math.round(Number(precioPorMes) * Number(duracion) * 100) / 100;
+    Math.round((Number(precioPorMes) - Number(costos) - gastosAdicionales) * 100) / 100;
+  const baseTotal = Math.round(Number(precioPorMes) * Number(duracion) * 100) / 100;
+  const precioTotal = Math.round((baseTotal + gastosAdicionales) * 100) / 100;
 
   const comisionesRen =
     body.comisiones != null ||
@@ -371,6 +383,7 @@ export async function renovar(id, body) {
     precio_por_mes: Math.round(Number(precioPorMes) * 100) / 100,
     costos: Math.round(Number(costos) * 100) / 100,
     utilidad_neta: utilidadNeta,
+    gastos_adicionales: Math.round(gastosAdicionales * 100) / 100,
     precio_total: precioTotal,
     comisiones:
       Number.isFinite(comisionesRen) && comisionesRen >= 0

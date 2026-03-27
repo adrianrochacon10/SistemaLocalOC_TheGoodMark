@@ -20,6 +20,51 @@ const SELECT_ORDENES = "*, colaborador:colaboradores(id,nombre)";
 const SELECT_VENTAS =
   "*, colaborador:colaboradores(id,nombre,pantalla:pantallas(id,nombre),producto:productos(*))";
 
+async function cargarVentasDeOrden(orden) {
+  let ids = orden.ventas_ids;
+  if (typeof ids === "string")
+    try {
+      ids = JSON.parse(ids);
+    } catch {
+      ids = [];
+    }
+  ids = Array.isArray(ids) ? ids.filter(Boolean) : [];
+
+  const idsSet = new Set(ids.map((x) => String(x)));
+  const ventasMap = new Map();
+
+  const { data: ventasLigadas, error: errLigadas } = await supabase
+    .from("ventas")
+    .select(SELECT_VENTAS)
+    .eq("orden_de_compra_id", orden.id)
+    .order("fecha_inicio");
+  if (errLigadas) throw new Error(errLigadas.message);
+
+  for (const v of ventasLigadas ?? []) {
+    ventasMap.set(String(v.id), v);
+  }
+
+  // Fallback: si existen IDs históricos en ventas_ids que ya no están ligadas por FK.
+  const idsFaltantes = [...idsSet].filter((id) => !ventasMap.has(id));
+  if (idsFaltantes.length > 0) {
+    const { data: ventasPorIds, error: errPorIds } = await supabase
+      .from("ventas")
+      .select(SELECT_VENTAS)
+      .in("id", idsFaltantes)
+      .order("fecha_inicio");
+    if (errPorIds) throw new Error(errPorIds.message);
+    for (const v of ventasPorIds ?? []) {
+      ventasMap.set(String(v.id), v);
+    }
+  }
+
+  return [...ventasMap.values()].sort((a, b) => {
+    const fa = String(a.fecha_inicio ?? "");
+    const fb = String(b.fecha_inicio ?? "");
+    return fa.localeCompare(fb);
+  });
+}
+
 /** Primer y último día del mes calendario (mes 1–12). */
 function boundsMesCalendario(anio, mes) {
   const inicio = `${anio}-${String(mes).padStart(2, "0")}-01`;
@@ -65,16 +110,8 @@ export async function listar(mes, anio) {
 
   const ordenesConVentas = await Promise.all(
     ordenes.map(async (orden) => {
-      let ids = orden.ventas_ids;
-      if (typeof ids === "string") try { ids = JSON.parse(ids); } catch { ids = []; }
-      ids = Array.isArray(ids) ? ids.filter(Boolean) : [];
-      if (ids.length === 0) return { ...orden, ventas: [] };
-      const { data: ventas } = await supabase
-        .from("ventas")
-        .select(SELECT_VENTAS)
-        .in("id", ids)
-        .order("fecha_inicio");
-      return { ...orden, ventas: ventas ?? [] };
+      const ventas = await cargarVentasDeOrden(orden);
+      return { ...orden, ventas };
     })
   );
   return ordenesConVentas;
@@ -386,18 +423,7 @@ export async function crearManual({
     .single();
   if (errOrd) throw new Error(errOrd.message);
 
-  let ids = ordenFull.ventas_ids;
-  if (typeof ids === "string") try { ids = JSON.parse(ids); } catch { ids = []; }
-  ids = Array.isArray(ids) ? ids.filter(Boolean) : [];
-  let ventas = [];
-  if (ids.length > 0) {
-    const { data: vdata } = await supabase
-      .from("ventas")
-      .select(SELECT_VENTAS)
-      .in("id", ids)
-      .order("fecha_inicio");
-    ventas = vdata ?? [];
-  }
+  const ventas = await cargarVentasDeOrden(ordenFull);
 
   return { orden: { ...ordenFull, ventas } };
 }

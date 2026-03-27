@@ -31,7 +31,8 @@ function precioLineaOrden(v: RegistroVenta): number {
   const meses = Math.max(1, Number(v.mesesRenta) || 1);
   const baseMensual = Number(v.precioBaseMensualOrden);
   const productoMensual = round2(Number(v.productoPrecioMensual) || 0);
-  const incluirProducto = v.productoIncluidoEnOrden !== false;
+  const incluirProducto = v.productoIncluidoEnOrden === true;
+  const precioGeneralMensual = round2(Number(v.precioGeneral) || 0);
 
   // Si la orden trae desglose base/producto, usarlo para reflejar exactamente
   // la decisión de "sumar producto en esta orden".
@@ -42,12 +43,19 @@ function precioLineaOrden(v: RegistroVenta): number {
     return round2(mensual * meses);
   }
 
+  // Si no hay desglose, usar precio mensual de la venta y sumar producto.
+  if (precioGeneralMensual > 0) {
+    const mensual = round2(
+      precioGeneralMensual + (incluirProducto ? productoMensual : 0),
+    );
+    return round2(mensual * meses);
+  }
+
   const imp = round2(Number(v.importeTotal) || 0);
   const pt = round2(Number(v.precioTotal) || 0);
   if (imp > 0) return imp;
   if (pt > 0) return pt;
-  const pg = round2(Number(v.precioGeneral) || 0);
-  return round2(pg * meses);
+  return 0;
 }
 
 function pantallaMap(pantallas: Pantalla[]): Map<string, Pantalla> {
@@ -333,29 +341,52 @@ export async function exportarPDFOrden(
   for (const venta of registros) {
     idx += 1;
     const ids = venta.pantallasIds ?? [];
-    const firstId = ids[0];
-    const p0 = firstId ? pMap.get(firstId) : undefined;
-    const titulo = (p0?.nombre ?? "SERVICIO").toUpperCase();
+    const nombresPantallas = ids
+      .map((id) => pMap.get(String(id))?.nombre ?? "Pantalla")
+      .filter(Boolean);
+    const pantallasTexto =
+      nombresPantallas.length > 0 ? nombresPantallas.join(", ") : "Sin pantallas";
+    const titulo = "SERVICIO";
     const mesesV = Number(venta.mesesRenta) || 1;
     const fi = new Date(venta.fechaInicio).toLocaleDateString("es-MX");
     const ff = new Date(venta.fechaFin).toLocaleDateString("es-MX");
     const prod = (venta.productoNombre ?? "").trim();
+    const productosNombres = prod
+      ? prod
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean)
+      : [];
+    const productosDetalle =
+      productosNombres.length > 0
+        ? productosNombres
+        : Array.isArray(venta.productoIds) && venta.productoIds.length > 0
+          ? venta.productoIds.map((_, i) => `Producto ${i + 1}`)
+          : ["Sin producto"];
     const precioProd = round2(Number(venta.productoPrecioMensual) || 0);
-    const prodIncluido = venta.productoIncluidoEnOrden !== false;
+    const prodIncluido = venta.productoIncluidoEnOrden === true;
     const precio = precioLineaOrden(venta);
     const lineaProducto =
-      precioProd > 0
-        ? prodIncluido
-          ? `Precio de producto (sumado): ${fmtMoney(precioProd)}`
-          : `Precio de producto (no sumado): ${fmtMoney(precioProd)}`
-        : "Precio de producto: $0.00";
+      prodIncluido && precioProd > 0
+        ? `Precio de producto: ${fmtMoney(precioProd)}`
+        : null;
     descByRow.set(idx - 1, {
       title: titulo,
       details: [
-        `Producto: ${prod || "Sin producto"}`,
-        lineaProducto,
+        `Pantallas (${ids.length}):`,
+        ...(
+          nombresPantallas.length > 0
+            ? nombresPantallas.map((n) => `- ${n}`)
+            : ["- Sin pantallas"]
+        ),
+        ...(prodIncluido
+          ? [
+              `Producto(s) (${productosDetalle.length}):`,
+              ...productosDetalle.map((p) => `- ${p}`),
+            ]
+          : ["Producto(s): No incluido"]),
+        ...(lineaProducto ? [lineaProducto] : []),
         `Periodo: ${fi} - ${ff}`,
-        `Pantallas: ${ids.length}`,
       ],
     });
     tableBody.push([String(idx), " ", `${mesesV} Mes`, fmtMoney(precio)]);

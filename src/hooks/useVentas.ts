@@ -163,8 +163,10 @@ export function useVentas(profile: any, session: Session | null) {
             ? `Error: ${error.message}`
             : "Error al guardar.",
         );
-        setVentasRegistradas((prev) => [...prev, venta]);
-        return;
+        // Importante: permitir que el modal muestre error y NO cierre como si fuera éxito.
+        throw error instanceof Error
+          ? error
+          : new Error("Error al guardar la venta");
       }
 
       if (data) {
@@ -175,7 +177,8 @@ export function useVentas(profile: any, session: Session | null) {
       setErrorVenta(
         e instanceof Error ? `Error: ${e.message}` : "Error desconocido.",
       );
-      setVentasRegistradas((prev) => [...prev, venta]);
+      // Propagar para que RegistroVentaModal pueda capturarlo y no cerrar.
+      throw e;
     }
   };
 

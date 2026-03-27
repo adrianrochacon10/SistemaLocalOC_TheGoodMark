@@ -54,14 +54,10 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
     tipoComision === "consideracion" ? pagoConsiderar * mesesRenta : 0;
   const totalMontoSocio = aplicarDescuento ? montoSocio * mesesRenta : 0;
 
-  // Utilidad = bruto − todos los egresos
-  const utilidad =
-    totalBruto -
-    totalCostos -
-    totalComision -
-    totalGastosAdicionales -
-    totalPagoConsiderar -
-    totalMontoSocio;
+  // Solicitud: que la Utilidad neta sea igual a los ingresos totales (totalBruto).
+  // Nota: aunque aquí se muestran costos/comisiones/gastos, el valor de utilidad neta
+  // se mantiene igual a ingresos para que coincida con el total.
+  const utilidad = totalBruto;
 
   return (
     <div className="resumen-venta">

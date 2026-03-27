@@ -1,6 +1,29 @@
 // src/components/ventas/components/VentasGraficas.tsx
 import React, { useMemo } from "react";
 import { RegistroVenta } from "../../../types";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import { Bar, Line } from "react-chartjs-2";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+);
 
 interface Props {
   ventasRegistradas: RegistroVenta[];
@@ -22,10 +45,29 @@ const MESES = [
 ];
 
 export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
+  const esAceptada = (v: RegistroVenta) =>
+    String(v.estadoVenta ?? "").toLowerCase() === "aceptado";
+
+  const ingresoVenta = (v: RegistroVenta) =>
+    Number(v.precioTotal ?? v.importeTotal ?? 0) || 0;
+
+  const costoAdicionalVenta = (v: RegistroVenta) =>
+    Number(v.gastosAdicionales ?? 0) || 0;
+
+  const comisionVenta = (v: RegistroVenta) => Number(v.comision ?? 0) || 0;
+
   // ── Agrupar por mes (últimos 6 meses) ─────────────────────────────
   const datos = useMemo(() => {
     const hoy = new Date();
-    const result = [];
+    const result: Array<{
+      label: string;
+      ingreso: number;
+      costos: number;
+      comision: number;
+      egresos: number;
+      utilidad: number;
+      ventasAceptadas: number;
+    }> = [];
 
     for (let i = 5; i >= 0; i--) {
       const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
@@ -37,15 +79,22 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
         return f.getMonth() === mes && f.getFullYear() === año;
       });
 
-      const ingreso = ventasDelMes.reduce(
-        (s, v) => s + (v.precioGeneral ?? 0),
-        0,
-      );
-      const costos = ventasDelMes.reduce((s, v) => s + (v.costos ?? 0), 0);
-      const comision = ventasDelMes.reduce((s, v) => s + (v.comision ?? 0), 0);
-      const utilidad = ingreso - costos - comision;
+      const aceptadas = ventasDelMes.filter(esAceptada);
+      const ingreso = aceptadas.reduce((s, v) => s + ingresoVenta(v), 0);
+      const costos = aceptadas.reduce((s, v) => s + costoAdicionalVenta(v), 0);
+      const comision = aceptadas.reduce((s, v) => s + comisionVenta(v), 0);
+      const egresos = costos + comision;
+      const utilidad = ingreso - egresos;
 
-      result.push({ label: MESES[mes], ingreso, costos, comision, utilidad });
+      result.push({
+        label: MESES[mes],
+        ingreso,
+        costos,
+        comision,
+        egresos,
+        utilidad,
+        ventasAceptadas: aceptadas.length,
+      });
     }
 
     return result;
@@ -57,12 +106,17 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
       ingreso: datos.reduce((s, d) => s + d.ingreso, 0),
       costos: datos.reduce((s, d) => s + d.costos, 0),
       comision: datos.reduce((s, d) => s + d.comision, 0),
+      egresos: datos.reduce((s, d) => s + d.egresos, 0),
       utilidad: datos.reduce((s, d) => s + d.utilidad, 0),
+      ventasAceptadas: datos.reduce((s, d) => s + d.ventasAceptadas, 0),
     }),
     [datos],
   );
 
-  const maxIngreso = Math.max(...datos.map((d) => d.ingreso), 1);
+  const maxBar = Math.max(
+    ...datos.map((d) => Math.max(d.ingreso, d.egresos)),
+    1,
+  );
 
   const fmt = (n: number) =>
     n.toLocaleString("es-MX", {
@@ -70,6 +124,146 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
       currency: "MXN",
       maximumFractionDigits: 0,
     });
+
+  const opcionesTendencia = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index" as const, intersect: false },
+      plugins: {
+        legend: {
+          position: "bottom" as const,
+          labels: { usePointStyle: true, pointStyle: "circle" as const, padding: 18 },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx: any) => `${ctx.dataset.label}: ${fmt(Number(ctx.parsed?.y ?? 0))}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: "#6b7280", font: { size: 12 } },
+        },
+        y: {
+          type: "linear" as const,
+          display: true,
+          beginAtZero: true,
+          ticks: {
+            color: "#6b7280",
+            callback: (value: any) => {
+              const n = Number(value) || 0;
+              return n.toLocaleString("es-MX", {
+                style: "currency",
+                currency: "MXN",
+                maximumFractionDigits: 0,
+              });
+            },
+          },
+        },
+      },
+    }),
+    [],
+  );
+
+  const dataTendencia = useMemo(
+    () => ({
+      labels: datos.map((d) => d.label),
+      datasets: [
+        {
+          label: "Ingreso total",
+          data: datos.map((d) => d.ingreso),
+          borderColor: "#10b981",
+          backgroundColor: "rgba(16,185,129,0.10)",
+          pointBackgroundColor: "#10b981",
+          pointBorderColor: "#ffffff",
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.35,
+          fill: true,
+          borderWidth: 3,
+        },
+        {
+          label: "Egresos (gastos adicionales + comisiones)",
+          data: datos.map((d) => d.egresos),
+          borderColor: "#ef4444",
+          backgroundColor: "rgba(239,68,68,0.2)",
+          pointBackgroundColor: "#ef4444",
+          pointBorderColor: "#ffffff",
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          borderDash: [5, 4],
+          tension: 0.35,
+          fill: false,
+          borderWidth: 3,
+        },
+      ],
+    }),
+    [datos],
+  );
+
+  const opcionesBarras = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "top" as const,
+          labels: { usePointStyle: true, pointStyle: "circle" as const, padding: 18 },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx: any) => `${ctx.dataset.label}: ${fmt(Number(ctx.parsed?.y ?? 0))}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: "#6b7280" },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color: "#6b7280",
+            callback: (value: any) =>
+              Number(value || 0).toLocaleString("es-MX", {
+                style: "currency",
+                currency: "MXN",
+                maximumFractionDigits: 0,
+              }),
+          },
+        },
+      },
+    }),
+    [],
+  );
+
+  const dataBarras = useMemo(
+    () => ({
+      labels: datos.map((d) => d.label),
+      datasets: [
+        {
+          label: "Ingreso",
+          data: datos.map((d) => d.ingreso),
+          backgroundColor: "rgba(16, 185, 129, 0.72)",
+          borderRadius: 8,
+          maxBarThickness: 38,
+        },
+        {
+          label: "Egresos (gastos adicionales + comisiones)",
+          data: datos.map((d) => d.egresos),
+          backgroundColor: "rgba(239, 68, 68, 0.72)",
+          borderRadius: 8,
+          maxBarThickness: 38,
+        },
+      ],
+    }),
+    [datos],
+  );
 
   return (
     <div className="ventas-graficas">
@@ -104,195 +298,24 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
           </div>
         </div>
       </div>
+      <p className="grafica-nota">
+        Los totales consideran solo ventas con estado <strong>Aceptado</strong>.
+        Costos = <strong>Gastos adicionales</strong>.
+      </p>
 
-      {/* ── Gráfica de barras apiladas ── */}
+      {/* ── Gráfica mensual comparativa ── */}
       <div className="grafica-card">
-        <h4>📊 Desglose mensual de ingresos</h4>
-        <div className="grafica-barras">
-          {datos.map((d) => (
-            <div key={d.label} className="barra-col">
-              {/* Barra apilada */}
-              <div
-                className="barra-stack"
-                style={{ height: "160px", position: "relative" }}
-              >
-                {/* Utilidad */}
-                <div
-                  className="seg-utilidad"
-                  style={{ height: `${(d.utilidad / maxIngreso) * 100}%` }}
-                  title={`Utilidad: ${fmt(d.utilidad)}`}
-                />
-                {/* Comisión */}
-                <div
-                  className="seg-comision"
-                  style={{ height: `${(d.comision / maxIngreso) * 100}%` }}
-                  title={`Comisión: ${fmt(d.comision)}`}
-                />
-                {/* Costos */}
-                <div
-                  className="seg-costos"
-                  style={{ height: `${(d.costos / maxIngreso) * 100}%` }}
-                  title={`Costos: ${fmt(d.costos)}`}
-                />
-              </div>
-              <span className="barra-label">{d.label}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Leyenda */}
-        <div className="grafica-leyenda">
-          <span className="leyenda-item">
-            <span className="dot dot-utilidad" /> Utilidad
-          </span>
-          <span className="leyenda-item">
-            <span className="dot dot-comision" /> Comisiones
-          </span>
-          <span className="leyenda-item">
-            <span className="dot dot-costos" /> Costos
-          </span>
+        <h4>📊 Desglose mensual (aceptadas)</h4>
+        <div className="grafica-linea-wrap grafica-bar-chartjs">
+          <Bar options={opcionesBarras} data={dataBarras} />
         </div>
       </div>
 
-      {/* ── Gráfica de línea: tendencia ── */}
-      {/* ── Gráfica de línea: tendencia ── */}
-      <div className="grafica-card">
+      {/* ── Gráfica de línea: tendencia (Chart.js multi-axis) ── */}
+      <div className="grafica-card grafica-card-tendencia">
         <h4>📉 Tendencia — Ingreso vs Egresos</h4>
-        <div className="grafica-linea-wrap">
-          <svg
-            viewBox={`0 0 ${datos.length * 90 + 60} 220`}
-            className="grafica-svg"
-          >
-            {/* ── Líneas de guía horizontales + valores eje Y ── */}
-            {[0, 0.25, 0.5, 0.75, 1].map((pct) => {
-              const y = 20 + (1 - pct) * 150;
-              const val = maxIngreso * pct;
-              const label =
-                val >= 1_000_000
-                  ? `$${(val / 1_000_000).toFixed(1)}M`
-                  : val >= 1_000
-                    ? `$${(val / 1_000).toFixed(0)}k`
-                    : `$${val.toFixed(0)}`;
-              return (
-                <g key={pct}>
-                  <line
-                    x1={52}
-                    y1={y}
-                    x2={datos.length * 90 + 55}
-                    y2={y}
-                    stroke="#e5e7eb"
-                    strokeWidth="1"
-                  />
-                  <text
-                    x={48}
-                    y={y + 4}
-                    textAnchor="end"
-                    fontSize="10"
-                    fill="#9ca3af"
-                  >
-                    {label}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* ── Línea ingresos ── */}
-            <polyline
-              fill="none"
-              stroke="#20c997"
-              strokeWidth="2.5"
-              points={datos
-                .map((d, i) => {
-                  const x = i * 90 + 90;
-                  const y = 20 + (1 - d.ingreso / maxIngreso) * 150;
-                  return `${x},${y}`;
-                })
-                .join(" ")}
-            />
-
-            {/* ── Línea egresos ── */}
-            <polyline
-              fill="none"
-              stroke="#e74c3c"
-              strokeWidth="2.5"
-              strokeDasharray="6 3"
-              points={datos
-                .map((d, i) => {
-                  const egreso = d.costos + d.comision;
-                  const x = i * 90 + 90;
-                  const y = 20 + (1 - egreso / maxIngreso) * 150;
-                  return `${x},${y}`;
-                })
-                .join(" ")}
-            />
-
-            {/* ── Puntos + etiquetas de valor + mes ── */}
-            {datos.map((d, i) => {
-              const egreso = d.costos + d.comision;
-              const x = i * 90 + 90;
-              const yI = 20 + (1 - d.ingreso / maxIngreso) * 150;
-              const yE = 20 + (1 - egreso / maxIngreso) * 150;
-
-              const fmtCorto = (n: number) =>
-                n >= 1_000_000
-                  ? `$${(n / 1_000_000).toFixed(1)}M`
-                  : n >= 1_000
-                    ? `$${(n / 1_000).toFixed(0)}k`
-                    : `$${n.toFixed(0)}`;
-
-              return (
-                <g key={d.label}>
-                  {/* Punto ingreso */}
-                  <circle cx={x} cy={yI} r="5" fill="#20c997" />
-                  {/* Valor ingreso — encima del punto */}
-                  <text
-                    x={x}
-                    y={yI - 9}
-                    textAnchor="middle"
-                    fontSize="10"
-                    fontWeight="600"
-                    fill="#059669"
-                  >
-                    {fmtCorto(d.ingreso)}
-                  </text>
-
-                  {/* Punto egreso */}
-                  <circle cx={x} cy={yE} r="5" fill="#e74c3c" />
-                  {/* Valor egreso — debajo del punto (si no choca con ingreso) */}
-                  <text
-                    x={x}
-                    y={yE + 18}
-                    textAnchor="middle"
-                    fontSize="10"
-                    fontWeight="600"
-                    fill="#dc2626"
-                  >
-                    {fmtCorto(egreso)}
-                  </text>
-
-                  {/* Etiqueta mes */}
-                  <text
-                    x={x}
-                    y={195}
-                    textAnchor="middle"
-                    fontSize="11"
-                    fill="#6b7280"
-                  >
-                    {d.label}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-
-        <div className="grafica-leyenda">
-          <span className="leyenda-item">
-            <span className="dot dot-utilidad" /> Ingreso total
-          </span>
-          <span className="leyenda-item">
-            <span className="dot dot-costos" /> Costos + Comisiones
-          </span>
+        <div className="grafica-linea-wrap grafica-linea-chartjs">
+          <Line options={opcionesTendencia} data={dataTendencia} />
         </div>
       </div>
     </div>

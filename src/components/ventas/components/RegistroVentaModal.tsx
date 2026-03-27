@@ -25,7 +25,7 @@ interface RegistroVentaModalProps {
   clientes: Colaborador[];
   usuarios: Usuario[];
   usuarioActual: Usuario;
-  onRegistrarVenta: (venta: RegistroVenta) => void;
+  onRegistrarVenta: (venta: RegistroVenta) => Promise<void> | void;
   onActualizarVenta: (venta: RegistroVenta) => Promise<void> | void;
   onCerrar: () => void;
   ventaInicial: RegistroVenta | null;
@@ -473,7 +473,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
         await onActualizarVenta(nuevaVenta);
         setExito("Venta actualizada correctamente");
       } else {
-        onRegistrarVenta(nuevaVenta);
+        await onRegistrarVenta(nuevaVenta);
         setExito("Venta registrada correctamente");
       }
       resetFormularioVenta();
@@ -604,6 +604,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 options={[
                   { value: "", label: "-- Seleccionar --" },
                   { value: "Redes Sociales", label: "Redes Sociales" },
+                  { value: "Propia", label: "Propia" },
                 ]}
               />
               <SelectField

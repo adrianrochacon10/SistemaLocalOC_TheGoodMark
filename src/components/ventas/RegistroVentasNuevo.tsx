@@ -23,7 +23,7 @@ interface RegistroVentasNuevoProps {
   ventasRegistradas: RegistroVenta[];
   usuarios: Usuario[];
   usuarioActual: Usuario;
-  onRegistrarVenta: (venta: RegistroVenta) => void;
+  onRegistrarVenta: (venta: RegistroVenta) => Promise<void> | void;
   onActualizarVenta: (venta: RegistroVenta) => Promise<void> | void;
   onEliminarVenta: (ventaId: string) => void;
   errorExterno: string | null;
