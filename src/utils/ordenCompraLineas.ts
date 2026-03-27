@@ -1,4 +1,5 @@
 import type { Pantalla, RegistroVenta } from "../types";
+import { detallePantallaId, detallePrecioMensual } from "./ordenApiMapper";
 
 export type DetalleLineaOrden = {
   venta_id: string;
@@ -95,13 +96,13 @@ export function partesImporteOrdenVenta(
 
   const ventaDetalle = Array.isArray(venta.pantallasDetalle)
     ? venta.pantallasDetalle.filter(
-        (d) => String(d?.pantallaId ?? "") !== "__producto_total__",
+        (d) => detallePantallaId(d) !== "__producto_total__",
       )
     : [];
   const preciosVenta = new Map<string, number>(
     ventaDetalle.map((d) => [
-      String(d.pantallaId),
-      Number(d.precioMensual ?? 0) || 0,
+      detallePantallaId(d),
+      detallePrecioMensual(d),
     ]),
   );
   const precioPantalla = (id: string): number => {
@@ -218,18 +219,18 @@ export function construirDetalleLineas(
     const ff = new Date(v.fechaFin);
     const pantallasDetalleVenta = Array.isArray(v.pantallasDetalle)
       ? v.pantallasDetalle.filter(
-          (d) => String(d?.pantallaId ?? "") !== "__producto_total__",
+          (d) => detallePantallaId(d) !== "__producto_total__",
         )
       : [];
     const detallePantallasSeleccionadas = sel.map((pid) => {
       const snap = pantallasDetalleVenta.find(
-        (p) => String(p?.pantallaId ?? "") === String(pid),
+        (p) => detallePantallaId(p) === String(pid),
       );
       const nombre =
         String(snap?.nombre ?? "").trim() ||
         pantallas.find((p) => String(p.id) === String(pid))?.nombre ||
         "Pantalla";
-      const precioSnap = Number(snap?.precioMensual ?? 0) || 0;
+      const precioSnap = detallePrecioMensual(snap);
       const precioCat = precios.get(String(pid)) ?? 0;
       const precio = precioSnap > 0 ? precioSnap : precioCat;
       return {

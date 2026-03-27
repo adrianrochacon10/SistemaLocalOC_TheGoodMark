@@ -65,7 +65,6 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
       costos: number;
       comision: number;
       egresos: number;
-      utilidad: number;
       ventasAceptadas: number;
     }> = [];
 
@@ -84,7 +83,6 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
       const costos = aceptadas.reduce((s, v) => s + costoAdicionalVenta(v), 0);
       const comision = aceptadas.reduce((s, v) => s + comisionVenta(v), 0);
       const egresos = costos + comision;
-      const utilidad = ingreso - egresos;
 
       result.push({
         label: MESES[mes],
@@ -92,7 +90,6 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
         costos,
         comision,
         egresos,
-        utilidad,
         ventasAceptadas: aceptadas.length,
       });
     }
@@ -107,15 +104,9 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
       costos: datos.reduce((s, d) => s + d.costos, 0),
       comision: datos.reduce((s, d) => s + d.comision, 0),
       egresos: datos.reduce((s, d) => s + d.egresos, 0),
-      utilidad: datos.reduce((s, d) => s + d.utilidad, 0),
       ventasAceptadas: datos.reduce((s, d) => s + d.ventasAceptadas, 0),
     }),
     [datos],
-  );
-
-  const maxBar = Math.max(
-    ...datos.map((d) => Math.max(d.ingreso, d.egresos)),
-    1,
   );
 
   const fmt = (n: number) =>
@@ -272,15 +263,13 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
         <div className="kpi-card kpi-ingreso">
           <span className="kpi-icon">💰</span>
           <div>
-            <p className="kpi-label">Ingreso total</p>
+            <p className="kpi-label">
+              Ingreso total <span className="kpi-label-muted">· utilidad neta</span>
+            </p>
             <p className="kpi-valor">{fmt(totales.ingreso)}</p>
-          </div>
-        </div>
-        <div className="kpi-card kpi-utilidad">
-          <span className="kpi-icon">📈</span>
-          <div>
-            <p className="kpi-label">Utilidad neta</p>
-            <p className="kpi-valor">{fmt(totales.utilidad)}</p>
+            <p className="kpi-hint">
+              Mismo monto en ambos conceptos en este resumen.
+            </p>
           </div>
         </div>
         <div className="kpi-card kpi-costos">
@@ -295,12 +284,18 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
           <div>
             <p className="kpi-label">Comisiones</p>
             <p className="kpi-valor">{fmt(totales.comision)}</p>
+            <p className="kpi-hint">
+              Suma de comisiones registradas en cada venta aceptada.
+            </p>
           </div>
         </div>
       </div>
       <p className="grafica-nota">
         Los totales consideran solo ventas con estado <strong>Aceptado</strong>.
         Costos = <strong>Gastos adicionales</strong>.
+      </p>
+      <p className="grafica-nota grafica-nota-chico">
+        Comisiones (detalle): <strong>{fmt(totales.comision)}</strong>
       </p>
 
       {/* ── Gráfica mensual comparativa ── */}

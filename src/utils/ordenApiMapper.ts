@@ -1,5 +1,14 @@
 import type { OrdenDeCompra, RegistroVenta } from "../types";
 
+/** `pantallas_detalle` JSON puede venir en camelCase o snake_case (API/BD). */
+export function detallePantallaId(p: any): string {
+  return String(p?.pantallaId ?? p?.pantalla_id ?? "");
+}
+
+export function detallePrecioMensual(p: any): number {
+  return Number(p?.precioMensual ?? p?.precio_mensual ?? 0) || 0;
+}
+
 /** Fila de `ventas` desde el API (p. ej. GET /api/ordenes/ventas). */
 export function mapVentaFromApi(row: any): RegistroVenta {
   const pantallasIds: string[] =
@@ -8,13 +17,13 @@ export function mapVentaFromApi(row: any): RegistroVenta {
     ? row.pantallas_detalle
     : [];
   const metaProducto = pantallasDetalleRaw.find(
-    (p: any) => String(p?.pantallaId ?? "") === "__producto_total__",
+    (p: any) => detallePantallaId(p) === "__producto_total__",
   );
-  const pantallasDetalle = pantallasDetalleRaw.filter(
-    (p: any) => String(p?.pantallaId ?? "") !== "__producto_total__",
+  const pantallasDetalleFiltrado = pantallasDetalleRaw.filter(
+    (p: any) => detallePantallaId(p) !== "__producto_total__",
   );
-  const precioPantallasDesdeDetalle = pantallasDetalle.reduce(
-    (sum: number, p: any) => sum + (Number(p?.precioMensual ?? 0) || 0),
+  const precioPantallasDesdeDetalle = pantallasDetalleFiltrado.reduce(
+    (sum: number, p: any) => sum + detallePrecioMensual(p),
     0,
   );
   const precioPantallasMensual =
@@ -25,7 +34,14 @@ export function mapVentaFromApi(row: any): RegistroVenta {
     0,
     Number((precioMensualVenta - precioPantallasMensual).toFixed(2)),
   );
-  const productoDesdeMeta = Number(metaProducto?.precioMensual ?? NaN);
+  const productoDesdeMeta = Number(
+    metaProducto?.precioMensual ?? metaProducto?.precio_mensual ?? NaN,
+  );
+  const pantallasDetalle = pantallasDetalleFiltrado.map((p: any) => ({
+    pantallaId: detallePantallaId(p),
+    nombre: p?.nombre,
+    precioMensual: detallePrecioMensual(p),
+  }));
 
   return {
     id: row.id,
@@ -157,9 +173,9 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
               : undefined,
         pantallasDetalle: Array.isArray(line.pantallas_detalle)
           ? line.pantallas_detalle.map((p: any) => ({
-              pantallaId: String(p?.pantalla_id ?? ""),
+              pantallaId: detallePantallaId(p),
               nombre: String(p?.nombre ?? "").trim() || undefined,
-              precioMensual: Number(p?.precio_mensual ?? 0) || 0,
+              precioMensual: detallePrecioMensual(p),
             }))
           : [],
         vendidoA: line.vendido_a ?? "",

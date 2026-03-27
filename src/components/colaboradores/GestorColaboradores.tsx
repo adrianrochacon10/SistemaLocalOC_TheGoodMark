@@ -147,6 +147,11 @@ export function useGestorColaboradores(props: Props) {
     setMensajeGuardado("");
   };
 
+  const cerrarModalCodigo = () => {
+    setMostrarModalCodigo(false);
+    setErrorCodigo("");
+  };
+
   const abrirEditor = (colaborador: Colaborador) => {
     setNombre(colaborador.nombre);
     setAlias(colaborador.alias || "");
@@ -460,6 +465,8 @@ export function useGestorColaboradores(props: Props) {
   // ─── EDITAR COLABORADOR ──────────────────────────────────────────────
   const handleEditar = (colaborador: Colaborador) => {
     setColaboradorPendiente(colaborador);
+    setCodigoEdicion("");
+    setCodigoValidado(false);
     abrirEditor(colaborador);
   };
 
@@ -553,6 +560,7 @@ export function useGestorColaboradores(props: Props) {
     mensajeCodigo,
     errorCodigo,
     setMostrarModalCodigo,
+    cerrarModalCodigo,
     solicitarCodigoEdicion,
     validarCodigoEdicion,
     handleGuardar,

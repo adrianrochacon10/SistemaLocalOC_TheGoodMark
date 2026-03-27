@@ -1,5 +1,6 @@
 // src/components/ventas/RegistroVentaModal.tsx
 import React, { useState, useEffect, useMemo } from "react";
+import { backendApi } from "../../../lib/backendApi";
 import {
   RegistroVenta,
   Pantalla,
@@ -124,9 +125,21 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     ventaInicial?.fuenteOrigen ?? "",
   );
   const [codigoEdicion, setCodigoEdicion] = useState<string>("");
+  const [codigoValidado, setCodigoValidado] = useState(false);
+  const [mostrarModalCodigo, setMostrarModalCodigo] = useState(false);
+  const [mensajeCodigo, setMensajeCodigo] = useState("");
+  const [errorCodigoModal, setErrorCodigoModal] = useState("");
 
   const [error, setError] = useState<string>("");
   const [exito, setExito] = useState<string>("");
+
+  useEffect(() => {
+    setCodigoEdicion("");
+    setCodigoValidado(false);
+    setMostrarModalCodigo(false);
+    setMensajeCodigo("");
+    setErrorCodigoModal("");
+  }, [ventaInicial?.id]);
 
   const toNumberSafe = (value: string, fallback = 0): number => {
     if (value === "") return 0;
@@ -429,6 +442,10 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setPagoConsiderar(0);
     setNotas("");
     setCodigoEdicion("");
+    setCodigoValidado(false);
+    setMostrarModalCodigo(false);
+    setMensajeCodigo("");
+    setErrorCodigoModal("");
     setFuenteOrigen("");
   };
 
@@ -462,8 +479,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       setError("El costo de la venta no puede ser negativo");
       return;
     }
-    if (ventaInicial && usuarioActual.rol === "vendedor" && !codigoEdicion.trim()) {
-      setError("Ingresa código de edición para guardar cambios");
+    if (ventaInicial && usuarioActual.rol === "vendedor" && !codigoValidado) {
+      setMensajeCodigo(
+        "Para guardar los cambios, solicita e ingresa tu código de autorización.",
+      );
+      setErrorCodigoModal("");
+      setMostrarModalCodigo(true);
       return;
     }
 
@@ -539,8 +560,43 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     }
   };
 
+  const solicitarCodigoVenta = async () => {
+    if (!ventaInicial?.id) return;
+    setErrorCodigoModal("");
+    try {
+      const data = await backendApi.post<{
+        mensaje?: string;
+      }>("/api/codigos/solicitar", {
+        entidad: "orden",
+        entidad_id: ventaInicial.id,
+      });
+      setMensajeCodigo(data?.mensaje ?? "Código solicitado. Revisa tu correo.");
+    } catch (e) {
+      setErrorCodigoModal(
+        e instanceof Error ? e.message : "No se pudo solicitar el código",
+      );
+    }
+  };
+
+  const validarCodigoYGuardarVenta = () => {
+    if (!codigoEdicion.trim()) {
+      setErrorCodigoModal("Ingresa un código");
+      return;
+    }
+    setErrorCodigoModal("");
+    setCodigoValidado(true);
+    setMostrarModalCodigo(false);
+    void handleRegistrarVenta();
+  };
+
+  const cerrarModalCodigoVenta = () => {
+    setMostrarModalCodigo(false);
+    setErrorCodigoModal("");
+  };
+
   // ── JSX ───────────────────────────────────────────────────────────────
   return (
+    <>
     <div className="modal-overlay" onClick={onCerrar}>
       <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
         <h3
@@ -814,14 +870,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                   maxLength={300}
                 />
               </div>
-              {ventaInicial && usuarioActual.rol === "vendedor" && (
-                <InputField
-                  label="Código de edición *"
-                  value={codigoEdicion}
-                  onChange={setCodigoEdicion}
-                  placeholder="Ingresa tu código"
-                />
-              )}
               {tieneComisionPorcentaje && (
                 <>{/* bloque comisión porcentaje socio */}</>
               )}
@@ -880,5 +928,58 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
         </BotonAccion>
       </div>
     </div>
+
+    {mostrarModalCodigo && (
+      <div
+        className="modal-overlay"
+        style={{ zIndex: 11000 }}
+        onClick={cerrarModalCodigoVenta}
+      >
+        <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>Código requerido para editar</h3>
+            <button
+              type="button"
+              className="modal-close"
+              onClick={cerrarModalCodigoVenta}
+            >
+              ✕
+            </button>
+          </div>
+          <div className="modal-body">
+            <p>{mensajeCodigo}</p>
+            <div className="form-group">
+              <label>Código de edición</label>
+              <input
+                type="text"
+                value={codigoEdicion}
+                onChange={(e) => setCodigoEdicion(e.target.value)}
+                placeholder="Ingresa el código"
+              />
+            </div>
+            {errorCodigoModal && (
+              <div className="error-message">{errorCodigoModal}</div>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => void solicitarCodigoVenta()}
+            >
+              Solicitar código
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={validarCodigoYGuardarVenta}
+            >
+              Validar código
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };

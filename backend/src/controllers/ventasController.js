@@ -27,7 +27,8 @@ export async function actualizar(req, res) {
   const body = req.body || {};
   if (req.user.rol !== "admin") {
     const codigo = body.codigo_edicion;
-    const resultado = await validarYConsumirCodigo(codigo, req.user.id, "venta", id);
+    // Mismo `entidad` que POST /api/codigos/solicitar con entidad "orden" (id = venta).
+    const resultado = await validarYConsumirCodigo(codigo, req.user.id, "orden", id);
     if (!resultado.ok) return res.status(400).json({ error: resultado.error });
   }
   try {

@@ -4,6 +4,10 @@ import type { Session } from "@supabase/supabase-js";
 import { RegistroVenta } from "../types";
 import { backendApi } from "../lib/backendApi";
 import { registrarVenta } from "../lib/ventas";
+import {
+  detallePantallaId,
+  detallePrecioMensual,
+} from "../utils/ordenApiMapper";
 
 export function useVentas(profile: any, session: Session | null) {
   const [ventasRegistradas, setVentasRegistradas] = useState<RegistroVenta[]>(
@@ -18,13 +22,13 @@ export function useVentas(profile: any, session: Session | null) {
       ? row.pantallas_detalle
       : [];
     const metaProducto = pantallasDetalleRaw.find(
-      (p: any) => String(p?.pantallaId ?? "") === "__producto_total__",
+      (p: any) => detallePantallaId(p) === "__producto_total__",
     );
-    const pantallasDetalle = pantallasDetalleRaw.filter(
-      (p: any) => String(p?.pantallaId ?? "") !== "__producto_total__",
+    const pantallasDetalleFiltrado = pantallasDetalleRaw.filter(
+      (p: any) => detallePantallaId(p) !== "__producto_total__",
     );
-    const precioPantallasDesdeDetalle = pantallasDetalle.reduce(
-      (sum: number, p: any) => sum + (Number(p?.precioMensual ?? 0) || 0),
+    const precioPantallasDesdeDetalle = pantallasDetalleFiltrado.reduce(
+      (sum: number, p: any) => sum + detallePrecioMensual(p),
       0,
     );
     const precioPantallasMensual =
@@ -35,7 +39,14 @@ export function useVentas(profile: any, session: Session | null) {
       0,
       Number((precioMensualVenta - precioPantallasMensual).toFixed(2)),
     );
-    const productoDesdeMeta = Number(metaProducto?.precioMensual ?? NaN);
+    const productoDesdeMeta = Number(
+      metaProducto?.precioMensual ?? metaProducto?.precio_mensual ?? NaN,
+    );
+    const pantallasDetalle = pantallasDetalleFiltrado.map((p: any) => ({
+      pantallaId: detallePantallaId(p),
+      nombre: p?.nombre,
+      precioMensual: detallePrecioMensual(p),
+    }));
 
     return {
       id: row.id,

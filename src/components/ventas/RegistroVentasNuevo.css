@@ -291,6 +291,14 @@
   opacity: 0.9;
 }
 
+.stat-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  opacity: 0.82;
+}
+
 /* VENTAS CLIENTE */
 .ventas-cliente {
   margin-top: 20px;
@@ -608,6 +616,16 @@
   color: #6b7280;
   margin: 0;
 }
+.kpi-label-muted {
+  font-weight: 400;
+  color: #9ca3af;
+}
+.kpi-hint {
+  margin: 6px 0 0;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: #6b7280;
+}
 .kpi-valor {
   font-size: 1.15rem;
   font-weight: 700;
@@ -616,9 +634,6 @@
 
 .kpi-ingreso .kpi-valor {
   color: #1e3a5f;
-}
-.kpi-utilidad .kpi-valor {
-  color: #16a34a;
 }
 .kpi-costos .kpi-valor {
   color: #dc2626;
@@ -631,6 +646,11 @@
   margin: -6px 2px 4px;
   font-size: 0.92rem;
   color: #4b5563;
+}
+.grafica-nota-chico {
+  margin: 2px 2px 8px;
+  font-size: 0.75rem;
+  color: #6b7280;
 }
 
 /* ═══════════════════════ GRÁFICA CARDS ═══════════════════════ */

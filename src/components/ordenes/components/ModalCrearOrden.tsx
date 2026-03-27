@@ -12,7 +12,11 @@ import {
   ConfiguracionEmpresa,
 } from "../../../types";
 import { backendApi } from "../../../lib/backendApi";
-import { mapVentaFromApi } from "../../../utils/ordenApiMapper";
+import {
+  mapVentaFromApi,
+  detallePantallaId,
+  detallePrecioMensual,
+} from "../../../utils/ordenApiMapper";
 import { ventaSolapaMesCalendario } from "../../../utils/ordenUtils";
 import {
   construirDetalleLineas,
@@ -671,9 +675,10 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                           ?.nombre ?? "Pantalla";
                                       const marcada = pantallasSeleccionadasLocal.includes(pid);
                                       const snap = v.pantallasDetalle?.find(
-                                        (d) => String(d.pantallaId) === String(pid),
+                                        (d) =>
+                                          detallePantallaId(d) === String(pid),
                                       );
-                                      const precioSnap = Number(snap?.precioMensual ?? 0) || 0;
+                                      const precioSnap = detallePrecioMensual(snap);
                                       const precioCat =
                                         Number(
                                           pantallas.find((p) => String(p.id) === String(pid))

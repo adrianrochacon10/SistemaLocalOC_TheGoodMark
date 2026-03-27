@@ -113,14 +113,14 @@ export const GestorPantallasClientes: React.FC<GestorPantallasClientesProps> = (
       {gestor.mostrarModalCodigo && (
         <div
           className="modal-overlay"
-          onClick={() => gestor.setMostrarModalCodigo(false)}
+          onClick={() => gestor.cerrarModalCodigo()}
         >
           <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Código requerido para editar</h3>
               <button
                 className="modal-close"
-                onClick={() => gestor.setMostrarModalCodigo(false)}
+                onClick={() => gestor.cerrarModalCodigo()}
               >
                 ✕
               </button>
