@@ -12,6 +12,7 @@ interface ResumenVentaProps {
   fechaInicio: string;
   fechaFin: string;
   mesesRenta: number;
+  duracionUnidad?: "meses" | "dias";
   precioGeneral: number;
   porcentajeSocio: number;
   montoSocio: number;
@@ -22,6 +23,7 @@ interface ResumenVentaProps {
   tipoComision?: string;
   productoNombre?: string;
   precioProductos?: number;
+  precioPantallas?: number;
   gastosAdicionales?: number;
 }
 
@@ -33,6 +35,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   fechaInicio,
   fechaFin,
   mesesRenta,
+  duracionUnidad = "meses",
   precioGeneral,
   porcentajeSocio,
   montoSocio,
@@ -43,6 +46,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   tipoComision = "",
   productoNombre = "",
   precioProductos = 0,
+  precioPantallas = 0,
   gastosAdicionales = 0,
 }) => {
   // ── Derivados ──────────────────────────────────────────────
@@ -54,10 +58,9 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
     tipoComision === "consideracion" ? pagoConsiderar * mesesRenta : 0;
   const totalMontoSocio = aplicarDescuento ? montoSocio * mesesRenta : 0;
 
-  // Solicitud: que la Utilidad neta sea igual a los ingresos totales (totalBruto).
-  // Nota: aunque aquí se muestran costos/comisiones/gastos, el valor de utilidad neta
-  // se mantiene igual a ingresos para que coincida con el total.
-  const utilidad = totalBruto;
+  // Regla solicitada: precio final suma gastos y descuenta comisiones.
+  const precioVentaFinal = totalBruto + totalGastosAdicionales - totalComision;
+  const utilidad = precioVentaFinal;
 
   return (
     <div className="resumen-venta">
@@ -107,7 +110,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
         <div className="resumen-item">
           <span className="label">Duración:</span>
           <span className="valor">
-            {mesesRenta} mes{mesesRenta !== 1 ? "es" : ""}
+            {mesesRenta} {duracionUnidad === "dias" ? (mesesRenta !== 1 ? "días" : "día") : (mesesRenta !== 1 ? "meses" : "mes")}
           </span>
         </div>
 
@@ -116,11 +119,27 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
           {/* ── TOTAL BRUTO — siempre precio lleno ── */}
           <div className="resumen-fin-bloque">
             <div className="resumen-fin-row resumen-fin-principal">
-              <span>Precio de la venta</span>
-              <span>{formatearMoneda(totalBruto)}</span>
+              <span>Precio de la venta por periodo</span>
+              <span>{formatearMoneda(precioVentaFinal)}</span>
             </div>
             <div className="resumen-fin-row resumen-fin-sub">
-              <span>Precio de la venta por mes</span>
+              <span>↳ Base (pantallas + productos)</span>
+              <span>{formatearMoneda(totalBruto)}</span>
+            </div>
+            {precioPantallas > 0 && (
+              <div className="resumen-fin-row resumen-fin-sub">
+                <span>↳ Pantallas</span>
+                <span>{formatearMoneda(precioPantallas)}</span>
+              </div>
+            )}
+            {precioProductos > 0 && (
+              <div className="resumen-fin-row resumen-fin-sub">
+                <span>↳ Productos</span>
+                <span>{formatearMoneda(precioProductos)}</span>
+              </div>
+            )}
+            <div className="resumen-fin-row resumen-fin-sub">
+              <span>Precio por periodo</span>
               <span>{formatearMoneda(precioGeneral)}</span>
             </div>
           </div>
@@ -136,7 +155,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
                 <span>{formatearMoneda(totalPagoConsiderar)}</span>
               </div>
               <div className="resumen-fin-row resumen-fin-sub">
-                <span>↳ Pago por mes</span>
+                <span>↳ Pago</span>
                 <span>
                   {formatearMoneda(totalPagoConsiderar / (mesesRenta || 1))}
                 </span>
@@ -154,7 +173,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
                 <span>{formatearMoneda(totalCostos)}</span>
               </div>
               <div className="resumen-fin-row resumen-fin-sub">
-                <span>↳ Costo por mes</span>
+                <span>↳ Costo</span>
                 <span>
                   {formatearMoneda(totalCostos / (mesesRenta || 1))}
                 </span>
@@ -181,7 +200,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
                 <span>− {formatearMoneda(totalComision)}</span>
               </div>
               <div className="resumen-fin-row resumen-fin-sub">
-                <span>↳ Comisión por mes ({comisionPorcentaje}%)</span>
+                <span>↳ Comisión ({comisionPorcentaje}%)</span>
                 <span>
                   − {formatearMoneda(totalComision / (mesesRenta || 1))}
                 </span>
@@ -204,7 +223,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
                 <span>{porcentajeSocio}%</span>
               </div>
               <div className="resumen-fin-row resumen-fin-sub">
-                <span>↳ Monto socio por mes</span>
+                <span>↳ Monto socio</span>
                 <span>{formatearMoneda(montoSocio)}</span>
               </div>
             </div>

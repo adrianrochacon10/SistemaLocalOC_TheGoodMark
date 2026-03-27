@@ -45,6 +45,10 @@ export function useVentas(profile: any, session: Session | null) {
       productoPrecioMensual: leerPrecioProducto(
         row.producto ?? row.colaborador?.producto,
       ),
+      precioPantallasMensual: Number(row.precio_pantallas_mensual ?? 0) || 0,
+      pantallasDetalle: Array.isArray(row.pantallas_detalle)
+        ? row.pantallas_detalle
+        : [],
       vendidoA:
         row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
       precioGeneral: Number(row.precio_por_mes ?? row.precio_general ?? 0) || 0,
@@ -141,6 +145,8 @@ export function useVentas(profile: any, session: Session | null) {
       comision: venta.comision ?? 0,
       comision_porcentaje: venta.comisionPorcentaje ?? 0,
       gastos_adicionales: venta.gastosAdicionales ?? 0,
+      precio_pantallas_mensual: venta.precioPantallasMensual ?? 0,
+      pantallas_detalle: venta.pantallasDetalle ?? [],
       costos_mes: venta.costos ?? 0,
       costos_total: (venta.costos ?? 0) * venta.mesesRenta,
       comision_mes: venta.comision ?? 0,
@@ -202,6 +208,8 @@ export function useVentas(profile: any, session: Session | null) {
       comision: venta.comision ?? 0,
       comision_porcentaje: venta.comisionPorcentaje ?? 0,
       gastos_adicionales: venta.gastosAdicionales ?? 0,
+      precio_pantallas_mensual: venta.precioPantallasMensual ?? 0,
+      pantallas_detalle: venta.pantallasDetalle ?? [],
       pantallas_ids: venta.pantallasIds,
       notas: venta.notas ?? null,
       fuente_origen: venta.fuenteOrigen ?? null,

@@ -33,6 +33,10 @@ export function mapVentaFromApi(row: any): RegistroVenta {
     productoPrecioMensual: leerPrecioProducto(
       row.producto ?? row.colaborador?.producto,
     ),
+    precioPantallasMensual: Number(row.precio_pantallas_mensual ?? 0) || 0,
+    pantallasDetalle: Array.isArray(row.pantallas_detalle)
+      ? row.pantallas_detalle
+      : [],
     vendidoA:
       row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
     precioGeneral:

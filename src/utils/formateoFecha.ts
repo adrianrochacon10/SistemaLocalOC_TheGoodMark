@@ -33,3 +33,19 @@ export const calcularFechaFin = (fechaInicio: string, mesesRenta: number): strin
   fin.setMonth(fin.getMonth() + mesesRenta);
   return fin.toISOString().split("T")[0];
 };
+
+export const calcularFechaFinDuracion = (
+  fechaInicio: string,
+  duracion: number,
+  unidad: "meses" | "dias",
+): string => {
+  if (!fechaInicio || !duracion) return "";
+  const inicio = stringAFecha(fechaInicio);
+  const fin = new Date(inicio);
+  if (unidad === "dias") {
+    fin.setDate(fin.getDate() + duracion);
+  } else {
+    fin.setMonth(fin.getMonth() + duracion);
+  }
+  return fin.toISOString().split("T")[0];
+};

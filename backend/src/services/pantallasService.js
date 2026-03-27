@@ -7,10 +7,15 @@ export async function listar() {
 }
 
 export async function crear(payload, userId) {
+  const precio = Number(payload.precio ?? 0);
+  if (!Number.isFinite(precio) || precio < 0) {
+    return { error: "precio debe ser un numero >= 0" };
+  }
   const { data, error } = await supabase
     .from("pantallas")
     .insert({
       nombre: payload.nombre.trim(),
+      precio: Math.round(precio * 100) / 100,
       creado_por: userId,
     })
     .select()
@@ -20,9 +25,18 @@ export async function crear(payload, userId) {
 }
 
 export async function actualizar(id, payload) {
+  const nextPayload = { ...payload };
+  if (payload.precio !== undefined) {
+    const precio = Number(payload.precio);
+    if (!Number.isFinite(precio) || precio < 0) {
+      throw new Error("precio debe ser un numero >= 0");
+    }
+    nextPayload.precio = Math.round(precio * 100) / 100;
+  }
+
   const { data, error } = await supabase
     .from("pantallas")
-    .update(payload)
+    .update(nextPayload)
     .eq("id", id)
     .select()
     .single();

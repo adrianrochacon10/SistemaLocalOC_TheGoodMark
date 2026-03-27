@@ -108,7 +108,7 @@ export function useGestorColaboradores(props: Props) {
   const [errorPantalla, setErrorPantalla] = useState("");
 
   // ─── FILAS DINÁMICAS ─────────────────────────────────────────────────
-  const pantallasForm = useFilasFormulario({ nombre: "", ubicacion: "" });
+  const pantallasForm = useFilasFormulario({ nombre: "", precio: 0 });
   const productosForm = useFilasFormulario({ nombre: "", precio: 0 });
 
   // ─── HELPERS INTERNOS ────────────────────────────────────────────────
@@ -161,19 +161,23 @@ export function useGestorColaboradores(props: Props) {
     const colabAny = colaborador as Colaborador & {
       pantalla_ids?: string[] | string;
       producto_ids?: string[] | string;
-      pantallas?: Array<{ id: string; nombre: string }>;
+      pantallas?: Array<{ id: string; nombre: string; precio?: number }>;
       productos?: Array<{ id: string; nombre: string; precio?: number }>;
     };
 
-    const pantallasAsociadasDesdeBackend = (colabAny.pantallas ?? []).map((p) => ({
-      nombre: p.nombre,
-      tempId: p.id,
-    }));
+    const pantallasAsociadasDesdeBackend = (colabAny.pantallas ?? []).map((p) => {
+      const encontrada = pantallas.find((x) => String(x.id) === String(p.id));
+      return {
+        nombre: p.nombre,
+        precio: Number(p.precio ?? encontrada?.precio ?? 0),
+        tempId: p.id,
+      };
+    });
     const pantallasAsociadasDesdeAsignaciones = asignaciones
       .filter((a) => a.clienteId === colaborador.id && a.activa)
       .map((a) => {
         const p = pantallas.find((x) => x.id === a.pantallaId);
-        return p ? { nombre: p.nombre, tempId: p.id } : null;
+        return p ? { nombre: p.nombre, precio: Number(p.precio ?? 0), tempId: p.id } : null;
       })
       .filter(Boolean) as { nombre: string; tempId: string }[];
     const pantallasAsociadas =
@@ -188,7 +192,7 @@ export function useGestorColaboradores(props: Props) {
         ? pantallasAsociadas
         : toIds(colabAny.pantalla_ids).map((id) => {
             const p = pantallas.find((x) => x.id === id);
-            return p ? { nombre: p.nombre, tempId: p.id } : null;
+            return p ? { nombre: p.nombre, precio: Number(p.precio ?? 0), tempId: p.id } : null;
           }).filter(Boolean) as { nombre: string; tempId: string }[];
 
     pantallasForm.setFilas(
@@ -197,6 +201,7 @@ export function useGestorColaboradores(props: Props) {
         : [
             {
               nombre: "",
+              precio: 0,
               tempId: Math.random().toString(36).substring(2, 15),
             },
           ],
@@ -281,6 +286,7 @@ export function useGestorColaboradores(props: Props) {
     const pantallasValidas = pantallasForm.filasValidas() as Array<{
       tempId: string;
       nombre?: string;
+      precio?: number | string;
     }>;
     if (pantallasValidas.length === 0) {
       setErrorPantalla("Debe agregar al menos una pantalla");
@@ -293,9 +299,12 @@ export function useGestorColaboradores(props: Props) {
       precio?: number | string;
     }>;
 
-    const pantallaNombres = pantallasValidas
-      .map((p) => String(p.nombre ?? "").trim())
-      .filter(Boolean);
+    const pantallaRows = pantallasValidas
+      .map((p) => ({
+        nombre: String(p.nombre ?? "").trim(),
+        precio: Number(p.precio ?? 0),
+      }))
+      .filter((p) => p.nombre);
     const productoRows = productosValidos
       .map((p) => ({
         nombre: String(p.nombre ?? "").trim(),
@@ -322,18 +331,49 @@ export function useGestorColaboradores(props: Props) {
     try {
       setGuardando(true);
       const pantallaIds: string[] = [];
-      for (const nombrePantalla of pantallaNombres) {
+      const pantallaPrecioById: Record<string, number> = {};
+      const pantallaNombreById: Record<string, string> = {};
+      for (const row of pantallaRows) {
         const existente = pantallas.find(
-          (x) => x.nombre.trim().toLowerCase() === nombrePantalla.toLowerCase(),
+          (x) => x.nombre.trim().toLowerCase() === row.nombre.toLowerCase(),
         );
         if (existente) {
+          pantallaNombreById[String(existente.id)] = String(
+            existente.nombre ?? row.nombre ?? "Pantalla",
+          );
+          pantallaPrecioById[String(existente.id)] = Number(row.precio ?? 0) || 0;
+          if (Number(row.precio) >= 0 && Number(row.precio) !== Number(existente.precio ?? 0)) {
+            await backendApi.patch(`/api/pantallas/${existente.id}`, {
+              nombre: existente.nombre,
+              precio: Number(row.precio),
+            });
+          }
           pantallaIds.push(existente.id);
           continue;
         }
-        const creada = await backendApi.post("/api/pantallas", { nombre: nombrePantalla });
+        const creada = await backendApi.post("/api/pantallas", {
+          nombre: row.nombre,
+          precio: Number(row.precio ?? 0),
+        });
         if (creada?.id) {
+          pantallaNombreById[String(creada.id)] = String(
+            creada.nombre ?? row.nombre ?? "Pantalla",
+          );
+          pantallaPrecioById[String(creada.id)] = Number(row.precio ?? 0) || 0;
           pantallaIds.push(creada.id);
         }
+      }
+      // Segundo pase para asegurar persistencia del precio en todos los IDs vinculados.
+      for (const pantallaId of pantallaIds) {
+        const precioPantalla = Number(pantallaPrecioById[String(pantallaId)] ?? 0) || 0;
+        const nombrePantalla =
+          pantallaNombreById[String(pantallaId)] ??
+          pantallas.find((p) => String(p.id) === String(pantallaId))?.nombre ??
+          "Pantalla";
+        await backendApi.patch(`/api/pantallas/${pantallaId}`, {
+          nombre: nombrePantalla,
+          precio: precioPantalla,
+        });
       }
       if (pantallaIds.length === 0) {
         setErrorPantalla("Debe agregar al menos una pantalla válida");

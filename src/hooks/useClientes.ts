@@ -6,7 +6,7 @@ import { backendApi } from "../lib/backendApi";
 type ExtrasColaborador = {
   pantalla_ids?: string[];
   producto_ids?: string[];
-  pantallas?: Array<{ id: string; nombre: string }>;
+  pantallas?: Array<{ id: string; nombre: string; precio?: number }>;
   productos?: Array<{ id: string; nombre: string; precio?: number }>;
   color?: string;
 };

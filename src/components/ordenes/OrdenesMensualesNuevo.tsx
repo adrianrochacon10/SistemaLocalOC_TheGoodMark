@@ -58,8 +58,13 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
   const [modalAbierto, setModal] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
+  const [colaboradorFiltroId, setColaboradorFiltroId] = useState<string>("");
 
-  const ordenesEsteMes = ordenes.filter((o) => o.mes === mes && o.año === año);
+  const ordenesEsteMes = ordenes.filter((o) => {
+    if (!(o.mes === mes && o.año === año)) return false;
+    if (!colaboradorFiltroId) return true;
+    return String(o.colaboradorId ?? "") === String(colaboradorFiltroId);
+  });
 
   const handleConfirmarModal = async (payload: CrearOrdenPayload) => {
     setError("");
@@ -111,6 +116,30 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
           onCambiarMes={setMes}
           onCambiarAño={setAño}
         />
+        <div className="selector-mes-section" style={{ marginTop: 10 }}>
+          <h3>Filtrar por colaborador</h3>
+          <div className="selector-row">
+            <div className="selector-group" style={{ minWidth: 280 }}>
+              <label>Colaborador:</label>
+              <select
+                value={colaboradorFiltroId}
+                onChange={(e) => setColaboradorFiltroId(e.target.value)}
+              >
+                <option value="">Todos</option>
+                {clientes
+                  .slice()
+                  .sort((a, b) =>
+                    String(a.nombre ?? "").localeCompare(String(b.nombre ?? "")),
+                  )
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+        </div>
 
         {error && !modalAbierto && (
           <div className="orden-error-banner" role="alert">

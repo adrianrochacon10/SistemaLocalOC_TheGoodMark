@@ -1,14 +1,4 @@
 -- TGM - Esquema Supabase
-DROP TABLE IF EXISTS codigos_edicion;
-DROP TABLE IF EXISTS ordenes_mes;
-DROP TABLE IF EXISTS ventas;
-DROP TABLE IF EXISTS porcentajes;
-DROP TABLE IF EXISTS productos;
-DROP TABLE IF EXISTS colaboradores;
-DROP TABLE IF EXISTS pantallas;
-DROP TABLE IF EXISTS tipo_pago;
-DROP TABLE IF EXISTS perfiles;
-
 CREATE TABLE perfiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   nombre text NOT NULL,

@@ -76,6 +76,13 @@ export const ColaboradorCard: React.FC<Props> = ({
                 {pantallas.map((p) => (
                   <li key={p.id}>
                     <span className="pantalla-nombre">{p.nombre}</span>
+                    <span className="pantalla-ubicacion">
+                      $
+                      {(Number(p.precio ?? 0) || 0).toLocaleString("es-MX", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
                     {p.ubicacion && (
                       <span className="pantalla-ubicacion">{p.ubicacion}</span>
                     )}

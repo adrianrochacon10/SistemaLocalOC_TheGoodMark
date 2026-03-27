@@ -82,6 +82,12 @@ export interface RegistroVenta {
   productoPrecioMensual?: number;
   productoIncluidoEnOrden?: boolean;
   precioBaseMensualOrden?: number;
+  precioPantallasMensual?: number;
+  pantallasDetalle?: Array<{
+    pantallaId: string;
+    nombre?: string;
+    precioMensual?: number;
+  }>;
   codigoEdicion?: string;
   fuenteOrigen?: string;
   vendidoA: string;

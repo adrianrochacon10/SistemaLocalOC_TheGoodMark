@@ -161,6 +161,12 @@ export const ColaboradorForm: React.FC<Props> = ({
             label: "Nombre de Pantalla",
             placeholder: "Ej: Cantarranas",
           },
+          {
+            key: "precio",
+            label: "Precio mensual",
+            placeholder: "Ej: 1200.00",
+            tipo: "number",
+          },
         ]}
         filas={pantallasForm.filas}
         onActualizarCampo={pantallasForm.actualizarCampo}

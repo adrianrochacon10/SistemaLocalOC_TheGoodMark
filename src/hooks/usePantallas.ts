@@ -68,6 +68,7 @@ export function usePantallas(profile: any, session: Session | null) {
     try {
       const data = await backendApi.post("/api/pantallas", {
         nombre: pantalla.nombre,
+        precio: Number(pantalla.precio ?? 0),
       });
 
       if (data) {
@@ -78,6 +79,10 @@ export function usePantallas(profile: any, session: Session | null) {
           fechaCreacion: data.fecha_creacion
             ? new Date(data.fecha_creacion)
             : pantalla.fechaCreacion,
+          precio:
+            data.precio != null
+              ? Number(data.precio)
+              : Number(pantalla.precio ?? 0),
         };
       }
     } catch (e) {

@@ -1,7 +1,7 @@
 import { supabase } from "../config/supabase.js";
 
 const SELECT_COLABORADOR =
-  "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre), producto:productos(*)";
+  "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre, precio), producto:productos(*)";
 
 const leerPrecioProducto = (p) => {
   const n = Number(p?.precio ?? p?.precio_unitario ?? p?.precio_por_mes ?? 0);
@@ -35,7 +35,10 @@ async function enrichRelaciones(colaborador) {
 
   const [pantallasRes, productosRes] = await Promise.all([
     pantallaIds.length
-      ? supabase.from("pantallas").select("id,nombre").in("id", pantallaIds)
+      ? supabase
+          .from("pantallas")
+          .select("id,nombre,precio")
+          .in("id", pantallaIds)
       : Promise.resolve({
           data: colaborador?.pantalla ? [colaborador.pantalla] : [],
           error: null,
