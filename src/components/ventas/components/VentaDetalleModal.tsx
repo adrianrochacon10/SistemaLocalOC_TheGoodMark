@@ -145,8 +145,13 @@ export const VentaDetalleModal: React.FC<Props> = ({
             >
               {(() => {
                 const meses = venta.mesesRenta || 1;
-                const precioMes = venta.precioGeneral ?? 0;
-                const totalBruto = venta.precioTotal ?? precioMes * meses;
+                const precioMes = Number(venta.precioGeneral ?? 0) || 0;
+                const totalBruto =
+                  Number(venta.importeTotal ?? 0) > 0
+                    ? Number(venta.importeTotal ?? 0)
+                    : Number(venta.precioTotal ?? 0) > 0
+                      ? Number(venta.precioTotal ?? 0)
+                      : precioMes * meses;
 
                 const totalCostos = venta.costos ?? 0;
                 const totalComision = venta.comision ?? 0;

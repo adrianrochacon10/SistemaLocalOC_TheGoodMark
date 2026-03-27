@@ -33,14 +33,16 @@ export const VentaCard: React.FC<VentaCardProps> = ({
   const colores = colorPorEstado(venta.estadoVenta);
   const colorColaborador = colaborador?.color || "#1461a1";
 
-  const precioMes =
-    venta.precioGeneral > 0
-      ? venta.precioGeneral
-      : venta.mesesRenta > 0
-        ? (venta.precioTotal ?? 0) / venta.mesesRenta
-        : (venta.precioTotal ?? 0);
-
-  const precioTotalContrato = venta.precioTotal ?? precioMes * venta.mesesRenta;
+  const meses = Math.max(1, Number(venta.mesesRenta) || 1);
+  const precioMes = Number(venta.precioGeneral ?? 0) || 0;
+  const precioTotalContrato =
+    Number(venta.precioTotal ?? 0) > 0
+        ? Number(venta.precioTotal ?? 0)
+        : Number(venta.importeTotal ?? 0) > 0
+      ? Number(venta.importeTotal ?? 0)
+        : precioMes * meses;
+  const precioPorPeriodo =
+    meses > 0 ? precioTotalContrato / meses : precioMes;
 
   return (
     <div
@@ -178,16 +180,14 @@ export const VentaCard: React.FC<VentaCardProps> = ({
             fontSize: "1em",
           }}
         >
-          {formatearMoneda(precioMes)}
+          {formatearMoneda(precioTotalContrato)}
         </span>
 
-        {venta.mesesRenta > 1 && (
-          <span
-            style={{ color: "#64748b", fontSize: "0.82em", fontWeight: 500 }}
-          >
-            Total: {formatearMoneda(precioTotalContrato)}
-          </span>
-        )}
+        <span
+          style={{ color: "#64748b", fontSize: "0.82em", fontWeight: 500 }}
+        >
+          Precio por periodo: {formatearMoneda(precioPorPeriodo)}
+        </span>
 
         {venta.importeTotal !== venta.precioTotal && venta.precioTotal && (
           <span

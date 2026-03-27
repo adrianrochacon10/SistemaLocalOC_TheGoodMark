@@ -26,16 +26,19 @@ function round2(n: number): number {
   return Math.round(Number(n) * 100) / 100;
 }
 
-/** Monto de línea para PDF: total de la venta, no el precio mensual suelto. */
+/** Monto de línea para PDF: prioriza importe total ya guardado en la orden (detalle). */
 function precioLineaOrden(v: RegistroVenta): number {
+  const imp = round2(Number(v.importeTotal) || 0);
+  const pt = round2(Number(v.precioTotal) || 0);
+  if (imp > 0) return imp;
+  if (pt > 0) return pt;
+
   const meses = Math.max(1, Number(v.mesesRenta) || 1);
   const baseMensual = Number(v.precioBaseMensualOrden);
   const productoMensual = round2(Number(v.productoPrecioMensual) || 0);
   const incluirProducto = v.productoIncluidoEnOrden === true;
   const precioGeneralMensual = round2(Number(v.precioGeneral) || 0);
 
-  // Si la orden trae desglose base/producto, usarlo para reflejar exactamente
-  // la decisión de "sumar producto en esta orden".
   if (Number.isFinite(baseMensual) && baseMensual >= 0) {
     const mensual = round2(
       baseMensual + (incluirProducto ? productoMensual : 0),
@@ -43,7 +46,6 @@ function precioLineaOrden(v: RegistroVenta): number {
     return round2(mensual * meses);
   }
 
-  // Si no hay desglose, usar precio mensual de la venta y sumar producto.
   if (precioGeneralMensual > 0) {
     const mensual = round2(
       precioGeneralMensual + (incluirProducto ? productoMensual : 0),
@@ -51,10 +53,6 @@ function precioLineaOrden(v: RegistroVenta): number {
     return round2(mensual * meses);
   }
 
-  const imp = round2(Number(v.importeTotal) || 0);
-  const pt = round2(Number(v.precioTotal) || 0);
-  if (imp > 0) return imp;
-  if (pt > 0) return pt;
   return 0;
 }
 
@@ -189,15 +187,11 @@ function drawResumenFinanciero(
   const pad = 3;
   const lineH = 4.5;
   const sub = totales.subtotal;
-  const desc = 0;
-  const subNeto = sub - desc;
   const iva = totales.ivaTotal;
   const total = totales.total;
   const pct = totales.ivaPercentaje;
   const rows: { label: string; value: string; bold?: boolean }[] = [
-    { label: "Gran Total", value: fmtMoney(sub) },
-    { label: "Descuento", value: `-${fmtMoney(desc)}` },
-    { label: "Subtotal", value: fmtMoney(subNeto) },
+    { label: "Subtotal", value: fmtMoney(sub) },
     { label: `I.V.A. (${pct}%)`, value: fmtMoney(iva) },
   ];
   const titleH = 7;
@@ -320,9 +314,16 @@ export async function exportarPDFOrden(
       ? numPantallas
       : registros.reduce((m, v) => Math.max(m, v.pantallasIds?.length ?? 0), 0);
 
+  const numProductosBeneficio = registros.filter(
+    (v) =>
+      Boolean((v.productoNombre ?? "").trim()) ||
+      v.productoIncluidoEnOrden === true ||
+      (Array.isArray(v.productoIds) && v.productoIds.length > 0),
+  ).length;
+
   const h2 = drawInfoBox(doc, margin + boxW + gap, y, boxW, "BENEFICIOS", [
     { label: "Pantallas", value: String(pantallasBeneficio) },
-    { label: "Descuento", value: fmtMoney(0) },
+    { label: "Producto", value: String(numProductosBeneficio) },
   ]);
 
   y += Math.max(h1, h2) + 8;
@@ -341,13 +342,36 @@ export async function exportarPDFOrden(
   for (const venta of registros) {
     idx += 1;
     const ids = venta.pantallasIds ?? [];
+    const pantallasDetalle = Array.isArray(venta.pantallasDetalle)
+      ? venta.pantallasDetalle
+      : [];
     const nombresPantallas = ids
       .map((id) => pMap.get(String(id))?.nombre ?? "Pantalla")
       .filter(Boolean);
-    const pantallasTexto =
-      nombresPantallas.length > 0 ? nombresPantallas.join(", ") : "Sin pantallas";
+    const pantallasConPrecio =
+      pantallasDetalle.length > 0
+        ? pantallasDetalle.map(
+            (p) =>
+              `- ${p.nombre || pMap.get(String(p.pantallaId))?.nombre || "Pantalla"}: ${fmtMoney(
+                Number(p.precioMensual ?? 0),
+              )}`,
+          )
+        : (
+            nombresPantallas.length > 0
+              ? nombresPantallas.map((n) => `- ${n}`)
+              : ["- Sin pantallas"]
+          );
     const titulo = "SERVICIO";
-    const mesesV = Number(venta.mesesRenta) || 1;
+    const mr = Number(venta.mesesRenta);
+    const fiD = new Date(venta.fechaInicio);
+    const ffD = new Date(venta.fechaFin);
+    const mesesPorFechas = Math.max(
+      1,
+      (ffD.getFullYear() - fiD.getFullYear()) * 12 +
+        (ffD.getMonth() - fiD.getMonth()),
+    );
+    const mesesV =
+      Number.isFinite(mr) && mr > 0 ? Math.floor(mr) : mesesPorFechas;
     const fi = new Date(venta.fechaInicio).toLocaleDateString("es-MX");
     const ff = new Date(venta.fechaFin).toLocaleDateString("es-MX");
     const prod = (venta.productoNombre ?? "").trim();
@@ -362,34 +386,46 @@ export async function exportarPDFOrden(
         ? productosNombres
         : Array.isArray(venta.productoIds) && venta.productoIds.length > 0
           ? venta.productoIds.map((_, i) => `Producto ${i + 1}`)
-          : ["Sin producto"];
+          : [];
     const precioProd = round2(Number(venta.productoPrecioMensual) || 0);
     const prodIncluido = venta.productoIncluidoEnOrden === true;
+    const gastosMonto = round2(Number(venta.gastosAdicionales) || 0);
+    const gastosIncluidos =
+      venta.gastosIncluidosEnOrden === true ||
+      (venta.gastosIncluidosEnOrden !== false && gastosMonto > 0);
     const precio = precioLineaOrden(venta);
     const lineaProducto =
       prodIncluido && precioProd > 0
         ? `Precio de producto: ${fmtMoney(precioProd)}`
         : null;
+    const lineaGastos =
+      gastosMonto > 0 && gastosIncluidos
+        ? `Gastos adicionales (incluidos en la orden): ${fmtMoney(gastosMonto)}`
+        : venta.gastosIncluidosEnOrden === false
+          ? "Gastos adicionales: no incluidos en esta orden"
+          : null;
     descByRow.set(idx - 1, {
       title: titulo,
       details: [
         `Pantallas (${ids.length}):`,
-        ...(
-          nombresPantallas.length > 0
-            ? nombresPantallas.map((n) => `- ${n}`)
-            : ["- Sin pantallas"]
-        ),
-        ...(prodIncluido
+        ...pantallasConPrecio,
+        ...(prodIncluido && productosDetalle.length > 0
           ? [
               `Producto(s) (${productosDetalle.length}):`,
               ...productosDetalle.map((p) => `- ${p}`),
             ]
-          : ["Producto(s): No incluido"]),
+          : []),
         ...(lineaProducto ? [lineaProducto] : []),
+        ...(lineaGastos ? [lineaGastos] : []),
         `Periodo: ${fi} - ${ff}`,
       ],
     });
-    tableBody.push([String(idx), " ", `${mesesV} Mes`, fmtMoney(precio)]);
+    tableBody.push([
+      String(idx),
+      " ",
+      mesesV === 1 ? "1 Mes" : `${mesesV} Meses`,
+      fmtMoney(precio),
+    ]);
   }
 
   if (tableBody.length === 0) {

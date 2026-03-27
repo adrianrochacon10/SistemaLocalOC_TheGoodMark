@@ -63,14 +63,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const [vendidoA, setVendidoA] = useState<string>(
     ventaInicial?.vendidoA ?? "",
   );
-  const [precioGeneral, setPrecioGeneral] = useState<number>(
-    ventaInicial?.precioGeneral ?? 0,
-  );
-  const [precioGeneralEditadoManualmente, setPrecioGeneralEditadoManualmente] =
-    useState<boolean>(Boolean(ventaInicial));
-  const [precioVentaPorMesOverride, setPrecioVentaPorMesOverride] = useState<
-    number | null
-  >(null);
   const [productosSeleccionados, setProductosSeleccionados] = useState<string[]>(
     ventaInicial?.productoIds ??
       (ventaInicial?.productoId ? [String(ventaInicial.productoId)] : []),
@@ -84,10 +76,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       : ventaInicial.productoId
         ? [String(ventaInicial.productoId)]
         : [];
-    if (ids.length === 1) {
-      return { [ids[0]]: Number(ventaInicial.productoPrecioMensual ?? 0) || 0 };
-    }
-    return {};
+    if (ids.length === 0) return {};
+    const totalProductoInicial = Number(ventaInicial.productoPrecioMensual ?? 0) || 0;
+    const unit = totalProductoInicial / ids.length;
+    const map: Record<string, number> = {};
+    for (const id of ids) map[String(id)] = unit;
+    return map;
   });
   const [precioVentaPantallaMap, setPrecioVentaPantallaMap] = useState<
     Record<string, number>
@@ -204,6 +198,21 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     return Array.from(map.values());
   }, [clienteSeleccionado, clientes, productos]);
 
+  const precioProductoFallbackMap = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!ventaInicial) return m;
+    const ids = Array.isArray(ventaInicial.productoIds)
+      ? ventaInicial.productoIds.map((x) => String(x))
+      : ventaInicial.productoId
+        ? [String(ventaInicial.productoId)]
+        : [];
+    if (ids.length === 0) return m;
+    const total = Number(ventaInicial.productoPrecioMensual ?? 0) || 0;
+    const unit = ids.length > 0 ? total / ids.length : 0;
+    for (const id of ids) m.set(id, unit);
+    return m;
+  }, [ventaInicial]);
+
   const pantallasCatalogo = useMemo(() => {
     const c = clientes.find((x) => x.id === clienteSeleccionado) as
       | (Colaborador & {
@@ -274,16 +283,23 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   }, [clienteSeleccionado, asignaciones, clientes]);
 
   const clienteActual = clientes.find((c) => c.id === clienteSeleccionado);
-  const soloUnProductoSinPantallas =
-    productosSeleccionados.length === 1 && pantallasSeleccionadas.length === 0;
-  const precioPorMesEditable = mesesRenta > 1;
-  const productosActuales = productosDelCliente.filter((p) =>
-    productosSeleccionados.includes(String(p.id)),
-  );
-  const precioProductosSeleccionados = productosActuales.reduce(
-    (sum, p) => sum + (Number(precioVentaProductoMap[String(p.id)] ?? p.precio ?? 0) || 0),
-    0,
-  );
+  const productosActuales = productosSeleccionados.map((id) => {
+    const p = productosDelCliente.find((x) => String(x.id) === String(id));
+    if (p) return p;
+    return {
+      id: String(id),
+      nombre: "Producto",
+      precio: Number(precioProductoFallbackMap.get(String(id)) ?? 0) || 0,
+    };
+  });
+  const precioProductosSeleccionados = productosSeleccionados.reduce((sum, id) => {
+    const sid = String(id);
+    const desdeMapa = precioVentaProductoMap[sid];
+    if (Number.isFinite(Number(desdeMapa))) return sum + (Number(desdeMapa) || 0);
+    const prod = productosDelCliente.find((p) => String(p.id) === sid);
+    if (prod) return sum + (Number(prod.precio ?? 0) || 0);
+    return sum + (Number(precioProductoFallbackMap.get(sid) ?? 0) || 0);
+  }, 0);
   const pantallasActuales = pantallasSeleccionadas
     .map((id) => pantallasCatalogo.find((p) => String(p.id) === String(id)))
     .filter(Boolean) as Pantalla[];
@@ -293,21 +309,21 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       (Number(precioVentaPantallaMap[String(p.id)] ?? p.precio ?? 0) || 0),
     0,
   );
-  const precioTotalCalculado = Number(precioGeneral || 0);
   const divisorDuracion = Math.max(1, Number(mesesRenta || 1));
-  const precioPorPeriodoCalculado = precioTotalCalculado / divisorDuracion;
-  const precioMensualFinal = !precioPorMesEditable
-    ? precioPorPeriodoCalculado
-    : precioVentaPorMesOverride == null
-      ? precioPorPeriodoCalculado
-      : precioVentaPorMesOverride;
+  const precioPorPeriodoBase =
+    Number(precioPantallasSeleccionadas || 0) +
+    Number(precioProductosSeleccionados || 0) +
+    Number(gastosAdicionales || 0);
+  const precioTotalCalculado = Math.round(precioPorPeriodoBase * 100) / 100;
+  const precioMensualFinal =
+    Math.round((precioTotalCalculado / divisorDuracion) * 100) / 100;
   const comisionMensual = (precioMensualFinal * (Number(comision || 0) / 100));
   const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
   const tieneConsideracion = clienteActual?.tipoComision === "consideracion";
   const fechaFin = calcularFechaFinDuracion(fechaInicio, mesesRenta, duracionUnidad);
-  const totalBaseVenta = precioMensualFinal * mesesRenta;
+  const totalBaseVenta = precioTotalCalculado;
   const totalComision = comisionMensual * mesesRenta;
-  const totalVenta = totalBaseVenta + Number(gastosAdicionales || 0) - totalComision;
+  const totalVenta = totalBaseVenta;
   const costosTotales = costos * mesesRenta;
 
   useEffect(() => {
@@ -316,12 +332,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       // montoSocio = precio por mes × porcentaje  → valor POR MES
       setMontoSocio(
         Math.round(
-          ((precioGeneral * clienteActual.porcentajeSocio) / 100) * 100,
+          ((precioMensualFinal * clienteActual.porcentajeSocio) / 100) * 100,
         ) / 100,
       );
     } else {
       setMontoSocio(
-        Math.round(((precioGeneral * porcentajeSocio) / 100) * 100) / 100,
+        Math.round(((precioMensualFinal * porcentajeSocio) / 100) * 100) / 100,
       );
     }
   }, [precioMensualFinal, porcentajeSocio, clienteActual]);
@@ -335,28 +351,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       prev.filter((pid) => productosDelCliente.some((p) => String(p.id) === String(pid))),
     );
   }, [clienteSeleccionado, productosDelCliente]);
-
-  useEffect(() => {
-    if (
-      !precioGeneralEditadoManualmente &&
-      (pantallasSeleccionadas.length > 0 || productosSeleccionados.length > 0)
-    ) {
-      const precioCatalogo =
-        Number(precioPantallasSeleccionadas || 0) +
-        Number(precioProductosSeleccionados || 0);
-      setPrecioGeneral((prev) =>
-        Math.abs(Number(prev || 0) - precioCatalogo) > 0.009
-          ? precioCatalogo
-          : Number(prev || 0),
-      );
-    }
-  }, [
-    pantallasSeleccionadas,
-    productosSeleccionados,
-    precioPantallasSeleccionadas,
-    precioProductosSeleccionados,
-    precioGeneralEditadoManualmente,
-  ]);
 
   useEffect(() => {
     setPrecioVentaPantallaMap((prev) => {
@@ -393,8 +387,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   };
 
   const setPrecioProductoVenta = (productoId: string, value: number) => {
-    setPrecioGeneralEditadoManualmente(false);
-    setPrecioVentaPorMesOverride(null);
     setPrecioVentaProductoMap((prev) => ({
       ...prev,
       [productoId]: value >= 0 ? value : 0,
@@ -402,8 +394,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   };
 
   const setPrecioPantallaVenta = (pantallaId: string, value: number) => {
-    setPrecioGeneralEditadoManualmente(false);
-    setPrecioVentaPorMesOverride(null);
     setPrecioVentaPantallaMap((prev) => ({
       ...prev,
       [pantallaId]: value >= 0 ? value : 0,
@@ -426,12 +416,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setFechaInicio("");
     setMesesRenta(1);
     setDuracionUnidad("meses");
-    setPrecioGeneral(0);
     setProductosSeleccionados([]);
     setPrecioVentaProductoMap({});
     setPrecioVentaPantallaMap({});
-    setPrecioGeneralEditadoManualmente(false);
-    setPrecioVentaPorMesOverride(null);
     setEstadoVenta("Prospecto");
     setAplicarDescuento(false);
     setCostos(0);
@@ -471,7 +458,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       );
       return;
     }
-    if (precioGeneral < 0) {
+    if (precioMensualFinal < 0) {
       setError("El costo de la venta no puede ser negativo");
       return;
     }
@@ -491,12 +478,20 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
         productosActuales.map((p) => p.nombre).join(", ").trim() || undefined,
       productoPrecioMensual: precioProductosSeleccionados || 0,
       precioPantallasMensual: Number(precioPantallasSeleccionadas || 0),
-      pantallasDetalle: pantallasActuales.map((p) => ({
-        pantallaId: String(p.id),
-        nombre: p.nombre,
-        precioMensual:
-          Number(precioVentaPantallaMap[String(p.id)] ?? p.precio ?? 0) || 0,
-      })),
+      pantallasDetalle: [
+        ...pantallasActuales.map((p) => ({
+          pantallaId: String(p.id),
+          nombre: p.nombre,
+          precioMensual:
+            Number(precioVentaPantallaMap[String(p.id)] ?? p.precio ?? 0) || 0,
+        })),
+        // Meta interna para conservar precio de producto de la venta (no catálogo).
+        {
+          pantallaId: "__producto_total__",
+          nombre: "META_PRODUCTO",
+          precioMensual: Number(precioProductosSeleccionados || 0),
+        },
+      ],
       fuenteOrigen: fuenteOrigen.trim() || undefined,
       vendidoA: vendidoA.trim(),
       precioGeneral: precioMensualFinal,
@@ -608,11 +603,13 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                         <span className="checkbox-visual"></span>
                         <span className="checkbox-label">
                           <span className="pantalla-nombre">{p.nombre}</span>
-                          <span className="pantalla-mini-ubicacion">
-                            Catálogo: ${Number(p.precio ?? 0).toLocaleString("es-MX", {
-                              minimumFractionDigits: 2,
-                            })}
-                          </span>
+                          {!ventaInicial ? (
+                            <span className="pantalla-mini-ubicacion">
+                              Catálogo: ${Number(p.precio ?? 0).toLocaleString("es-MX", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </span>
+                          ) : null}
                           {selected ? (
                             <input
                               type="number"
@@ -717,32 +714,23 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 </select>
               </div>
               <InputField
-                label="Precio de la venta"
-                value={precioGeneral || ""}
-                onChange={(v: any) =>
-                  {
-                    setPrecioGeneralEditadoManualmente(true);
-                    setPrecioGeneral((prev) => toNumberSafe(v, prev));
-                  }
-                }
+                label="Precio de la venta (total)"
+                value={precioTotalCalculado || ""}
+                onChange={() => {}}
                 type="number"
                 min={0}
                 step={0.01}
                 placeholder="0.00"
-                readOnly={soloUnProductoSinPantallas}
+                readOnly
               />
               <InputField
                 label={`Precio de la venta (por ${duracionUnidad === "dias" ? "día" : "mes"})`}
                 value={precioMensualFinal || 0}
-                onChange={(v: any) => {
-                  if (!precioPorMesEditable) return;
-                  const totalMensualIngresado = toNumberSafe(v, precioMensualFinal);
-                  setPrecioVentaPorMesOverride(totalMensualIngresado);
-                }}
+                onChange={() => {}}
                 type="number"
                 min={0}
                 step={0.01}
-                readOnly={!precioPorMesEditable}
+                readOnly
               />
               <InputField
                 label="Gastos adicionales"

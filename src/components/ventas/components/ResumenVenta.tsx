@@ -54,13 +54,14 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   const totalCostos = costos * mesesRenta;
   const totalComision = (totalBruto * (Number(comisionPorcentaje || 0) / 100));
   const totalGastosAdicionales = gastosAdicionales;
+  const totalBaseSinGastos = Math.max(0, totalBruto - totalGastosAdicionales);
   const totalPagoConsiderar =
     tipoComision === "consideracion" ? pagoConsiderar * mesesRenta : 0;
   const totalMontoSocio = aplicarDescuento ? montoSocio * mesesRenta : 0;
 
-  // Regla solicitada: precio final suma gastos y descuenta comisiones.
-  const precioVentaFinal = totalBruto + totalGastosAdicionales - totalComision;
-  const utilidad = precioVentaFinal;
+  // Regla solicitada: total de venta fijo; por periodo = total/duracion.
+  const precioVentaFinal = totalBruto;
+  const utilidad = totalBruto - totalComision;
 
   return (
     <div className="resumen-venta">
@@ -124,7 +125,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
             </div>
             <div className="resumen-fin-row resumen-fin-sub">
               <span>↳ Base (pantallas + productos)</span>
-              <span>{formatearMoneda(totalBruto)}</span>
+              <span>{formatearMoneda(totalBaseSinGastos)}</span>
             </div>
             {precioPantallas > 0 && (
               <div className="resumen-fin-row resumen-fin-sub">

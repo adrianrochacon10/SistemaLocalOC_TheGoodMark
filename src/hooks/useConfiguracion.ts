@@ -133,11 +133,6 @@ export function useConfiguracion(profile: any, session: Session | null) {
       const sinDuplicado = prev.filter((o) => o.id !== nuevaOrden.id);
       return [nuevaOrden, ...sinDuplicado];
     });
-    try {
-      await refetchOrdenes();
-    } catch (e) {
-      console.warn("No se pudieron refrescar todas las órdenes tras guardar:", e);
-    }
   };
 
   const handleEliminarOrden = async (ordenId: string) => {

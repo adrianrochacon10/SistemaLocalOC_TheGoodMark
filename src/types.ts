@@ -108,6 +108,8 @@ export interface RegistroVenta {
   comision?: number;
   comisionPorcentaje?: number;
   gastosAdicionales?: number;
+  /** En líneas de orden: si los gastos adicionales de la venta entraron en el importe. */
+  gastosIncluidosEnOrden?: boolean;
   pagoConsiderar?: number;
   notas?: string;
 }

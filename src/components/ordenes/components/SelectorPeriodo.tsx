@@ -1,10 +1,14 @@
 import React from "react";
+import { Colaborador } from "../../../types";
 
 interface Props {
   mesSeleccionado: number;
   añoSeleccionado: number;
   onCambiarMes: (mes: number) => void;
   onCambiarAño: (año: number) => void;
+  colaboradorFiltroId?: string;
+  onCambiarColaborador?: (colaboradorId: string) => void;
+  clientes?: Colaborador[];
 }
 
 const MESES = [
@@ -27,13 +31,16 @@ export const SelectorPeriodo: React.FC<Props> = ({
   añoSeleccionado,
   onCambiarMes,
   onCambiarAño,
+  colaboradorFiltroId = "",
+  onCambiarColaborador,
+  clientes = [],
 }) => {
   const hoy = new Date();
   const años = Array.from({ length: 4 }, (_, i) => hoy.getFullYear() - 2 + i);
 
   return (
     <div className="selector-mes-section">
-      <h3>Seleccionar Período</h3>
+      <h3>Filtros</h3>
       <div className="selector-row">
         <div className="selector-group">
           <label>Mes:</label>
@@ -61,6 +68,27 @@ export const SelectorPeriodo: React.FC<Props> = ({
             ))}
           </select>
         </div>
+        {onCambiarColaborador ? (
+          <div className="selector-group">
+            <label>Colaborador:</label>
+            <select
+              value={colaboradorFiltroId}
+              onChange={(e) => onCambiarColaborador(e.target.value)}
+            >
+              <option value="">Todos</option>
+              {clientes
+                .slice()
+                .sort((a, b) =>
+                  String(a.nombre ?? "").localeCompare(String(b.nombre ?? "")),
+                )
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+            </select>
+          </div>
+        ) : null}
       </div>
     </div>
   );

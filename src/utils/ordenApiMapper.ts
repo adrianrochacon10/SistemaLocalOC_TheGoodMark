@@ -1,16 +1,31 @@
 import type { OrdenDeCompra, RegistroVenta } from "../types";
 
-function leerPrecioProducto(producto: any): number {
-  const n = Number(
-    producto?.precio ?? producto?.precio_unitario ?? producto?.precio_por_mes ?? 0,
-  );
-  return Number.isFinite(n) ? n : 0;
-}
-
 /** Fila de `ventas` desde el API (p. ej. GET /api/ordenes/ventas). */
 export function mapVentaFromApi(row: any): RegistroVenta {
   const pantallasIds: string[] =
     row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []);
+  const pantallasDetalleRaw = Array.isArray(row.pantallas_detalle)
+    ? row.pantallas_detalle
+    : [];
+  const metaProducto = pantallasDetalleRaw.find(
+    (p: any) => String(p?.pantallaId ?? "") === "__producto_total__",
+  );
+  const pantallasDetalle = pantallasDetalleRaw.filter(
+    (p: any) => String(p?.pantallaId ?? "") !== "__producto_total__",
+  );
+  const precioPantallasDesdeDetalle = pantallasDetalle.reduce(
+    (sum: number, p: any) => sum + (Number(p?.precioMensual ?? 0) || 0),
+    0,
+  );
+  const precioPantallasMensual =
+    Number(row.precio_pantallas_mensual ?? precioPantallasDesdeDetalle ?? 0) || 0;
+  const precioMensualVenta =
+    Number(row.precio_por_mes ?? row.precio_general ?? row.precio_total ?? 0) || 0;
+  const productoDesdeVenta = Math.max(
+    0,
+    Number((precioMensualVenta - precioPantallasMensual).toFixed(2)),
+  );
+  const productoDesdeMeta = Number(metaProducto?.precioMensual ?? NaN);
 
   return {
     id: row.id,
@@ -30,22 +45,15 @@ export function mapVentaFromApi(row: any): RegistroVenta {
       row.producto?.nombre ??
       row.colaborador?.producto?.nombre ??
       undefined,
-    productoPrecioMensual: leerPrecioProducto(
-      row.producto ?? row.colaborador?.producto,
-    ),
-    precioPantallasMensual: Number(row.precio_pantallas_mensual ?? 0) || 0,
-    pantallasDetalle: Array.isArray(row.pantallas_detalle)
-      ? row.pantallas_detalle
-      : [],
+    productoPrecioMensual:
+      Number.isFinite(productoDesdeMeta) && productoDesdeMeta >= 0
+        ? productoDesdeMeta
+        : productoDesdeVenta,
+    precioPantallasMensual,
+    pantallasDetalle,
     vendidoA:
       row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
-    precioGeneral:
-      Number(
-        row.precio_por_mes ??
-          row.precio_general ??
-          row.precio_total ??
-          0,
-      ) || 0,
+    precioGeneral: precioMensualVenta,
     cantidad: row.cantidad ?? 1,
     precioTotal: row.precio_total ?? row.importe_total ?? 0,
     fechaRegistro: row.created_at
@@ -128,7 +136,10 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
           sinDescuento: false,
         })),
         colaboradorId: colaboradorId || "",
-        productoNombre: line.producto_nombre ?? undefined,
+        productoNombre:
+          line.producto_incluido === true
+            ? line.producto_nombre ?? "Producto seleccionado"
+            : undefined,
         productoPrecioMensual: Number(line.producto_precio_mensual ?? 0) || 0,
         productoIncluidoEnOrden:
           line.producto_incluido === true
@@ -137,6 +148,20 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
               ? false
               : undefined,
         precioBaseMensualOrden: Number(line.precio_base_mensual ?? imp) || imp,
+        gastosAdicionales: Number(line.gastos_adicionales ?? 0) || 0,
+        gastosIncluidosEnOrden:
+          line.gastos_incluidos_en_orden === true
+            ? true
+            : line.gastos_incluidos_en_orden === false
+              ? false
+              : undefined,
+        pantallasDetalle: Array.isArray(line.pantallas_detalle)
+          ? line.pantallas_detalle.map((p: any) => ({
+              pantallaId: String(p?.pantalla_id ?? ""),
+              nombre: String(p?.nombre ?? "").trim() || undefined,
+              precioMensual: Number(p?.precio_mensual ?? 0) || 0,
+            }))
+          : [],
         vendidoA: line.vendido_a ?? "",
         precioGeneral: imp,
         cantidad: 1,
@@ -144,7 +169,14 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
         fechaRegistro: new Date(),
         fechaInicio: fi,
         fechaFin: ff,
-        mesesRenta: 1,
+        mesesRenta: (() => {
+          const fromLine = Number(line.meses_renta ?? line.duracion_meses);
+          if (Number.isFinite(fromLine) && fromLine > 0) return Math.floor(fromLine);
+          const n =
+            (ff.getFullYear() - fi.getFullYear()) * 12 +
+            (ff.getMonth() - fi.getMonth());
+          return Math.max(1, n);
+        })(),
         importeTotal: imp,
         activo: true,
         usuarioRegistroId: "",

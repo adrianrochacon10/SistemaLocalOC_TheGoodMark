@@ -12,17 +12,30 @@ export function useVentas(profile: any, session: Session | null) {
   const [errorVenta, setErrorVenta] = useState<string | null>(null);
 
   const mapVentaFromApi = (row: any): RegistroVenta => {
-    const leerPrecioProducto = (producto: any): number => {
-      const n = Number(
-        producto?.precio ??
-          producto?.precio_unitario ??
-          producto?.precio_por_mes ??
-          0,
-      );
-      return Number.isFinite(n) ? n : 0;
-    };
     const pantallasIds: string[] =
       row.pantallas_ids ?? (row.pantalla_id ? [row.pantalla_id] : []);
+    const pantallasDetalleRaw = Array.isArray(row.pantallas_detalle)
+      ? row.pantallas_detalle
+      : [];
+    const metaProducto = pantallasDetalleRaw.find(
+      (p: any) => String(p?.pantallaId ?? "") === "__producto_total__",
+    );
+    const pantallasDetalle = pantallasDetalleRaw.filter(
+      (p: any) => String(p?.pantallaId ?? "") !== "__producto_total__",
+    );
+    const precioPantallasDesdeDetalle = pantallasDetalle.reduce(
+      (sum: number, p: any) => sum + (Number(p?.precioMensual ?? 0) || 0),
+      0,
+    );
+    const precioPantallasMensual =
+      Number(row.precio_pantallas_mensual ?? precioPantallasDesdeDetalle ?? 0) || 0;
+    const precioMensualVenta =
+      Number(row.precio_por_mes ?? row.precio_general ?? row.precio_total ?? 0) || 0;
+    const productoDesdeVenta = Math.max(
+      0,
+      Number((precioMensualVenta - precioPantallasMensual).toFixed(2)),
+    );
+    const productoDesdeMeta = Number(metaProducto?.precioMensual ?? NaN);
 
     return {
       id: row.id,
@@ -42,16 +55,15 @@ export function useVentas(profile: any, session: Session | null) {
         row.producto?.nombre ??
         row.colaborador?.producto?.nombre ??
         undefined,
-      productoPrecioMensual: leerPrecioProducto(
-        row.producto ?? row.colaborador?.producto,
-      ),
-      precioPantallasMensual: Number(row.precio_pantallas_mensual ?? 0) || 0,
-      pantallasDetalle: Array.isArray(row.pantallas_detalle)
-        ? row.pantallas_detalle
-        : [],
+      productoPrecioMensual:
+        Number.isFinite(productoDesdeMeta) && productoDesdeMeta >= 0
+          ? productoDesdeMeta
+          : productoDesdeVenta,
+      precioPantallasMensual,
+      pantallasDetalle,
       vendidoA:
         row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
-      precioGeneral: Number(row.precio_por_mes ?? row.precio_general ?? 0) || 0,
+      precioGeneral: precioMensualVenta,
       cantidad: row.cantidad ?? 1,
       precioTotal: row.precio_total ?? row.importe_total ?? 0,
       fechaRegistro: row.created_at

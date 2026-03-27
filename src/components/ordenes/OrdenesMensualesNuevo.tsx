@@ -115,31 +115,10 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
           añoSeleccionado={año}
           onCambiarMes={setMes}
           onCambiarAño={setAño}
+          colaboradorFiltroId={colaboradorFiltroId}
+          onCambiarColaborador={setColaboradorFiltroId}
+          clientes={clientes}
         />
-        <div className="selector-mes-section" style={{ marginTop: 10 }}>
-          <h3>Filtrar por colaborador</h3>
-          <div className="selector-row">
-            <div className="selector-group" style={{ minWidth: 280 }}>
-              <label>Colaborador:</label>
-              <select
-                value={colaboradorFiltroId}
-                onChange={(e) => setColaboradorFiltroId(e.target.value)}
-              >
-                <option value="">Todos</option>
-                {clientes
-                  .slice()
-                  .sort((a, b) =>
-                    String(a.nombre ?? "").localeCompare(String(b.nombre ?? "")),
-                  )
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          </div>
-        </div>
 
         {error && !modalAbierto && (
           <div className="orden-error-banner" role="alert">

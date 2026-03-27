@@ -134,11 +134,26 @@ export const OrdenCard: React.FC<Props> = ({
                 (c) =>
                   c.id === (venta.colaboradorId || orden.colaboradorId),
               );
+              const pantallasDetalle = Array.isArray(venta.pantallasDetalle)
+                ? venta.pantallasDetalle
+                : [];
               const nombresP =
-                (venta.pantallasIds ?? [])
-                  .map((id) => pantallas.find((p) => p.id === id)?.nombre ?? "Pantalla")
-                  .join(", ") || "—";
-              const productoTxt = venta.productoNombre?.trim() || "Sin producto";
+                pantallasDetalle.length > 0
+                  ? pantallasDetalle
+                      .map((p) => p.nombre || `Pantalla ${p.pantallaId}`)
+                      .join(", ")
+                  : (venta.pantallasIds ?? [])
+                      .map((id) => pantallas.find((p) => p.id === id)?.nombre ?? "Pantalla")
+                      .join(", ") || "Solo producto";
+              const productoTxt =
+                venta.productoIncluidoEnOrden === false
+                  ? "No incluido"
+                  : venta.productoNombre?.trim() || "Sin producto";
+              const precioProducto = Number(venta.productoPrecioMensual ?? 0) || 0;
+              const gastosMonto = Number(venta.gastosAdicionales ?? 0) || 0;
+              const gastosIncluidos =
+                venta.gastosIncluidosEnOrden === true ||
+                (venta.gastosIncluidosEnOrden !== false && gastosMonto > 0);
               const importeLinea =
                 Number(venta.importeTotal ?? venta.precioTotal ?? venta.precioGeneral ?? 0) || 0;
               return (
@@ -148,7 +163,32 @@ export const OrdenCard: React.FC<Props> = ({
                       {socio?.nombre ?? "Colaborador"} — {nombresP}
                     </strong>
                   </p>
+                  {pantallasDetalle.length > 0 ? (
+                    <p>
+                      Pantallas:
+                      {" "}
+                      {pantallasDetalle
+                        .map(
+                          (p) =>
+                            `${p.nombre || `Pantalla ${p.pantallaId}`}: $${Number(
+                              p.precioMensual ?? 0,
+                            ).toFixed(2)}`,
+                        )
+                        .join(" · ")}
+                    </p>
+                  ) : null}
                   <p>Producto: {productoTxt}</p>
+                  {venta.productoIncluidoEnOrden !== false && precioProducto > 0 ? (
+                    <p>Precio producto: ${precioProducto.toFixed(2)}</p>
+                  ) : null}
+                  {gastosMonto > 0 && gastosIncluidos ? (
+                    <p>
+                      Gastos adicionales:{" "}
+                      <strong>${gastosMonto.toFixed(2)}</strong> (incluidos en la orden)
+                    </p>
+                  ) : venta.gastosIncluidosEnOrden === false ? (
+                    <p>Gastos adicionales: no incluidos en esta orden</p>
+                  ) : null}
                   <p>Vendido a: {venta.vendidoA}</p>
                   <p>
                     Período:{" "}

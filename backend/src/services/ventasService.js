@@ -98,7 +98,7 @@ export async function crear(body, vendedorId) {
   }
 
   const baseTotal = Math.round(precioPorMes * duracionMeses * 100) / 100;
-  const brutoConExtras = Math.round((baseTotal + gastosAdicionales) * 100) / 100;
+  const brutoConExtras = baseTotal;
   const comisionesCalculadasPorPorcentaje =
     Number.isFinite(comisionPorcentaje) && comisionPorcentaje > 0
       ? Math.round((brutoConExtras * comisionPorcentaje) / 100 * 100) / 100
@@ -109,13 +109,11 @@ export async function crear(body, vendedorId) {
       : Number.isFinite(comisiones) && comisiones >= 0
         ? Math.round(comisiones * 100) / 100
         : 0;
-  const precioTotal = Math.round(
-    (brutoConExtras - comisionTotalCalculada) * 100,
-  ) / 100;
+  const precioTotal = Math.round(brutoConExtras * 100) / 100;
   const comisionPorPeriodo = comisionTotalCalculada / Math.max(1, duracionMeses);
   const utilidadNeta =
     Math.round(
-      (precioPorMes + gastosAdicionales - comisionPorPeriodo) * 100,
+      (precioPorMes - comisionPorPeriodo) * 100,
     ) / 100;
 
   const insertPayload = {
@@ -300,12 +298,10 @@ export async function actualizar(id, body) {
     const comisionPorPeriodo = comisionesBase / Math.max(1, duracionMeses);
     payload.utilidad_neta =
       Math.round(
-        (precioPorMes + gastosAdicionales - comisionPorPeriodo) * 100,
+        (precioPorMes - comisionPorPeriodo) * 100,
       ) / 100;
     const baseTotal = Math.round(precioPorMes * duracionMeses * 100) / 100;
-    payload.precio_total = Math.round(
-      (baseTotal + gastosAdicionales - comisionesBase) * 100,
-    ) / 100;
+    payload.precio_total = Math.round(baseTotal * 100) / 100;
   }
 
   if (
@@ -343,27 +339,20 @@ export async function actualizar(id, body) {
 
   {
     const precioPorMesBase = Number(payload.precio_por_mes ?? venta.precio_por_mes ?? 0) || 0;
-    const gastosBase =
-      Number(payload.gastos_adicionales ?? venta.gastos_adicionales ?? 0) || 0;
     const comisionesBase = Number(payload.comisiones ?? venta.comisiones ?? 0) || 0;
     const duracionBase = Number(payload.duracion_meses ?? venta.duracion_meses ?? 1) || 1;
     const baseTotal = Math.round(precioPorMesBase * duracionBase * 100) / 100;
-    payload.precio_total = Math.round(
-      (baseTotal + gastosBase - comisionesBase) * 100,
-    ) / 100;
+    payload.precio_total = Math.round(baseTotal * 100) / 100;
   }
 
   if (payload.utilidad_neta === undefined) {
     const precioPorMesBase = Number(payload.precio_por_mes ?? venta.precio_por_mes ?? 0) || 0;
-    const costosBase = Number(payload.costos ?? venta.costos ?? 0) || 0;
-    const gastosBase =
-      Number(payload.gastos_adicionales ?? venta.gastos_adicionales ?? 0) || 0;
     const comisionesBase = Number(payload.comisiones ?? venta.comisiones ?? 0) || 0;
     const duracionBase = Number(payload.duracion_meses ?? venta.duracion_meses ?? 1) || 1;
     const comisionPorPeriodo = comisionesBase / Math.max(1, duracionBase);
     payload.utilidad_neta =
       Math.round(
-        (precioPorMesBase + gastosBase - comisionPorPeriodo) * 100,
+        (precioPorMesBase - comisionPorPeriodo) * 100,
       ) / 100;
   }
 
@@ -426,15 +415,13 @@ export async function renovar(id, body) {
     body.descuento != null
       ? Number(body.descuento)
       : Number(venta.descuento ?? 0);
-  const precioTotal = Math.round(
-    (baseTotal + gastosAdicionales - (Number(comisionesRen) || 0)) * 100,
-  ) / 100;
+  const precioTotal = Math.round(baseTotal * 100) / 100;
 
   const comisionPorPeriodoRen =
     (Number(comisionesRen) || 0) / Math.max(1, Number(duracion) || 1);
   utilidadNeta =
     Math.round(
-      (Number(precioPorMes) + gastosAdicionales - comisionPorPeriodoRen) * 100,
+      (Number(precioPorMes) - comisionPorPeriodoRen) * 100,
     ) / 100;
 
   const insertPayload = {

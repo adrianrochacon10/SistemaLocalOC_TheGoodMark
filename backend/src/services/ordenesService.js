@@ -424,8 +424,20 @@ export async function crearManual({
   if (errOrd) throw new Error(errOrd.message);
 
   const ventas = await cargarVentasDeOrden(ordenFull);
+  const detalleLineasRespuesta =
+    Array.isArray(detalle_lineas) && detalle_lineas.length > 0
+      ? detalle_lineas
+      : ordenFull.detalle_lineas;
 
-  return { orden: { ...ordenFull, ventas } };
+  return {
+    orden: {
+      ...ordenFull,
+      ...(detalleLineasRespuesta
+        ? { detalle_lineas: detalleLineasRespuesta }
+        : {}),
+      ventas,
+    },
+  };
 }
 
 export async function eliminar(id) {
