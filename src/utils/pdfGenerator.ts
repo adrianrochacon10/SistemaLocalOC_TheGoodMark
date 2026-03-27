@@ -6,6 +6,7 @@ import {
   Pantalla,
   RegistroVenta,
 } from "../types";
+import { nombrePantallaDesdeVentaYCatalogo } from "./ordenCompraLineas";
 
 const COL_BLUE: [number, number, number] = [23, 58, 95];
 const COL_GREY: [number, number, number] = [110, 110, 110];
@@ -57,7 +58,7 @@ function precioLineaOrden(v: RegistroVenta): number {
 }
 
 function pantallaMap(pantallas: Pantalla[]): Map<string, Pantalla> {
-  return new Map(pantallas.map((p) => [p.id, p]));
+  return new Map(pantallas.map((p) => [String(p.id), p]));
 }
 
 function drawLine(
@@ -342,25 +343,34 @@ export async function exportarPDFOrden(
   for (const venta of registros) {
     idx += 1;
     const ids = venta.pantallasIds ?? [];
-    const pantallasDetalle = Array.isArray(venta.pantallasDetalle)
+    const pantallasDetalleRaw = Array.isArray(venta.pantallasDetalle)
       ? venta.pantallasDetalle
       : [];
-    const nombresPantallas = ids
-      .map((id) => pMap.get(String(id))?.nombre ?? "Pantalla")
-      .filter(Boolean);
+    const pantallasDetalle = pantallasDetalleRaw.filter((p: any) => {
+      const pid = String(p?.pantallaId ?? p?.pantalla_id ?? "");
+      return pid && pid !== "__producto_total__";
+    });
+    const nombresDesdeVenta = ids.map((id) =>
+      nombrePantallaDesdeVentaYCatalogo(
+        String(id),
+        pantallas,
+        venta.pantallasDetalle,
+      ),
+    );
     const pantallasConPrecio =
       pantallasDetalle.length > 0
-        ? pantallasDetalle.map(
-            (p) =>
-              `- ${p.nombre || pMap.get(String(p.pantallaId))?.nombre || "Pantalla"}: ${fmtMoney(
-                Number(p.precioMensual ?? 0),
-              )}`,
-          )
-        : (
-            nombresPantallas.length > 0
-              ? nombresPantallas.map((n) => `- ${n}`)
-              : ["- Sin pantallas"]
-          );
+        ? pantallasDetalle.map((p: any) => {
+            const pid = String(p.pantallaId ?? p.pantalla_id ?? "");
+            const nombre =
+              String(p.nombre ?? "").trim() ||
+              nombrePantallaDesdeVentaYCatalogo(pid, pantallas, venta.pantallasDetalle);
+            const precio =
+              Number(p.precioMensual ?? p.precio_mensual ?? 0) || 0;
+            return `- ${nombre}: ${fmtMoney(precio)}`;
+          })
+        : nombresDesdeVenta.length > 0
+          ? nombresDesdeVenta.map((n) => `- ${n}`)
+          : ["- Sin pantallas"];
     const titulo = "SERVICIO";
     const mr = Number(venta.mesesRenta);
     const fiD = new Date(venta.fechaInicio);

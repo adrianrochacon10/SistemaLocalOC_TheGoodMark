@@ -631,7 +631,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                   <div className="modal-venta-meta-row">
                                     <span className="modal-venta-meta-k">Pantallas del contrato</span>
                                     <span className="modal-venta-meta-v">
-                                      {nombresPantallas(pids, pantallas) || "—"}
+                                      {nombresPantallas(pids, pantallas, v) || "—"}
                                     </span>
                                   </div>
                                   {gastosVenta > 0 ? (
@@ -670,14 +670,16 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                   </div>
                                   <div className="modal-venta-checklist" role="group">
                                     {pantallasDeVenta.map((pid) => {
-                                      const nombre =
-                                        pantallas.find((p) => String(p.id) === String(pid))
-                                          ?.nombre ?? "Pantalla";
                                       const marcada = pantallasSeleccionadasLocal.includes(pid);
                                       const snap = v.pantallasDetalle?.find(
                                         (d) =>
                                           detallePantallaId(d) === String(pid),
                                       );
+                                      const nombre =
+                                        String(snap?.nombre ?? "").trim() ||
+                                        pantallas.find((p) => String(p.id) === String(pid))
+                                          ?.nombre ||
+                                        "Pantalla";
                                       const precioSnap = detallePrecioMensual(snap);
                                       const precioCat =
                                         Number(

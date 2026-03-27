@@ -7,6 +7,8 @@ import {
   Usuario,
 } from "../../../types";
 import { exportarPDFOrden } from "../../../utils/pdfGenerator";
+import { nombrePantallaDesdeVentaYCatalogo, nombresPantallas } from "../../../utils/ordenCompraLineas";
+import { detallePantallaId, detallePrecioMensual } from "../../../utils/ordenApiMapper";
 
 interface Props {
   orden: OrdenDeCompra;
@@ -134,17 +136,27 @@ export const OrdenCard: React.FC<Props> = ({
                 (c) =>
                   c.id === (venta.colaboradorId || orden.colaboradorId),
               );
-              const pantallasDetalle = Array.isArray(venta.pantallasDetalle)
-                ? venta.pantallasDetalle
-                : [];
+              const pantallasDetalle = (
+                Array.isArray(venta.pantallasDetalle) ? venta.pantallasDetalle : []
+              ).filter((p) => detallePantallaId(p) !== "__producto_total__");
               const nombresP =
-                pantallasDetalle.length > 0
-                  ? pantallasDetalle
-                      .map((p) => p.nombre || `Pantalla ${p.pantallaId}`)
-                      .join(", ")
-                  : (venta.pantallasIds ?? [])
-                      .map((id) => pantallas.find((p) => p.id === id)?.nombre ?? "Pantalla")
-                      .join(", ") || "Solo producto";
+                (venta.pantallasIds ?? []).length > 0
+                  ? nombresPantallas(
+                      (venta.pantallasIds ?? []).map(String),
+                      pantallas,
+                      venta,
+                    )
+                  : pantallasDetalle.length > 0
+                    ? pantallasDetalle
+                        .map((p) =>
+                          nombrePantallaDesdeVentaYCatalogo(
+                            detallePantallaId(p),
+                            pantallas,
+                            venta.pantallasDetalle,
+                          ),
+                        )
+                        .join(", ")
+                    : "Solo producto";
               const productoTxt =
                 venta.productoIncluidoEnOrden === false
                   ? "No incluido"
@@ -168,12 +180,16 @@ export const OrdenCard: React.FC<Props> = ({
                       Pantallas:
                       {" "}
                       {pantallasDetalle
-                        .map(
-                          (p) =>
-                            `${p.nombre || `Pantalla ${p.pantallaId}`}: $${Number(
-                              p.precioMensual ?? 0,
-                            ).toFixed(2)}`,
-                        )
+                        .map((p) => {
+                          const pid = detallePantallaId(p);
+                          const nombre = nombrePantallaDesdeVentaYCatalogo(
+                            pid,
+                            pantallas,
+                            venta.pantallasDetalle,
+                          );
+                          const precio = detallePrecioMensual(p);
+                          return `${nombre}: $${precio.toFixed(2)}`;
+                        })
                         .join(" · ")}
                     </p>
                   ) : null}

@@ -1,6 +1,22 @@
 import type { Pantalla, RegistroVenta } from "../types";
 import { detallePantallaId, detallePrecioMensual } from "./ordenApiMapper";
 
+/** Nombre legible para una pantalla: snapshot de la venta primero, luego catálogo. */
+export function nombrePantallaDesdeVentaYCatalogo(
+  id: string,
+  pantallas: Pantalla[],
+  detalle: RegistroVenta["pantallasDetalle"],
+): string {
+  const key = String(id);
+  const snap = Array.isArray(detalle)
+    ? detalle.find((d) => detallePantallaId(d) === key)
+    : undefined;
+  const deSnap = String(snap?.nombre ?? "").trim();
+  if (deSnap) return deSnap;
+  const cat = pantallas.find((p) => String(p.id) === key);
+  return cat?.nombre?.trim() || "Pantalla";
+}
+
 export type DetalleLineaOrden = {
   venta_id: string;
   pantallas_seleccionadas: string[];
@@ -190,9 +206,11 @@ export function importeVentaSeleccion(
 export function nombresPantallas(
   ids: string[],
   pantallas: Pantalla[],
+  venta?: RegistroVenta,
 ): string {
+  const detalle = venta?.pantallasDetalle;
   return ids
-    .map((id) => pantallas.find((p) => p.id === id)?.nombre ?? "Pantalla")
+    .map((id) => nombrePantallaDesdeVentaYCatalogo(String(id), pantallas, detalle))
     .join(", ");
 }
 
@@ -226,10 +244,11 @@ export function construirDetalleLineas(
       const snap = pantallasDetalleVenta.find(
         (p) => detallePantallaId(p) === String(pid),
       );
-      const nombre =
-        String(snap?.nombre ?? "").trim() ||
-        pantallas.find((p) => String(p.id) === String(pid))?.nombre ||
-        "Pantalla";
+      const nombre = nombrePantallaDesdeVentaYCatalogo(
+        String(pid),
+        pantallas,
+        v.pantallasDetalle,
+      );
       const precioSnap = detallePrecioMensual(snap);
       const precioCat = precios.get(String(pid)) ?? 0;
       const precio = precioSnap > 0 ? precioSnap : precioCat;
@@ -244,7 +263,7 @@ export function construirDetalleLineas(
       pantallas_seleccionadas: sel.filter((id) =>
         (v.pantallasIds ?? []).map(String).includes(String(id)),
       ),
-      nombres_pantallas: nombresPantallas(sel, pantallas),
+      nombres_pantallas: nombresPantallas(sel, pantallas, v),
       pantallas_detalle: detallePantallasSeleccionadas,
       producto_nombre: v.productoNombre ?? undefined,
       producto_precio_mensual: productoMensual,
