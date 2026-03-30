@@ -7,6 +7,7 @@ import { registrarVenta } from "../lib/ventas";
 import {
   detallePantallaId,
   detallePrecioMensual,
+  esLineaPrecioProductoEnDetalle,
 } from "../utils/ordenApiMapper";
 
 export function useVentas(profile: any, session: Session | null) {
@@ -27,10 +28,9 @@ export function useVentas(profile: any, session: Session | null) {
     const pantallasDetalleFiltrado = pantallasDetalleRaw.filter(
       (p: any) => detallePantallaId(p) !== "__producto_total__",
     );
-    const precioPantallasDesdeDetalle = pantallasDetalleFiltrado.reduce(
-      (sum: number, p: any) => sum + detallePrecioMensual(p),
-      0,
-    );
+    const precioPantallasDesdeDetalle = pantallasDetalleFiltrado
+      .filter((p: any) => !esLineaPrecioProductoEnDetalle(detallePantallaId(p)))
+      .reduce((sum: number, p: any) => sum + detallePrecioMensual(p), 0);
     const precioPantallasMensual =
       Number(row.precio_pantallas_mensual ?? precioPantallasDesdeDetalle ?? 0) || 0;
     const precioMensualVenta =

@@ -9,6 +9,7 @@ import {
   RegistroVenta,
   Colaborador,
   Pantalla,
+  Producto,
   ConfiguracionEmpresa,
 } from "../../../types";
 import { backendApi } from "../../../lib/backendApi";
@@ -16,12 +17,14 @@ import {
   mapVentaFromApi,
   detallePantallaId,
   detallePrecioMensual,
+  PREFIJO_LINEA_PRODUCTO,
 } from "../../../utils/ordenApiMapper";
 import { ventaSolapaMesCalendario } from "../../../utils/ordenUtils";
 import {
   construirDetalleLineas,
   totalesDesdeLineas,
   nombresPantallas,
+  enriquecerProductoNombreMultiplesIds,
   type CrearOrdenPayload,
 } from "../../../utils/ordenCompraLineas";
 
@@ -59,6 +62,50 @@ const fmtMoney = (n: number) =>
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+function idsProductosVenta(v: RegistroVenta): string[] {
+  if (Array.isArray(v.productoIds) && v.productoIds.length > 0) {
+    return v.productoIds.map((x) => String(x));
+  }
+  if (v.productoId) return [String(v.productoId)];
+  return [];
+}
+
+function nombreProductoEnVenta(
+  productoId: string,
+  v: RegistroVenta,
+  catalogo: Producto[],
+): string {
+  const p = catalogo.find((x) => String(x.id) === String(productoId));
+  if (p?.nombre?.trim()) return p.nombre.trim();
+  const nombres = (v.productoNombre ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const ids = idsProductosVenta(v);
+  const idx = ids.indexOf(String(productoId));
+  if (idx >= 0 && nombres[idx]) return nombres[idx];
+  return "Producto";
+}
+
+/** Reparto equitativo del total mensual de producto entre las líneas de la venta (fallback). */
+function precioMensualPorProductoLinea(v: RegistroVenta): number {
+  const ids = idsProductosVenta(v);
+  const total = Number(v.productoPrecioMensual ?? 0) || 0;
+  if (ids.length === 0) return 0;
+  return round2(total / ids.length);
+}
+
+/** Precio mensual guardado en `pantallasDetalle` (`__producto_linea__{id}`) o reparto equitativo. */
+function precioMensualProductoDesdeDetalle(
+  v: RegistroVenta,
+  productoId: string,
+): number {
+  const key = `${PREFIJO_LINEA_PRODUCTO}${String(productoId)}`;
+  const snap = v.pantallasDetalle?.find((d) => detallePantallaId(d) === key);
+  if (snap) return round2(detallePrecioMensual(snap));
+  return precioMensualPorProductoLinea(v);
+}
+
 export const ModalCrearOrden: React.FC<Props> = ({
   clientes,
   pantallas,
@@ -86,14 +133,16 @@ export const ModalCrearOrden: React.FC<Props> = ({
   );
   const [pantallasSeleccionadasPorVenta, setPantallasSeleccionadasPorVenta] =
     useState<Record<string, string[]>>({});
-  const [ventasConProductoIncluido, setVentasConProductoIncluido] = useState<
-    Set<string>
-  >(() => new Set());
+  /** IDs de producto incluidos en la orden por venta (subconjunto de `productoIds` de la venta). */
+  const [productosIncluidosPorVenta, setProductosIncluidosPorVenta] = useState<
+    Record<string, string[]>
+  >({});
   /** Gastos adicionales de la venta incluidos en el cálculo de la orden (mismo monto que trae la venta). */
   const [ventasConGastosIncluido, setVentasConGastosIncluido] = useState<
     Set<string>
   >(() => new Set());
   const [guardando, setGuardando] = useState(false);
+  const [productosCatalogo, setProductosCatalogo] = useState<Producto[]>([]);
 
   const pasoActual = colaboradorId ? 2 : 1;
   const años = Array.from({ length: 4 }, (_, i) => hoy.getFullYear() - 2 + i);
@@ -129,6 +178,26 @@ export const ModalCrearOrden: React.FC<Props> = ({
       cancelado = true;
     };
   }, [onRecargarColaboradores]);
+
+  useEffect(() => {
+    let cancel = false;
+    void (async () => {
+      try {
+        const data = await backendApi.get<Producto[]>("/api/productos");
+        if (!cancel && Array.isArray(data)) setProductosCatalogo(data);
+      } catch {
+        if (!cancel) setProductosCatalogo([]);
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, []);
+
+  const ventasParaOrden = useMemo(
+    () => enriquecerProductoNombreMultiplesIds(ventasDelMes, productosCatalogo),
+    [ventasDelMes, productosCatalogo],
+  );
 
   useEffect(() => {
     if (!colaboradorId) {
@@ -189,9 +258,9 @@ export const ModalCrearOrden: React.FC<Props> = ({
     setPantallasSeleccionadasPorVenta(porVenta);
   }, [colaboradorId, mes, año, ventaIdsKey]);
 
-  // El producto solo cuenta si el usuario lo marca (como pantallas). No auto-marcar todas las ventas.
+  // Productos en orden: el usuario elige cuáles (por venta). No auto-marcar.
   useEffect(() => {
-    setVentasConProductoIncluido(new Set());
+    setProductosIncluidosPorVenta({});
   }, [colaboradorId, mes, año, ventaIdsKey]);
 
   // Gastos adicionales: por defecto se toman de la venta (incluidos si la venta tiene monto > 0).
@@ -213,10 +282,10 @@ export const ModalCrearOrden: React.FC<Props> = ({
           ...prevSel,
           [ventaId]: [],
         }));
-        setVentasConProductoIncluido((prevProd) => {
-          const n = new Set(prevProd);
-          n.delete(String(ventaId));
-          return n;
+        setProductosIncluidosPorVenta((prev) => {
+          const next = { ...prev };
+          delete next[String(ventaId)];
+          return next;
         });
         setVentasConGastosIncluido((prevG) => {
           const n = new Set(prevG);
@@ -253,7 +322,8 @@ export const ModalCrearOrden: React.FC<Props> = ({
         const nextArr = [...set];
         setVentasSeleccionadas((prevVentas) => {
           const nextVentas = new Set(prevVentas);
-          const tieneProductoIncluido = ventasConProductoIncluido.has(String(ventaId));
+          const tieneProductoIncluido =
+            (productosIncluidosPorVenta[String(ventaId)]?.length ?? 0) > 0;
           if (nextArr.length > 0 || tieneProductoIncluido) nextVentas.add(String(ventaId));
           else nextVentas.delete(String(ventaId));
           return nextVentas;
@@ -261,32 +331,34 @@ export const ModalCrearOrden: React.FC<Props> = ({
         return { ...prev, [ventaId]: nextArr };
       });
     },
-    [ventasDelMes, ventasConProductoIncluido],
+    [ventasDelMes, productosIncluidosPorVenta],
   );
 
-  const toggleProductoEnOrden = useCallback((ventaId: string) => {
-    setVentasConProductoIncluido((prev) => {
-      const next = new Set(prev);
-      if (next.has(ventaId)) {
-        next.delete(ventaId);
+  const toggleProductoEnOrden = useCallback(
+    (ventaId: string, productoId: string) => {
+      const pid = String(productoId);
+      setProductosIncluidosPorVenta((prev) => {
+        const cur = [...(prev[ventaId] ?? [])];
+        const i = cur.indexOf(pid);
+        if (i >= 0) cur.splice(i, 1);
+        else cur.push(pid);
+        const next = { ...prev, [ventaId]: cur };
         setVentasSeleccionadas((prevVentas) => {
           const nextVentas = new Set(prevVentas);
-          const pantallasSel = pantallasSeleccionadasPorVenta[String(ventaId)] ?? [];
-          if ((pantallasSel?.length ?? 0) === 0) nextVentas.delete(String(ventaId));
+          const pantallasSel =
+            pantallasSeleccionadasPorVenta[String(ventaId)] ?? [];
+          if (cur.length === 0 && (pantallasSel?.length ?? 0) === 0) {
+            nextVentas.delete(String(ventaId));
+          } else {
+            nextVentas.add(String(ventaId));
+          }
           return nextVentas;
         });
-      } else {
-        next.add(ventaId);
-        // Permite orden solo de producto sin pantallas.
-        setVentasSeleccionadas((prevVentas) => {
-          const nextVentas = new Set(prevVentas);
-          nextVentas.add(String(ventaId));
-          return nextVentas;
-        });
-      }
-      return next;
-    });
-  }, [pantallasSeleccionadasPorVenta]);
+        return next;
+      });
+    },
+    [pantallasSeleccionadasPorVenta],
+  );
 
   const marcarTodasVentas = () =>
     {
@@ -303,7 +375,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
     };
   const quitarTodasVentas = () => {
     setVentasSeleccionadas(new Set());
-    setVentasConProductoIncluido(new Set());
+    setProductosIncluidosPorVenta({});
     setVentasConGastosIncluido(new Set());
     const porVenta: Record<string, string[]> = {};
     for (const v of ventasDelMes) porVenta[String(v.id)] = [];
@@ -336,24 +408,47 @@ export const ModalCrearOrden: React.FC<Props> = ({
   }, [ventasDelMes, ventasSeleccionadas, pantallasSeleccionadasPorVenta]);
 
   const ventasAjustadasParaOrden = useMemo(() => {
-    return ventasDelMes.map((v) => {
+    return ventasParaOrden.map((v) => {
       const id = String(v.id);
-      const incluirProducto = ventasConProductoIncluido.has(id);
+      const idsProd = idsProductosVenta(v);
+      const selRaw = productosIncluidosPorVenta[id] ?? [];
+      const sel = selRaw.filter((pid) => idsProd.includes(String(pid)));
+      const incluirProducto = sel.length > 0;
+      const precioProdAjustado = round2(
+        sel.reduce((s, pid) => s + precioMensualProductoDesdeDetalle(v, pid), 0),
+      );
+      const nombresProd =
+        sel.length > 0
+          ? sel
+              .map((pid) => nombreProductoEnVenta(pid, v, productosCatalogo))
+              .join(", ")
+          : undefined;
       const incluirGastos = ventasConGastosIncluido.has(id);
       const precioGeneralActual = Math.max(0, Number(v.precioGeneral ?? 0));
       const G = Math.max(0, Number(v.gastosAdicionales ?? 0) || 0);
       const T = Math.max(0, Number(v.importeTotal ?? v.precioTotal ?? 0) || 0);
       const totalSinGastos = Math.max(0, round2(T - G));
+      const precioProductoContrato = round2(
+        Number(v.productoPrecioMensual ?? 0) || 0,
+      );
       return {
         ...v,
         productoIncluidoEnOrden: incluirProducto,
+        productoPrecioMensual: precioProdAjustado,
+        productoPrecioMensualContrato: precioProductoContrato,
+        productoNombre: incluirProducto ? nombresProd : undefined,
         precioBaseMensualOrden: precioGeneralActual,
         gastosAdicionales: incluirGastos ? G : 0,
         importeTotal: incluirGastos ? T : totalSinGastos,
         precioTotal: incluirGastos ? T : totalSinGastos,
       };
     });
-  }, [ventasDelMes, ventasConProductoIncluido, ventasConGastosIncluido]);
+  }, [
+    ventasParaOrden,
+    productosIncluidosPorVenta,
+    ventasConGastosIncluido,
+    productosCatalogo,
+  ]);
 
   const detalleLineas = useMemo(
     () => construirDetalleLineas(ventasAjustadasParaOrden, seleccionArrays, pantallas),
@@ -380,7 +475,9 @@ export const ModalCrearOrden: React.FC<Props> = ({
       return;
     }
     if (detalleLineas.length === 0) {
-      alert("Selecciona al menos una pantalla o activa la opción de producto.");
+      alert(
+        "Selecciona al menos una pantalla o marca al menos un producto en la orden.",
+      );
       return;
     }
 
@@ -571,7 +668,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
 
                 {ventasDelMes.length > 0 ? (
                   <ul className="modal-ventas-seleccion-list">
-                    {ventasDelMes.map((v) => {
+                    {ventasParaOrden.map((v) => {
                       const id = String(v.id);
                       const checked = ventasSeleccionadas.has(id);
                       const pids = [...new Set(v.pantallasIds ?? [])];
@@ -579,8 +676,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
                         .filter((l) => String(l.venta_id) === id)
                         .reduce((s, l) => s + l.importe, 0);
                       const productoTxt = (v.productoNombre ?? "").trim();
-                      const precioProducto =
-                        Number(v.productoPrecioMensual ?? 0) || 0;
+                      const productoIdsVenta = idsProductosVenta(v);
                       const tieneProducto =
                         Boolean(v.productoId) ||
                         (Array.isArray(v.productoIds) && v.productoIds.length > 0) ||
@@ -589,8 +685,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
                       const productoLabel = tieneProducto
                         ? productoTxt || "Producto(s) de la venta"
                         : "Sin producto";
-                      const incluirProducto =
-                        ventasConProductoIncluido.has(id);
+                      const nProdSel = (productosIncluidosPorVenta[id] ?? []).length;
                       const gastosVenta =
                         Math.max(0, Number(v.gastosAdicionales ?? 0) || 0);
                       const incluirGastos = ventasConGastosIncluido.has(id);
@@ -598,7 +693,9 @@ export const ModalCrearOrden: React.FC<Props> = ({
                       const pantallasSeleccionadasLocal =
                         pantallasSeleccionadasPorVenta[id] ?? [];
                       const resumenSeleccion = `${pantallasSeleccionadasLocal.length} pantalla${pantallasSeleccionadasLocal.length !== 1 ? "s" : ""}${
-                        incluirProducto ? " + producto" : ""
+                        nProdSel > 0
+                          ? ` + ${nProdSel} producto${nProdSel !== 1 ? "s" : ""}`
+                          : ""
                       }${incluirGastos && gastosVenta > 0 ? " + gastos adic." : ""}`;
                       const mainChkId = `modal-venta-main-${id}`;
                       return (
@@ -620,14 +717,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                     <span className="modal-venta-meta-k">Producto</span>
                                     <span className="modal-venta-meta-v">{productoLabel}</span>
                                   </div>
-                                  {tieneProducto ? (
-                                    <div className="modal-venta-meta-row">
-                                      <span className="modal-venta-meta-k">Precio producto</span>
-                                      <span className="modal-venta-meta-v">
-                                        ${fmtMoney(precioProducto)}/mes
-                                      </span>
-                                    </div>
-                                  ) : null}
                                   <div className="modal-venta-meta-row">
                                     <span className="modal-venta-meta-k">Pantallas del contrato</span>
                                     <span className="modal-venta-meta-v">
@@ -647,20 +736,48 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                   Incluye en esta orden: <strong>{resumenSeleccion}</strong>
                                 </p>
                               </label>
-                              {tieneProducto ? (
+                              {tieneProducto && productoIdsVenta.length > 0 ? (
                                 <div className="modal-venta-section">
-                                  <div className="modal-venta-section-title">Producto en esta orden</div>
-                                  <label className="modal-venta-check-row">
-                                    <input
-                                      id={`modal-venta-prod-${id}`}
-                                      type="checkbox"
-                                      checked={incluirProducto}
-                                      onChange={() => toggleProductoEnOrden(id)}
-                                    />
-                                    <span className="modal-venta-check-label">
-                                      Incluir producto (${fmtMoney(precioProducto)}/mes)
-                                    </span>
-                                  </label>
+                                  <div className="modal-venta-section-title">
+                                    Productos en esta orden
+                                  </div>
+                                  <div className="modal-venta-checklist" role="group">
+                                    {productoIdsVenta.map((pid) => {
+                                      const marcado = (
+                                        productosIncluidosPorVenta[id] ?? []
+                                      ).includes(String(pid));
+                                      const nombreProd = nombreProductoEnVenta(
+                                        pid,
+                                        v,
+                                        productosCatalogo,
+                                      );
+                                      const subProd = `modal-venta-prod-${id}-${pid}`;
+                                      return (
+                                        <label
+                                          key={subProd}
+                                          className="modal-venta-check-row"
+                                        >
+                                          <input
+                                            id={subProd}
+                                            type="checkbox"
+                                            checked={marcado}
+                                            onChange={() =>
+                                              toggleProductoEnOrden(id, pid)
+                                            }
+                                          />
+                                          <span className="modal-venta-check-label">
+                                            {nombreProd}
+                                          </span>
+                                          <span className="modal-venta-check-precio">
+                                            ${fmtMoney(
+                                              precioMensualProductoDesdeDetalle(v, pid),
+                                            )}
+                                            /mes
+                                          </span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               ) : null}
                               {pantallasDeVenta.length > 0 ? (

@@ -80,6 +80,8 @@ export interface RegistroVenta {
   productoIds?: string[];
   productoNombre?: string;
   productoPrecioMensual?: number;
+  /** Total mensual de producto en el contrato (solo UI orden); el numerador usa `productoPrecioMensual` ajustado por selección. */
+  productoPrecioMensualContrato?: number;
   productoIncluidoEnOrden?: boolean;
   precioBaseMensualOrden?: number;
   precioPantallasMensual?: number;

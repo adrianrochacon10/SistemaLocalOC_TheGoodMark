@@ -163,7 +163,7 @@ export const ColaboradorForm: React.FC<Props> = ({
           },
           {
             key: "precio",
-            label: "Precio mensual",
+            label: "Precio unitario",
             placeholder: "Ej: 1200.00",
             tipo: "number",
           },

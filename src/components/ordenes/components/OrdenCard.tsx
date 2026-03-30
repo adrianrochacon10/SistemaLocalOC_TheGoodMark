@@ -8,7 +8,11 @@ import {
 } from "../../../types";
 import { exportarPDFOrden } from "../../../utils/pdfGenerator";
 import { nombrePantallaDesdeVentaYCatalogo, nombresPantallas } from "../../../utils/ordenCompraLineas";
-import { detallePantallaId, detallePrecioMensual } from "../../../utils/ordenApiMapper";
+import {
+  detallePantallaId,
+  detallePrecioMensual,
+  esLineaPrecioProductoEnDetalle,
+} from "../../../utils/ordenApiMapper";
 
 interface Props {
   orden: OrdenDeCompra;
@@ -35,6 +39,15 @@ const MESES = [
   "Noviembre",
   "Diciembre",
 ];
+
+function nombresProductoDesdeVenta(venta: OrdenDeCompra["registrosVenta"][number]): string[] {
+  const txt = String(venta.productoNombre ?? "").trim();
+  if (!txt) return [];
+  return txt
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 export const OrdenCard: React.FC<Props> = ({
   orden,
@@ -138,7 +151,13 @@ export const OrdenCard: React.FC<Props> = ({
               );
               const pantallasDetalle = (
                 Array.isArray(venta.pantallasDetalle) ? venta.pantallasDetalle : []
-              ).filter((p) => detallePantallaId(p) !== "__producto_total__");
+              ).filter((p) => {
+                const pid = detallePantallaId(p);
+                return (
+                  pid !== "__producto_total__" &&
+                  !esLineaPrecioProductoEnDetalle(pid)
+                );
+              });
               const nombresP =
                 (venta.pantallasIds ?? []).length > 0
                   ? nombresPantallas(
@@ -162,6 +181,53 @@ export const OrdenCard: React.FC<Props> = ({
                   ? "No incluido"
                   : venta.productoNombre?.trim() || "Sin producto";
               const precioProducto = Number(venta.productoPrecioMensual ?? 0) || 0;
+              const pantallasUnitarias =
+                pantallasDetalle.length > 0
+                  ? pantallasDetalle.map((p) => {
+                      const pid = detallePantallaId(p);
+                      const nombre = nombrePantallaDesdeVentaYCatalogo(
+                        pid,
+                        pantallas,
+                        venta.pantallasDetalle,
+                      );
+                      return {
+                        nombre,
+                        precio: detallePrecioMensual(p),
+                      };
+                    })
+                  : (venta.pantallasIds ?? []).map((pid) => {
+                      const nombre = nombrePantallaDesdeVentaYCatalogo(
+                        String(pid),
+                        pantallas,
+                        venta.pantallasDetalle,
+                      );
+                      const precioCat =
+                        Number(
+                          pantallas.find((p) => String(p.id) === String(pid))?.precio ?? 0,
+                        ) || 0;
+                      return { nombre, precio: precioCat };
+                    });
+              const productosDetalle = (Array.isArray(venta.pantallasDetalle)
+                ? venta.pantallasDetalle
+                : []
+              ).filter((p) => esLineaPrecioProductoEnDetalle(detallePantallaId(p)));
+              const nombresProducto = nombresProductoDesdeVenta(venta);
+              const precioUnitFallback =
+                nombresProducto.length > 0
+                  ? (Number(precioProducto) || 0) / nombresProducto.length
+                  : Number(precioProducto) || 0;
+              const productosUnitarios =
+                productosDetalle.length > 0
+                  ? productosDetalle.map((p) => ({
+                      nombre: String((p as any)?.nombre ?? "").trim() || "Producto",
+                      precio: detallePrecioMensual(p),
+                    }))
+                  : nombresProducto.length > 0
+                    ? nombresProducto.map((nombre) => ({
+                        nombre,
+                        precio: precioUnitFallback,
+                      }))
+                    : [];
               const gastosMonto = Number(venta.gastosAdicionales ?? 0) || 0;
               const gastosIncluidos =
                 venta.gastosIncluidosEnOrden === true ||
@@ -175,26 +241,26 @@ export const OrdenCard: React.FC<Props> = ({
                       {socio?.nombre ?? "Colaborador"} — {nombresP}
                     </strong>
                   </p>
-                  {pantallasDetalle.length > 0 ? (
-                    <p>
-                      Pantallas:
-                      {" "}
-                      {pantallasDetalle
-                        .map((p) => {
-                          const pid = detallePantallaId(p);
-                          const nombre = nombrePantallaDesdeVentaYCatalogo(
-                            pid,
-                            pantallas,
-                            venta.pantallasDetalle,
-                          );
-                          const precio = detallePrecioMensual(p);
-                          return `${nombre}: $${precio.toFixed(2)}`;
-                        })
-                        .join(" · ")}
-                    </p>
+                  {pantallasUnitarias.length > 0 ? (
+                    <div>
+                      <p>Pantallas:</p>
+                      {pantallasUnitarias.map((p, i) => (
+                        <p key={`pant-${venta.id}-${i}`}>
+                          - {p.nombre}: ${p.precio.toFixed(2)}
+                        </p>
+                      ))}
+                    </div>
                   ) : null}
                   <p>Producto: {productoTxt}</p>
-                  {venta.productoIncluidoEnOrden !== false && precioProducto > 0 ? (
+                  {venta.productoIncluidoEnOrden !== false && productosUnitarios.length > 0 ? (
+                    <div>
+                      {productosUnitarios.map((p, i) => (
+                        <p key={`prod-${venta.id}-${i}`}>
+                          - {p.nombre}: ${p.precio.toFixed(2)}
+                        </p>
+                      ))}
+                    </div>
+                  ) : venta.productoIncluidoEnOrden !== false && precioProducto > 0 ? (
                     <p>Precio producto: ${precioProducto.toFixed(2)}</p>
                   ) : null}
                   {gastosMonto > 0 && gastosIncluidos ? (

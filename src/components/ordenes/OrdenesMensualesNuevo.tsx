@@ -126,24 +126,12 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
           </div>
         )}
 
-        {ordenesEsteMes.length > 0 && (
-          <div className="orden-ya-en-bd-banner" role="status">
-            <strong>{ordenesEsteMes.length}</strong> orden
-            {ordenesEsteMes.length === 1 ? "" : "es"} guardada
-            {ordenesEsteMes.length === 1 ? "" : "s"} para {MESES[mes]} {año}.
-            Puedes crear otra con «Crear orden» sin perder las demás.
-          </div>
-        )}
       </div>
 
       <div className="ordenes-generadas-section">
         <h3>
           Órdenes de {MESES[mes]} {año}
         </h3>
-        <p className="ordenes-bd-hint">
-          Aquí ves las órdenes de compra de este mes y año (el selector está
-          arriba). Cada vez que guardas una nueva, se suma a la lista.
-        </p>
         <OrdenesGrid
           ordenes={ordenesEsteMes}
           vacioMensaje={`Todavía no hay órdenes para ${MESES[mes]} ${año}. Usa «Crear orden» para añadir una.`}

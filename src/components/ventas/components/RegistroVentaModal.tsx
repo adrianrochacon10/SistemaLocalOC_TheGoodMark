@@ -12,6 +12,12 @@ import {
   AsignacionProductoExtra,
 } from "../../../types";
 import { calcularFechaFinDuracion, stringAFecha } from "../../../utils/formateoFecha";
+import {
+  PREFIJO_LINEA_PRODUCTO,
+  detallePantallaId,
+  detallePrecioMensual,
+  esLineaPrecioProductoEnDetalle,
+} from "../../../utils/ordenApiMapper";
 import { SelectField } from "../../ui/SelectField";
 import { SelectorPantallas } from "./SelectorPantallas";
 import { InputField } from "../../ui/InputField";
@@ -78,9 +84,20 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
         ? [String(ventaInicial.productoId)]
         : [];
     if (ids.length === 0) return {};
+    const detalle = ventaInicial.pantallasDetalle ?? [];
+    const map: Record<string, number> = {};
+    let desdeLineas = false;
+    for (const id of ids) {
+      const lineKey = `${PREFIJO_LINEA_PRODUCTO}${id}`;
+      const row = detalle.find((p) => detallePantallaId(p) === lineKey);
+      if (row) {
+        map[String(id)] = detallePrecioMensual(row);
+        desdeLineas = true;
+      }
+    }
+    if (desdeLineas) return map;
     const totalProductoInicial = Number(ventaInicial.productoPrecioMensual ?? 0) || 0;
     const unit = totalProductoInicial / ids.length;
-    const map: Record<string, number> = {};
     for (const id of ids) map[String(id)] = unit;
     return map;
   });
@@ -91,7 +108,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     const map: Record<string, number> = {};
     for (const p of ventaInicial.pantallasDetalle) {
       const id = String(p?.pantallaId ?? "");
-      if (!id) continue;
+      if (!id || id === "__producto_total__" || esLineaPrecioProductoEnDetalle(id)) {
+        continue;
+      }
       map[id] = Number(p?.precioMensual ?? 0) || 0;
     }
     return map;
@@ -506,6 +525,22 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
           precioMensual:
             Number(precioVentaPantallaMap[String(p.id)] ?? p.precio ?? 0) || 0,
         })),
+        ...productosSeleccionados.map((id) => {
+          const sid = String(id);
+          const prod = productosActuales.find((x) => String(x.id) === sid);
+          const nombre = String(prod?.nombre ?? "").trim() || "Producto";
+          let precio = Number(precioVentaProductoMap[sid]);
+          if (!Number.isFinite(precio)) {
+            const pcat = productosDelCliente.find((p) => String(p.id) === sid);
+            precio =
+              Number(pcat?.precio ?? precioProductoFallbackMap.get(sid) ?? 0) || 0;
+          }
+          return {
+            pantallaId: `${PREFIJO_LINEA_PRODUCTO}${sid}`,
+            nombre,
+            precioMensual: precio,
+          };
+        }),
         // Meta interna para conservar precio de producto de la venta (no catálogo).
         {
           pantallaId: "__producto_total__",

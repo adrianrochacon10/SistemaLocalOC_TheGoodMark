@@ -9,6 +9,13 @@ export function detallePrecioMensual(p: any): number {
   return Number(p?.precioMensual ?? p?.precio_mensual ?? 0) || 0;
 }
 
+/** Línea de precio por producto guardada en `pantallas_detalle` (no es pantalla física). */
+export const PREFIJO_LINEA_PRODUCTO = "__producto_linea__";
+
+export function esLineaPrecioProductoEnDetalle(pantallaId: string): boolean {
+  return String(pantallaId).startsWith(PREFIJO_LINEA_PRODUCTO);
+}
+
 /** Fila de `ventas` desde el API (p. ej. GET /api/ordenes/ventas). */
 export function mapVentaFromApi(row: any): RegistroVenta {
   const pantallasIds: string[] =
@@ -22,10 +29,9 @@ export function mapVentaFromApi(row: any): RegistroVenta {
   const pantallasDetalleFiltrado = pantallasDetalleRaw.filter(
     (p: any) => detallePantallaId(p) !== "__producto_total__",
   );
-  const precioPantallasDesdeDetalle = pantallasDetalleFiltrado.reduce(
-    (sum: number, p: any) => sum + detallePrecioMensual(p),
-    0,
-  );
+  const precioPantallasDesdeDetalle = pantallasDetalleFiltrado
+    .filter((p: any) => !esLineaPrecioProductoEnDetalle(detallePantallaId(p)))
+    .reduce((sum: number, p: any) => sum + detallePrecioMensual(p), 0);
   const precioPantallasMensual =
     Number(row.precio_pantallas_mensual ?? precioPantallasDesdeDetalle ?? 0) || 0;
   const precioMensualVenta =
@@ -135,15 +141,50 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
   }
 
   let registrosVenta: RegistroVenta[];
+  const ventasRaw = Array.isArray(row.ventas) ? row.ventas : [];
+  const ventasById = new Map<string, any>(
+    ventasRaw.map((v: any) => [String(v?.id ?? ""), v]),
+  );
 
   if (Array.isArray(detalle) && detalle.length > 0) {
     registrosVenta = detalle.map((line: any) => {
       const pids: string[] = line.pantallas_seleccionadas ?? [];
+      const ventaSrc = ventasById.get(String(line.venta_id ?? ""));
+      const ventaSrcDetalleRaw = Array.isArray(ventaSrc?.pantallas_detalle)
+        ? ventaSrc.pantallas_detalle
+        : [];
+      const linePantallasDetalle = Array.isArray(line.pantallas_detalle)
+        ? line.pantallas_detalle.map((p: any) => ({
+            pantallaId: detallePantallaId(p),
+            nombre: String(p?.nombre ?? "").trim() || undefined,
+            precioMensual: detallePrecioMensual(p),
+          }))
+        : [];
+      const lineasProductoDesdeVenta = ventaSrcDetalleRaw
+        .filter((p: any) => esLineaPrecioProductoEnDetalle(detallePantallaId(p)))
+        .map((p: any) => ({
+          pantallaId: detallePantallaId(p),
+          nombre: String(p?.nombre ?? "").trim() || undefined,
+          precioMensual: detallePrecioMensual(p),
+        }));
+      const pantallasDetalleMerge = new Map<string, any>();
+      for (const p of [...linePantallasDetalle, ...lineasProductoDesdeVenta]) {
+        const pid = detallePantallaId(p);
+        if (!pid) continue;
+        pantallasDetalleMerge.set(pid, p);
+      }
       const fi = line.fecha_inicio
         ? parseFechaLocalOnly(line.fecha_inicio)
         : new Date();
       const ff = line.fecha_fin ? parseFechaLocalOnly(line.fecha_fin) : fi;
       const imp = Number(line.importe) || 0;
+      const comisionPct = Number(
+        line.comision_porcentaje ??
+          line.comisionPorcentaje ??
+          ventaSrc?.comision_porcentaje ??
+          ventaSrc?.comisionPorcentaje ??
+          0,
+      ) || 0;
       return {
         id: String(line.venta_id ?? ""),
         pantallasIds: pids,
@@ -152,6 +193,15 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
           sinDescuento: false,
         })),
         colaboradorId: colaboradorId || "",
+        productoId:
+          ventaSrc?.producto_id != null
+            ? String(ventaSrc.producto_id)
+            : undefined,
+        productoIds: Array.isArray(ventaSrc?.producto_ids)
+          ? ventaSrc.producto_ids.map((x: any) => String(x))
+          : ventaSrc?.producto_id != null
+            ? [String(ventaSrc.producto_id)]
+            : [],
         productoNombre:
           line.producto_incluido === true
             ? line.producto_nombre ?? "Producto seleccionado"
@@ -171,13 +221,7 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
             : line.gastos_incluidos_en_orden === false
               ? false
               : undefined,
-        pantallasDetalle: Array.isArray(line.pantallas_detalle)
-          ? line.pantallas_detalle.map((p: any) => ({
-              pantallaId: detallePantallaId(p),
-              nombre: String(p?.nombre ?? "").trim() || undefined,
-              precioMensual: detallePrecioMensual(p),
-            }))
-          : [],
+        pantallasDetalle: Array.from(pantallasDetalleMerge.values()),
         vendidoA: line.vendido_a ?? "",
         precioGeneral: imp,
         cantidad: 1,
@@ -194,15 +238,15 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
           return Math.max(1, n);
         })(),
         importeTotal: imp,
+        comisionPorcentaje: comisionPct,
         activo: true,
         usuarioRegistroId: "",
         estadoVenta: "Aceptado",
       };
     });
   } else {
-    const ventas = row.ventas ?? [];
-    registrosVenta = Array.isArray(ventas)
-      ? ventas.map(mapVentaFromApi)
+    registrosVenta = Array.isArray(ventasRaw)
+      ? ventasRaw.map(mapVentaFromApi)
       : [];
   }
 

@@ -1,5 +1,9 @@
 import type { Pantalla, RegistroVenta } from "../types";
-import { detallePantallaId, detallePrecioMensual } from "./ordenApiMapper";
+import {
+  detallePantallaId,
+  detallePrecioMensual,
+  esLineaPrecioProductoEnDetalle,
+} from "./ordenApiMapper";
 
 /** Nombre legible para una pantalla: snapshot de la venta primero, luego catálogo. */
 export function nombrePantallaDesdeVentaYCatalogo(
@@ -15,6 +19,33 @@ export function nombrePantallaDesdeVentaYCatalogo(
   if (deSnap) return deSnap;
   const cat = pantallas.find((p) => String(p.id) === key);
   return cat?.nombre?.trim() || "Pantalla";
+}
+
+/**
+ * Varios `producto_ids` en la venta; el API suele devolver solo `producto.nombre` (primer FK).
+ * Reconstruye `productoNombre` como "A, B" usando el catálogo.
+ */
+export function enriquecerProductoNombreMultiplesIds(
+  ventas: RegistroVenta[],
+  productos: Array<{ id: string; nombre?: string }>,
+): RegistroVenta[] {
+  if (!productos.length) return ventas;
+  const map = new Map(
+    productos.map((p) => [String(p.id), String(p.nombre ?? "").trim()]),
+  );
+  return ventas.map((v) => {
+    const ids = v.productoIds?.length
+      ? v.productoIds.map(String)
+      : v.productoId
+        ? [String(v.productoId)]
+        : [];
+    if (ids.length < 2) return v;
+    const nombres = ids
+      .map((id) => map.get(id))
+      .filter((n): n is string => Boolean(n));
+    if (nombres.length === 0) return v;
+    return { ...v, productoNombre: nombres.join(", ") };
+  });
 }
 
 export type DetalleLineaOrden = {
@@ -99,9 +130,18 @@ export function partesImporteOrdenVenta(
     ),
   ];
   const productoIncluido = Boolean(venta.productoIncluidoEnOrden);
-  const precioProductoVenta = Math.max(0, Number(venta.productoPrecioMensual ?? 0) || 0);
+  /** Mensual de producto incluido en esta orden (subconjunto). */
+  const precioProductoSeleccion = Math.max(
+    0,
+    Number(venta.productoPrecioMensual ?? 0) || 0,
+  );
+  /** Mensual de producto del contrato completo (peso en el denominador). */
+  const precioProductoContrato =
+    typeof venta.productoPrecioMensualContrato === "number"
+      ? Math.max(0, venta.productoPrecioMensualContrato)
+      : precioProductoSeleccion;
   const G = Math.max(0, Number(venta.gastosAdicionales ?? 0) || 0);
-  const T = Math.max(
+  const T_raw = Math.max(
     0,
     Number(venta.importeTotal ?? venta.precioTotal ?? 0) || 0,
   );
@@ -112,7 +152,9 @@ export function partesImporteOrdenVenta(
 
   const ventaDetalle = Array.isArray(venta.pantallasDetalle)
     ? venta.pantallasDetalle.filter(
-        (d) => detallePantallaId(d) !== "__producto_total__",
+        (d) =>
+          detallePantallaId(d) !== "__producto_total__" &&
+          !esLineaPrecioProductoEnDetalle(detallePantallaId(d)),
       )
     : [];
   const preciosVenta = new Map<string, number>(
@@ -146,7 +188,21 @@ export function partesImporteOrdenVenta(
     sumSel = sumAllPant;
   }
 
-  const denom = sumAllPant + precioProductoVenta + G;
+  const denom = sumAllPant + precioProductoContrato + G;
+  const mesesContrato = mesesRentaDesdeVenta(venta);
+  /**
+   * Si `importeTotal` difiere en centavos de (pesos mensuales del contrato × meses),
+   * el reparto T×(num/denom) desincroniza el subtotal respecto a los precios mostrados
+   * (p. ej. pantalla 8000/mes pero línea 7999.99). Solo alineamos cuando no hay gastos
+   * en el peso o el desvío es claramente redondeo (< 5 centavos).
+   */
+  let T = T_raw;
+  if (G === 0 && denom > 0 && mesesContrato >= 1) {
+    const refTotal = round2(denom * mesesContrato);
+    if (Math.abs(T_raw - refTotal) < 0.05) {
+      T = refTotal;
+    }
+  }
 
   const sinSeleccion =
     sel.length === 0 && !productoIncluido && G <= 0;
@@ -164,7 +220,7 @@ export function partesImporteOrdenVenta(
   // al tener todo seleccionado num === denom e importe === T.
   const num =
     sumSel +
-    (productoIncluido ? precioProductoVenta : 0) +
+    (productoIncluido ? precioProductoSeleccion : 0) +
     G;
 
   let importe: number;
@@ -172,15 +228,15 @@ export function partesImporteOrdenVenta(
 
   if (denom <= 0) {
     importe = round2(num);
-    productoPart = productoIncluido ? precioProductoVenta : 0;
+    productoPart = productoIncluido ? precioProductoSeleccion : 0;
   } else if (T <= 0) {
     importe = round2(num);
-    productoPart = productoIncluido ? precioProductoVenta : 0;
+    productoPart = productoIncluido ? precioProductoSeleccion : 0;
   } else {
     importe = round2(T * (num / denom));
     productoPart =
-      productoIncluido && precioProductoVenta > 0
-        ? round2(T * (precioProductoVenta / denom))
+      productoIncluido && precioProductoSeleccion > 0
+        ? round2(T * (precioProductoSeleccion / denom))
         : 0;
   }
 
@@ -237,7 +293,9 @@ export function construirDetalleLineas(
     const ff = new Date(v.fechaFin);
     const pantallasDetalleVenta = Array.isArray(v.pantallasDetalle)
       ? v.pantallasDetalle.filter(
-          (d) => detallePantallaId(d) !== "__producto_total__",
+          (d) =>
+            detallePantallaId(d) !== "__producto_total__" &&
+            !esLineaPrecioProductoEnDetalle(detallePantallaId(d)),
         )
       : [];
     const detallePantallasSeleccionadas = sel.map((pid) => {
