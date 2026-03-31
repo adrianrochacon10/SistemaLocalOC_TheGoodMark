@@ -46,7 +46,7 @@ CREATE TABLE colaboradores (
   email text,
   contacto text,
   tipo_pago_id uuid NOT NULL REFERENCES tipo_pago(id),
-  pantalla_id uuid NOT NULL REFERENCES pantallas(id) ON DELETE RESTRICT,
+  pantalla_id uuid REFERENCES pantallas(id) ON DELETE RESTRICT,
   tipo_pdf smallint NOT NULL DEFAULT 1 CHECK (tipo_pdf IN (1, 2)),
   creado_por uuid REFERENCES perfiles(id),
   actualizado_por uuid REFERENCES perfiles(id),

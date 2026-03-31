@@ -37,8 +37,8 @@ export const ColaboradorModal: React.FC<Props> = ({
   onGuardar,
   onCerrar,
 }) => (
-  <div className="modal-overlay" onClick={onCerrar}>
-    <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
+  <div className="modal-overlay">
+    <div className="modal-contenido">
       <div className="modal-header">
         <h3>
           {modoEdicion ? "Editar Colaborador" : "Agregar Nuevo Colaborador"}

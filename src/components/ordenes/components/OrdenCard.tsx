@@ -71,6 +71,7 @@ export const OrdenCard: React.FC<Props> = ({
           config,
           usuarioActual.nombre,
           pantallas,
+          clientes,
         );
       } catch (e) {
         alert(

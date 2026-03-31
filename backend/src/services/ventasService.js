@@ -13,6 +13,17 @@ function leerPrecioProducto(producto) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Si la migración `porcentaje_socio` aún no está aplicada en Supabase. */
+function ventasErrorColumnaPorcentajeSocio(error) {
+  return /porcentaje_socio|schema cache/i.test(String(error?.message ?? ""));
+}
+
+function ventasPayloadSinPorcentajeSocio(p) {
+  if (p == null || typeof p !== "object") return p;
+  const { porcentaje_socio, ...rest } = p;
+  return rest;
+}
+
 export async function listar() {
   const { data, error } = await supabase
     .from("ventas")
@@ -76,6 +87,7 @@ export async function crear(body, vendedorId) {
     body.comisiones ?? body.comision ?? body.comision_total ?? 0,
   );
   const comisionPorcentaje = Number(body.comision_porcentaje ?? 0);
+  const porcentajeSocio = Number(body.porcentaje_socio ?? 0);
   const descuento = Number(body.descuento ?? 0);
   const renovable = body.renovable ?? false;
 
@@ -144,6 +156,10 @@ export async function crear(body, vendedorId) {
       Number.isFinite(comisionPorcentaje) && comisionPorcentaje >= 0
         ? Math.round(comisionPorcentaje * 100) / 100
         : 0,
+    porcentaje_socio:
+      Number.isFinite(porcentajeSocio) && porcentajeSocio >= 0
+        ? Math.round(porcentajeSocio * 100) / 100
+        : 0,
     descuento:
       Number.isFinite(descuento) && descuento >= 0
         ? Math.round(descuento * 100) / 100
@@ -157,11 +173,23 @@ export async function crear(body, vendedorId) {
     fuente_origen: body.fuente_origen ?? null,
   };
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("ventas")
     .insert(insertPayload)
     .select(SELECT_VENTAS)
     .single();
+  if (error && ventasErrorColumnaPorcentajeSocio(error)) {
+    console.warn(
+      "[ventas] Falta columna ventas.porcentaje_socio. Ejecuta: supabase/migrations/20260330130000_ventas_porcentaje_socio.sql en el SQL Editor de Supabase.",
+    );
+    const r2 = await supabase
+      .from("ventas")
+      .insert(ventasPayloadSinPorcentajeSocio(insertPayload))
+      .select(SELECT_VENTAS)
+      .single();
+    data = r2.data;
+    error = r2.error;
+  }
   if (error) throw new Error(error.message);
 
   return { data };
@@ -336,6 +364,12 @@ export async function actualizar(id, body) {
       throw new Error("descuento debe ser un numero >= 0");
     payload.descuento = Math.round(d * 100) / 100;
   }
+  if (body.porcentaje_socio !== undefined) {
+    const ps = Number(body.porcentaje_socio);
+    if (!Number.isFinite(ps) || ps < 0)
+      throw new Error("porcentaje_socio debe ser un numero >= 0");
+    payload.porcentaje_socio = Math.round(ps * 100) / 100;
+  }
 
   {
     const precioPorMesBase = Number(payload.precio_por_mes ?? venta.precio_por_mes ?? 0) || 0;
@@ -356,12 +390,25 @@ export async function actualizar(id, body) {
       ) / 100;
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("ventas")
     .update(payload)
     .eq("id", id)
     .select(SELECT_VENTAS)
     .single();
+  if (error && ventasErrorColumnaPorcentajeSocio(error)) {
+    console.warn(
+      "[ventas] Falta columna ventas.porcentaje_socio. Ejecuta: supabase/migrations/20260330130000_ventas_porcentaje_socio.sql en el SQL Editor de Supabase.",
+    );
+    const r2 = await supabase
+      .from("ventas")
+      .update(ventasPayloadSinPorcentajeSocio(payload))
+      .eq("id", id)
+      .select(SELECT_VENTAS)
+      .single();
+    data = r2.data;
+    error = r2.error;
+  }
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Venta no encontrada");
   return data;

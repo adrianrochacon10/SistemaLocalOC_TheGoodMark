@@ -91,6 +91,10 @@ export function mapVentaFromApi(row: any): RegistroVenta {
     tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
     fuenteOrigen: row.fuente_origen ?? undefined,
     comisionPorcentaje: Number(row.comision_porcentaje ?? 0) || 0,
+    porcentajeSocio:
+      row.porcentaje_socio != null && row.porcentaje_socio !== ""
+        ? Number(row.porcentaje_socio) || 0
+        : undefined,
     gastosAdicionales: Number(row.gastos_adicionales ?? 0) || 0,
   };
 }
@@ -178,13 +182,6 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
         : new Date();
       const ff = line.fecha_fin ? parseFechaLocalOnly(line.fecha_fin) : fi;
       const imp = Number(line.importe) || 0;
-      const comisionPct = Number(
-        line.comision_porcentaje ??
-          line.comisionPorcentaje ??
-          ventaSrc?.comision_porcentaje ??
-          ventaSrc?.comisionPorcentaje ??
-          0,
-      ) || 0;
       return {
         id: String(line.venta_id ?? ""),
         pantallasIds: pids,
@@ -221,8 +218,18 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
             : line.gastos_incluidos_en_orden === false
               ? false
               : undefined,
+        aplicarPorcentajeSocioEnOrden:
+          line.aplicar_porcentaje_socio === true
+            ? true
+            : line.aplicar_porcentaje_socio === false
+              ? false
+              : undefined,
         pantallasDetalle: Array.from(pantallasDetalleMerge.values()),
-        vendidoA: line.vendido_a ?? "",
+        vendidoA:
+          line.vendido_a ??
+          ventaSrc?.vendido_a ??
+          ventaSrc?.vendidoA ??
+          "",
         precioGeneral: imp,
         cantidad: 1,
         precioTotal: imp,
@@ -238,7 +245,6 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
           return Math.max(1, n);
         })(),
         importeTotal: imp,
-        comisionPorcentaje: comisionPct,
         activo: true,
         usuarioRegistroId: "",
         estadoVenta: "Aceptado",

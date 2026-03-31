@@ -34,6 +34,14 @@ export const calcularFechaFin = (fechaInicio: string, mesesRenta: number): strin
   return fin.toISOString().split("T")[0];
 };
 
+/** Días calendario entre inicio y fin (excluye el día final tipo “checkout” si coincide con calcularFechaFinDuracion en días). */
+export const diasEntreFechasInicioFin = (inicio: Date, fin: Date): number => {
+  const a = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate());
+  const b = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
+  const diff = Math.round((b.getTime() - a.getTime()) / 86400000);
+  return Math.max(1, diff);
+};
+
 export const calcularFechaFinDuracion = (
   fechaInicio: string,
   duracion: number,

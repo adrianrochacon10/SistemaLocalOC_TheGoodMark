@@ -123,7 +123,9 @@ export const ColaboradorForm: React.FC<Props> = ({
               value={porcentaje}
               onChange={(e) =>
                 setPorcentaje(
-                  e.target.value === "" ? 0 : parseInt(e.target.value) || 0,
+                  e.target.value === ""
+                    ? 0
+                    : Number.parseFloat(e.target.value) || 0,
                 )
               }
               placeholder="Ej: 30"
@@ -154,7 +156,7 @@ export const ColaboradorForm: React.FC<Props> = ({
       </div>
 
       <FilasFormulario
-        titulo="Pantallas Asociadas *"
+        titulo="Pantallas Asociadas (opcional)"
         campos={[
           {
             key: "nombre",

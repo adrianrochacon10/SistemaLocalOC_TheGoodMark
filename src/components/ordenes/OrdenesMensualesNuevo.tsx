@@ -12,6 +12,7 @@ import { SelectorPeriodo } from "./components/SelectorPeriodo";
 import { OrdenesGrid } from "./components/OrdenesGrid";
 import { ModalCrearOrden } from "./components/ModalCrearOrden";
 import type { CrearOrdenPayload } from "../../utils/ordenCompraLineas";
+import { ordenApareceEnMesVista } from "../../utils/ordenUtils";
 
 const MESES = [
   "Enero",
@@ -61,7 +62,7 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
   const [colaboradorFiltroId, setColaboradorFiltroId] = useState<string>("");
 
   const ordenesEsteMes = ordenes.filter((o) => {
-    if (!(o.mes === mes && o.año === año)) return false;
+    if (!ordenApareceEnMesVista(o, mes, año)) return false;
     if (!colaboradorFiltroId) return true;
     return String(o.colaboradorId ?? "") === String(colaboradorFiltroId);
   });

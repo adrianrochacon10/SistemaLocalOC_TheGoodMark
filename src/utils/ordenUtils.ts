@@ -2,6 +2,47 @@
 import { RegistroVenta } from "../types";
 import { OrdenDeCompra } from "../types";
 
+/** Inicio del día en horario local (evita desfaces por UTC). */
+function inicioDiaLocal(d: Date): Date {
+  const x = d instanceof Date ? d : new Date(d);
+  return new Date(x.getFullYear(), x.getMonth(), x.getDate());
+}
+
+/** Contrato [fechaInicio, fechaFin] toca el mes calendario indicado (mes 0–11). */
+export function registroSolapaMesCalendario(
+  fechaInicio: Date,
+  fechaFin: Date,
+  mes: number,
+  año: number,
+): boolean {
+  const monthStart = inicioDiaLocal(new Date(año, mes, 1));
+  const monthEnd = inicioDiaLocal(new Date(año, mes + 1, 0));
+  const fi = inicioDiaLocal(fechaInicio);
+  const ff = inicioDiaLocal(fechaFin);
+  return fi <= monthEnd && ff >= monthStart;
+}
+
+/**
+ * La orden debe listarse al elegir un mes/año si **alguna** venta solapa ese mes calendario
+ * (p. ej. contrato 20 mar–abr aparece en marzo y en abril).
+ * Sin líneas cargadas, se mantiene el criterio anterior: mes/año de la orden en BD.
+ */
+export function ordenApareceEnMesVista(
+  orden: OrdenDeCompra,
+  mes: number,
+  año: number,
+): boolean {
+  const regs = orden.registrosVenta ?? [];
+  if (regs.length === 0) {
+    return orden.mes === mes && orden.año === año;
+  }
+  for (const v of regs) {
+    if (registroSolapaMesCalendario(v.fechaInicio, v.fechaFin, mes, año))
+      return true;
+  }
+  return false;
+}
+
 /* ------------------------------------------------------------------ */
 /*  1️⃣  Asignación de mes (misma lógica que ya tenías)               */
 /* ------------------------------------------------------------------ */
@@ -161,10 +202,10 @@ export function ventaSolapaMesCalendario(
   mes0: number,
   año: number,
 ): boolean {
-  const inicioMes = `${año}-${String(mes0 + 1).padStart(2, "0")}-01`;
-  const ultimo = new Date(año, mes0 + 1, 0);
-  const finMes = ultimo.toISOString().slice(0, 10);
-  const s = new Date(v.fechaInicio).toISOString().slice(0, 10);
-  const e = new Date(v.fechaFin).toISOString().slice(0, 10);
-  return s <= finMes && e >= inicioMes;
+  return registroSolapaMesCalendario(
+    new Date(v.fechaInicio),
+    new Date(v.fechaFin),
+    mes0,
+    año,
+  );
 }

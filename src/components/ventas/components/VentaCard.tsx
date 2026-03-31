@@ -1,5 +1,5 @@
 import { colorPorEstado } from "../../../utils/colores";
-import { formatearFecha } from "../../../utils/formateoFecha";
+import { diasEntreFechasInicioFin, formatearFecha } from "../../../utils/formateoFecha";
 import { formatearMoneda } from "../../../utils/formateoMoneda";
 import { Colaborador, Pantalla, RegistroVenta } from "../../../types";
 
@@ -30,19 +30,38 @@ export const VentaCard: React.FC<VentaCardProps> = ({
   const pantallasVisibles = todasLasPantallas.slice(0, MAX_PANTALLAS);
   const pantallasExtra = todasLasPantallas.length - MAX_PANTALLAS;
 
-  const colores = colorPorEstado(venta.estadoVenta);
-  const colorColaborador = colaborador?.color || "#1461a1";
+  const colores = colorPorEstado(venta.estadoVenta ?? "Prospecto");
+  const colorColaborador =
+    (colaborador as { color?: string } | undefined)?.color ?? "#1461a1";
 
   const meses = Math.max(1, Number(venta.mesesRenta) || 1);
   const precioMes = Number(venta.precioGeneral ?? 0) || 0;
   const precioTotalContrato =
     Number(venta.precioTotal ?? 0) > 0
-        ? Number(venta.precioTotal ?? 0)
-        : Number(venta.importeTotal ?? 0) > 0
-      ? Number(venta.importeTotal ?? 0)
+      ? Number(venta.precioTotal ?? 0)
+      : Number(venta.importeTotal ?? 0) > 0
+        ? Number(venta.importeTotal ?? 0)
         : precioMes * meses;
+
+  const fi =
+    venta.fechaInicio instanceof Date
+      ? venta.fechaInicio
+      : new Date(venta.fechaInicio);
+  const ff =
+    venta.fechaFin instanceof Date
+      ? venta.fechaFin
+      : new Date(venta.fechaFin);
+  const diasEnContrato = diasEntreFechasInicioFin(fi, ff);
+  const unidadEsDia =
+    meses > 0 &&
+    (meses === diasEnContrato || Math.abs(diasEnContrato - meses) <= 1);
+
   const precioPorPeriodo =
-    meses > 0 ? precioTotalContrato / meses : precioMes;
+    precioMes > 0
+      ? precioMes
+      : meses > 0
+        ? precioTotalContrato / meses
+        : 0;
 
   return (
     <div
@@ -186,7 +205,8 @@ export const VentaCard: React.FC<VentaCardProps> = ({
         <span
           style={{ color: "#64748b", fontSize: "0.82em", fontWeight: 500 }}
         >
-          Precio por periodo: {formatearMoneda(precioPorPeriodo)}
+          Precio por periodo ({unidadEsDia ? "por día" : "por mes"}):{" "}
+          {formatearMoneda(precioPorPeriodo)}
         </span>
 
         {venta.importeTotal !== venta.precioTotal && venta.precioTotal && (
@@ -245,8 +265,11 @@ export const VentaCard: React.FC<VentaCardProps> = ({
             fontWeight: 600,
             color: "#1461a1",
           }}
+          title={`${diasEnContrato} días calendario en el rango`}
         >
-          {venta.mesesRenta} {venta.mesesRenta === 1 ? "mes" : "meses"}
+          {unidadEsDia
+            ? `${venta.mesesRenta} ${venta.mesesRenta === 1 ? "día" : "días"}`
+            : `${venta.mesesRenta} ${venta.mesesRenta === 1 ? "mes" : "meses"}`}
         </span>
       </div>
     </div>

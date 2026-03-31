@@ -3,6 +3,49 @@ import { supabase } from "../config/supabase.js";
 const SELECT_COLABORADOR =
   "*, tipo_pago(id, nombre), pantalla:pantallas(id, nombre, precio), producto:productos(*)";
 
+/** Pantalla interna para FK cuando el colaborador no tiene pantallas (si `pantalla_id` sigue NOT NULL en BD). */
+const PANTALLA_SISTEMA_NOMBRE = "Sin pantalla (sistema)";
+
+/** @returns {Promise<string>} */
+async function obtenerIdPantallaSistema(userId) {
+  const { data: existente, error: err1 } = await supabase
+    .from("pantallas")
+    .select("id")
+    .eq("nombre", PANTALLA_SISTEMA_NOMBRE)
+    .maybeSingle();
+  if (err1) throw new Error(err1.message);
+  if (existente?.id) return existente.id;
+
+  const insertPayload = {
+    nombre: PANTALLA_SISTEMA_NOMBRE,
+    precio: 0,
+  };
+  if (userId) insertPayload.creado_por = userId;
+
+  const { data: creada, error: err2 } = await supabase
+    .from("pantallas")
+    .insert(insertPayload)
+    .select("id")
+    .single();
+  if (err2) {
+    const { data: retry } = await supabase
+      .from("pantallas")
+      .select("id")
+      .eq("nombre", PANTALLA_SISTEMA_NOMBRE)
+      .maybeSingle();
+    if (retry?.id) return retry.id;
+    throw new Error(err2.message);
+  }
+  return creada.id;
+}
+
+function filtrarPantallaSistemaDeLista(pantallas) {
+  const list = Array.isArray(pantallas) ? pantallas : [];
+  return list.filter(
+    (p) => String(p?.nombre ?? "").trim() !== PANTALLA_SISTEMA_NOMBRE,
+  );
+}
+
 const leerPrecioProducto = (p) => {
   const n = Number(p?.precio ?? p?.precio_unitario ?? p?.precio_por_mes ?? 0);
   return Number.isFinite(n) ? n : 0;
@@ -22,11 +65,13 @@ const toIdArray = (value) => {
 };
 
 async function enrichRelaciones(colaborador) {
-  const pantallaIds = Array.isArray(colaborador?.pantalla_ids)
-    ? colaborador.pantalla_ids
-    : colaborador?.pantalla_id
-      ? [colaborador.pantalla_id]
-      : [];
+  /** Si `pantalla_ids` viene [] pero hay `pantalla_id` (p. ej. placeholder), usar el id para cargar catálogo. */
+  let pantallaIds = [];
+  if (Array.isArray(colaborador?.pantalla_ids) && colaborador.pantalla_ids.length > 0) {
+    pantallaIds = colaborador.pantalla_ids.map(String);
+  } else if (colaborador?.pantalla_id) {
+    pantallaIds = [String(colaborador.pantalla_id)];
+  }
   const productoIds = Array.isArray(colaborador?.producto_ids)
     ? colaborador.producto_ids
     : colaborador?.producto_id
@@ -57,11 +102,17 @@ async function enrichRelaciones(colaborador) {
   if (pantallasRes.error) throw new Error(pantallasRes.error.message);
   if (productosRes.error) throw new Error(productosRes.error.message);
 
+  const pantallasLista = filtrarPantallaSistemaDeLista(pantallasRes.data ?? []);
+
   return {
     ...colaborador,
-    pantalla_ids: pantallaIds,
-    producto_ids: productoIds,
-    pantallas: pantallasRes.data ?? [],
+    pantalla_ids: Array.isArray(colaborador?.pantalla_ids)
+      ? colaborador.pantalla_ids
+      : [],
+    producto_ids: Array.isArray(colaborador?.producto_ids)
+      ? colaborador.producto_ids
+      : productoIds,
+    pantallas: pantallasLista,
     productos: (productosRes.data ?? []).map((p) => ({
       ...p,
       precio: leerPrecioProducto(p),
@@ -124,16 +175,16 @@ export async function crear(body, userId) {
   ) {
     pantallaIds.push(String(body.pantalla_id).trim());
   }
-  const pantallaId = pantallaIds[0] ?? null;
+  let pantallaId = pantallaIds[0] ?? null;
   const productoIds = toIdArray(body.producto_ids ?? body.producto_id);
   const productoId = productoIds[0] ?? null;
   if (!body.nombre?.trim()) return { error: "Nombre es obligatorio" };
   if (!tipoPagoId)
     return { error: "Tipo de pago es obligatorio (tipo_pago_id en el body)" };
-  if (!pantallaId)
-    return {
-      error: "Debes enviar al menos una pantalla (pantalla_ids o pantalla_id).",
-    };
+
+  if (!pantallaId) {
+    pantallaId = await obtenerIdPantallaSistema(userId);
+  }
 
   const { data, error } = await supabase
     .from("colaboradores")
@@ -181,7 +232,11 @@ export async function actualizar(id, body, userId) {
       pantallaIds.push(String(body.pantalla_id).trim());
     }
     payload.pantalla_ids = pantallaIds;
-    payload.pantalla_id = pantallaIds[0] ?? null;
+    let pid = pantallaIds[0] ?? null;
+    if (!pid) {
+      pid = await obtenerIdPantallaSistema(userId);
+    }
+    payload.pantalla_id = pid;
   }
   if (body.producto_ids !== undefined || body.producto_id !== undefined) {
     const productoIds = toIdArray(body.producto_ids ?? body.producto_id);

@@ -109,9 +109,16 @@ export interface RegistroVenta {
   costos?: number;
   comision?: number;
   comisionPorcentaje?: number;
+  /** % del socio (renta); distinto de la comisión de venta. */
+  porcentajeSocio?: number;
   gastosAdicionales?: number;
   /** En líneas de orden: si los gastos adicionales de la venta entraron en el importe. */
   gastosIncluidosEnOrden?: boolean;
+  /**
+   * En orden/PDF: si se aplica el % del socio a pantallas en esta línea.
+   * `false` = no descontar; `undefined` = compatibilidad (antes se aplicaba si el colaborador era tipo porcentaje).
+   */
+  aplicarPorcentajeSocioEnOrden?: boolean;
   pagoConsiderar?: number;
   notas?: string;
 }

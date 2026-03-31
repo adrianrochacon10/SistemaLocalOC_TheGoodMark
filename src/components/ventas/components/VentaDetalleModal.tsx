@@ -146,27 +146,63 @@ export const VentaDetalleModal: React.FC<Props> = ({
               {(() => {
                 const meses = venta.mesesRenta || 1;
                 const precioMes = Number(venta.precioGeneral ?? 0) || 0;
+                // Bruto del contrato: nunca usar importeTotal aquí (ese campo puede ser solo monto socio).
                 const totalBruto =
-                  Number(venta.importeTotal ?? 0) > 0
-                    ? Number(venta.importeTotal ?? 0)
-                    : Number(venta.precioTotal ?? 0) > 0
-                      ? Number(venta.precioTotal ?? 0)
-                      : precioMes * meses;
+                  Number(venta.precioTotal ?? 0) > 0
+                    ? Number(venta.precioTotal)
+                    : precioMes * meses;
 
                 const totalCostos = venta.costos ?? 0;
                 const totalComision = venta.comision ?? 0;
                 const totalPagoCons = venta.pagoConsiderar ?? 0;
+                const gastosAdic = Number(venta.gastosAdicionales ?? 0) || 0;
+                // % del socio solo sobre productos + pantallas (mismo criterio que al registrar).
+                const baseSocioSinGastos = Math.max(0, totalBruto - gastosAdic);
 
-                const totalMontoSocio = venta.importeTotal ?? 0;
-                const montoSocioMes = meses > 0 ? totalMontoSocio / meses : 0;
+                const pctGuardado =
+                  venta.porcentajeSocio != null &&
+                  Number.isFinite(Number(venta.porcentajeSocio))
+                    ? Number(venta.porcentajeSocio)
+                    : typeof colaborador?.porcentajeSocio === "number"
+                      ? colaborador.porcentajeSocio
+                      : null;
 
-                // Porcentaje sobre precio por mes
-                const porcentajeSocio =
-                  precioMes > 0
-                    ? Math.round((montoSocioMes / precioMes) * 100)
+                const importeGuardado = Number(venta.importeTotal ?? 0) || 0;
+                const socioDesdePorcentaje =
+                  pctGuardado != null &&
+                  pctGuardado >= 0 &&
+                  baseSocioSinGastos > 0
+                    ? Math.round(
+                        (baseSocioSinGastos * pctGuardado) / 100 * 100,
+                      ) / 100
                     : 0;
 
                 const esPorcentaje = colaborador?.tipoComision === "porcentaje";
+                let totalMontoSocio = 0;
+                if (esPorcentaje) {
+                  // Si el importe guardado es menor que el bruto, es el monto socio real (líneas producto/pantalla).
+                  if (
+                    importeGuardado > 0 &&
+                    totalBruto > 0 &&
+                    importeGuardado < totalBruto - 0.01
+                  ) {
+                    totalMontoSocio = importeGuardado;
+                  } else if (socioDesdePorcentaje > 0) {
+                    // importeTotal === precioTotal (error) o solo hay %: aplica % sobre el bruto, no el 100 %.
+                    totalMontoSocio = socioDesdePorcentaje;
+                  }
+                }
+
+                const montoSocioMes = meses > 0 ? totalMontoSocio / meses : 0;
+
+                const porcentajeSocio =
+                  pctGuardado != null && Number.isFinite(pctGuardado)
+                    ? Math.round(pctGuardado)
+                    : baseSocioSinGastos > 0 && totalMontoSocio > 0
+                      ? Math.round(
+                          (totalMontoSocio / baseSocioSinGastos) * 100,
+                        )
+                      : 0;
 
                 const utilidad =
                   totalBruto -

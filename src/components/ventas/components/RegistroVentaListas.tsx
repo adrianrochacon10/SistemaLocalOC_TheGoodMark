@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { registroSolapaMesCalendario } from "../../../utils/ordenUtils";
 import {
   RegistroVenta,
   Pantalla,
@@ -36,19 +37,6 @@ const MESES = [
   "noviembre",
   "diciembre",
 ];
-
-function obtenerMesesCubiertos(
-  fechaInicio: Date | string,
-  mesesRenta: number,
-): { mes: number; anio: number }[] {
-  const inicio = new Date(fechaInicio);
-  const meses: { mes: number; anio: number }[] = [];
-  for (let i = 0; i < mesesRenta; i++) {
-    const d = new Date(inicio.getFullYear(), inicio.getMonth() + i, 1);
-    meses.push({ mes: d.getMonth(), anio: d.getFullYear() });
-  }
-  return meses;
-}
 
 export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   pantallas,
@@ -110,18 +98,35 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
         filtroVendedor === "Todos" ||
         String(venta.vendedorId ?? "") === String(filtroVendedor);
 
-      // ✅ Filtro por mes/año usando mesesRenta (excluye el mes de fechaFin)
+      // Filtro por mes/año: contrato que **cruza** el periodo (fecha inicio–fin), no solo mesesRenta contados desde inicio
       let coincideMesAnio = true;
       if (filtroMes >= 0 || filtroAnio >= 0) {
-        const mesesCubiertos = obtenerMesesCubiertos(
-          venta.fechaInicio,
-          venta.mesesRenta,
-        );
-        coincideMesAnio = mesesCubiertos.some(({ mes, anio }) => {
-          const okMes = filtroMes < 0 || mes === filtroMes;
-          const okAnio = filtroAnio < 0 || anio === filtroAnio;
-          return okMes && okAnio;
-        });
+        const fi = new Date(venta.fechaInicio);
+        const ff = new Date(venta.fechaFin);
+        if (filtroMes >= 0 && filtroAnio >= 0) {
+          coincideMesAnio = registroSolapaMesCalendario(
+            fi,
+            ff,
+            filtroMes,
+            filtroAnio,
+          );
+        } else if (filtroMes >= 0 && filtroAnio < 0) {
+          coincideMesAnio = false;
+          for (let y = fi.getFullYear(); y <= ff.getFullYear(); y++) {
+            if (registroSolapaMesCalendario(fi, ff, filtroMes, y)) {
+              coincideMesAnio = true;
+              break;
+            }
+          }
+        } else if (filtroAnio >= 0 && filtroMes < 0) {
+          coincideMesAnio = false;
+          for (let m = 0; m < 12; m++) {
+            if (registroSolapaMesCalendario(fi, ff, m, filtroAnio)) {
+              coincideMesAnio = true;
+              break;
+            }
+          }
+        }
       }
 
       return (

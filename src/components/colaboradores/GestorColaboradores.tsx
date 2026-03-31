@@ -158,7 +158,12 @@ export function useGestorColaboradores(props: Props) {
     setTelefono(colaborador.telefono || "");
     setEmail(colaborador.email || "");
     setColor((colaborador as Colaborador & { color?: string }).color || "");
-    setPorcentaje(30);
+    const pctGuardado = Number(
+      (colaborador as Colaborador).porcentajeSocio ?? 0,
+    );
+    setPorcentaje(
+      Number.isFinite(pctGuardado) && pctGuardado >= 0 ? pctGuardado : 30,
+    );
     setTipoPagoId(
       (colaborador as Colaborador & { tipoPagoId?: string }).tipoPagoId || "",
     );
@@ -293,10 +298,6 @@ export function useGestorColaboradores(props: Props) {
       nombre?: string;
       precio?: number | string;
     }>;
-    if (pantallasValidas.length === 0) {
-      setErrorPantalla("Debe agregar al menos una pantalla");
-      return;
-    }
 
     const productosValidos = productosForm.filasValidas() as Array<{
       tempId: string;
@@ -306,12 +307,14 @@ export function useGestorColaboradores(props: Props) {
 
     const pantallaRows = pantallasValidas
       .map((p) => ({
+        tempId: String(p.tempId ?? "").trim(),
         nombre: String(p.nombre ?? "").trim(),
         precio: Number(p.precio ?? 0),
       }))
       .filter((p) => p.nombre);
     const productoRows = productosValidos
       .map((p) => ({
+        tempId: String(p.tempId ?? "").trim(),
         nombre: String(p.nombre ?? "").trim(),
         precio: Number(p.precio ?? 0),
       }))
@@ -339,21 +342,18 @@ export function useGestorColaboradores(props: Props) {
       const pantallaPrecioById: Record<string, number> = {};
       const pantallaNombreById: Record<string, string> = {};
       for (const row of pantallaRows) {
-        const existente = pantallas.find(
-          (x) => x.nombre.trim().toLowerCase() === row.nombre.toLowerCase(),
-        );
-        if (existente) {
-          pantallaNombreById[String(existente.id)] = String(
-            existente.nombre ?? row.nombre ?? "Pantalla",
-          );
-          pantallaPrecioById[String(existente.id)] = Number(row.precio ?? 0) || 0;
-          if (Number(row.precio) >= 0 && Number(row.precio) !== Number(existente.precio ?? 0)) {
-            await backendApi.patch(`/api/pantallas/${existente.id}`, {
-              nombre: existente.nombre,
-              precio: Number(row.precio),
-            });
-          }
-          pantallaIds.push(existente.id);
+        const existentePorId =
+          row.tempId &&
+          pantallas.find((x) => String(x.id) === String(row.tempId));
+        if (existentePorId) {
+          pantallaNombreById[String(existentePorId.id)] = row.nombre;
+          pantallaPrecioById[String(existentePorId.id)] =
+            Number(row.precio ?? 0) || 0;
+          await backendApi.patch(`/api/pantallas/${existentePorId.id}`, {
+            nombre: row.nombre,
+            precio: Number(row.precio ?? 0),
+          });
+          pantallaIds.push(existentePorId.id);
           continue;
         }
         const creada = await backendApi.post("/api/pantallas", {
@@ -380,24 +380,18 @@ export function useGestorColaboradores(props: Props) {
           precio: precioPantalla,
         });
       }
-      if (pantallaIds.length === 0) {
-        setErrorPantalla("Debe agregar al menos una pantalla válida");
-        return;
-      }
 
       const productoIds: string[] = [];
       for (const row of productoRows) {
-        const existente = productos.find(
-          (x) => x.nombre.trim().toLowerCase() === row.nombre.toLowerCase(),
-        );
-        if (existente) {
-          if (Number(row.precio) >= 0 && Number(row.precio) !== Number(existente.precio ?? 0)) {
-            await backendApi.patch(`/api/productos/${existente.id}`, {
-              nombre: existente.nombre,
-              precio: Number(row.precio),
-            });
-          }
-          productoIds.push(existente.id);
+        const existentePorId =
+          row.tempId &&
+          productos.find((x) => String(x.id) === String(row.tempId));
+        if (existentePorId) {
+          await backendApi.patch(`/api/productos/${existentePorId.id}`, {
+            nombre: row.nombre,
+            precio: Number(row.precio ?? 0),
+          });
+          productoIds.push(existentePorId.id);
           continue;
         }
         const creado = await backendApi.post("/api/productos", {

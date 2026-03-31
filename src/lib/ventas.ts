@@ -20,6 +20,7 @@ export interface RegistroVentaPayload {
   costos?: number;
   comision?: number;
   comision_porcentaje?: number;
+  porcentaje_socio?: number;
   gastos_adicionales?: number;
   costos_mes?: number;
   comision_mes?: number;

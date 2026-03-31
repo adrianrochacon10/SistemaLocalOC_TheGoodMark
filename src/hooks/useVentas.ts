@@ -104,6 +104,10 @@ export function useVentas(profile: any, session: Session | null) {
       costos: row.costos ?? 0,
       comision: row.comisiones ?? row.comision ?? 0,
       comisionPorcentaje: Number(row.comision_porcentaje ?? 0) || 0,
+      porcentajeSocio:
+        row.porcentaje_socio != null && row.porcentaje_socio !== ""
+          ? Number(row.porcentaje_socio) || 0
+          : undefined,
       gastosAdicionales: Number(row.gastos_adicionales ?? 0) || 0,
       pagoConsiderar: row.pago_considerar ?? undefined,
       fuenteOrigen: row.fuente_origen ?? undefined,
@@ -167,6 +171,7 @@ export function useVentas(profile: any, session: Session | null) {
       costos: venta.costos ?? 0,
       comision: venta.comision ?? 0,
       comision_porcentaje: venta.comisionPorcentaje ?? 0,
+      porcentaje_socio: venta.porcentajeSocio ?? 0,
       gastos_adicionales: venta.gastosAdicionales ?? 0,
       precio_pantallas_mensual: venta.precioPantallasMensual ?? 0,
       pantallas_detalle: venta.pantallasDetalle ?? [],
@@ -230,6 +235,7 @@ export function useVentas(profile: any, session: Session | null) {
       costos: venta.costos ?? 0,
       comision: venta.comision ?? 0,
       comision_porcentaje: venta.comisionPorcentaje ?? 0,
+      porcentaje_socio: venta.porcentajeSocio ?? 0,
       gastos_adicionales: venta.gastosAdicionales ?? 0,
       precio_pantallas_mensual: venta.precioPantallasMensual ?? 0,
       pantallas_detalle: venta.pantallasDetalle ?? [],

@@ -63,6 +63,8 @@ export type DetalleLineaOrden = {
   /** Monto de gastos adicionales de la venta incluido en esta línea (0 si no aplica). */
   gastos_adicionales?: number;
   gastos_incluidos_en_orden?: boolean;
+  /** Si en PDF se aplica el % del socio a pantallas en esta venta (solo colaboradores tipo porcentaje). */
+  aplicar_porcentaje_socio?: boolean;
   precio_base_mensual?: number;
   importe: number;
   vendido_a: string;
@@ -328,6 +330,9 @@ export function construirDetalleLineas(
       producto_incluido: productoIncluido,
       gastos_adicionales: gastosIncluidos ? gastosG : 0,
       gastos_incluidos_en_orden: gastosIncluidos,
+      ...(typeof v.aplicarPorcentajeSocioEnOrden === "boolean"
+        ? { aplicar_porcentaje_socio: v.aplicarPorcentajeSocioEnOrden }
+        : {}),
       precio_base_mensual: baseMensual,
       importe: imp,
       vendido_a: v.vendidoA ?? "",

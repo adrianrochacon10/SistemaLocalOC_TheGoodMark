@@ -115,8 +115,19 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     }
     return map;
   });
-  const [porcentajeSocio, setPorcentajeSocio] = useState<number>(30);
-  const [montoSocio, setMontoSocio] = useState<number>(0);
+  const [porcentajeSocio, setPorcentajeSocio] = useState<number>(() => {
+    if (
+      ventaInicial?.porcentajeSocio != null &&
+      Number.isFinite(Number(ventaInicial.porcentajeSocio))
+    ) {
+      return Number(ventaInicial.porcentajeSocio);
+    }
+    const c = clientes.find((x) => x.id === (ventaInicial?.colaboradorId ?? ""));
+    if (c?.tipoComision === "porcentaje" && typeof c.porcentajeSocio === "number") {
+      return c.porcentajeSocio;
+    }
+    return 30;
+  });
   const [aplicarDescuento, setAplicarDescuento] = useState<boolean>(false);
   const [estadoVenta, setEstadoVenta] = useState<
     "Aceptado" | "Rechazado" | "Prospecto"
@@ -159,6 +170,21 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setMensajeCodigo("");
     setErrorCodigoModal("");
   }, [ventaInicial?.id]);
+
+  useEffect(() => {
+    if (!ventaInicial?.id) return;
+    if (
+      ventaInicial.porcentajeSocio != null &&
+      Number.isFinite(Number(ventaInicial.porcentajeSocio))
+    ) {
+      setPorcentajeSocio(Number(ventaInicial.porcentajeSocio));
+      return;
+    }
+    const c = clientes.find((x) => x.id === ventaInicial.colaboradorId);
+    if (c?.tipoComision === "porcentaje" && typeof c.porcentajeSocio === "number") {
+      setPorcentajeSocio(c.porcentajeSocio);
+    }
+  }, [ventaInicial?.id, ventaInicial?.porcentajeSocio, ventaInicial?.colaboradorId, clientes]);
 
   const toNumberSafe = (value: string, fallback = 0): number => {
     if (value === "") return 0;
@@ -342,6 +368,46 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     0,
   );
   const divisorDuracion = Math.max(1, Number(mesesRenta || 1));
+  /** % del socio solo sobre cada producto y cada pantalla por periodo (no sobre gastos adicionales). */
+  const montoSocio = useMemo(() => {
+    const pct = Number(porcentajeSocio || 0);
+    const div = divisorDuracion;
+    let sum = 0;
+    for (const id of pantallasSeleccionadas) {
+      const sid = String(id);
+      const desdeMapa = precioVentaPantallaMap[sid];
+      let raw = Number(desdeMapa);
+      if (!Number.isFinite(raw)) {
+        const pan = pantallasCatalogo.find((p) => String(p.id) === sid);
+        raw = Number(pan?.precio ?? 0) || 0;
+      }
+      const porPeriodo = raw / div;
+      sum += Math.round((porPeriodo * pct) / 100 * 100) / 100;
+    }
+    for (const id of productosSeleccionados) {
+      const sid = String(id);
+      const desdeMapa = precioVentaProductoMap[sid];
+      let raw = Number(desdeMapa);
+      if (!Number.isFinite(raw)) {
+        const prod = productosDelCliente.find((p) => String(p.id) === sid);
+        raw =
+          Number(prod?.precio ?? precioProductoFallbackMap.get(sid) ?? 0) || 0;
+      }
+      const porPeriodo = raw / div;
+      sum += Math.round((porPeriodo * pct) / 100 * 100) / 100;
+    }
+    return Math.round(sum * 100) / 100;
+  }, [
+    pantallasSeleccionadas,
+    precioVentaPantallaMap,
+    pantallasCatalogo,
+    productosSeleccionados,
+    precioVentaProductoMap,
+    productosDelCliente,
+    precioProductoFallbackMap,
+    divisorDuracion,
+    porcentajeSocio,
+  ]);
   const precioPorPeriodoBase =
     Number(precioPantallasSeleccionadas || 0) +
     Number(precioProductosSeleccionados || 0) +
@@ -358,21 +424,20 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const totalVenta = totalBaseVenta;
   const costosTotales = costos * mesesRenta;
 
+  // Al editar: restaurar si esta venta guardó importe de socio o el total de venta.
   useEffect(() => {
-    if (clienteActual && typeof clienteActual.porcentajeSocio === "number") {
-      setPorcentajeSocio(clienteActual.porcentajeSocio);
-      // montoSocio = precio por mes × porcentaje  → valor POR MES
-      setMontoSocio(
-        Math.round(
-          ((precioMensualFinal * clienteActual.porcentajeSocio) / 100) * 100,
-        ) / 100,
-      );
-    } else {
-      setMontoSocio(
-        Math.round(((precioMensualFinal * porcentajeSocio) / 100) * 100) / 100,
-      );
-    }
-  }, [precioMensualFinal, porcentajeSocio, clienteActual]);
+    if (!ventaInicial?.id) return;
+    if (clienteActual?.tipoComision !== "porcentaje") return;
+    const pt = Number(ventaInicial.precioTotal ?? 0);
+    const im = Number(ventaInicial.importeTotal ?? 0);
+    if (!Number.isFinite(pt) || !Number.isFinite(im)) return;
+    setAplicarDescuento(Math.abs(im - pt) > 0.01);
+  }, [
+    ventaInicial?.id,
+    ventaInicial?.precioTotal,
+    ventaInicial?.importeTotal,
+    clienteActual?.tipoComision,
+  ]);
 
   useEffect(() => {
     if (!clienteSeleccionado) {
@@ -453,6 +518,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setPrecioVentaPantallaMap({});
     setEstadoVenta("Prospecto");
     setAplicarDescuento(false);
+    setPorcentajeSocio(30);
     setCostos(0);
     setError("");
     setExito("");
@@ -568,6 +634,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       costos: costosTotales,
       comision: totalComision,
       comisionPorcentaje: Number(comision || 0),
+      porcentajeSocio: tieneComisionPorcentaje
+        ? Number(porcentajeSocio || 0)
+        : 0,
       gastosAdicionales: Number(gastosAdicionales || 0),
       pagoConsiderar: tieneConsideracion
         ? pagoConsiderar * mesesRenta
@@ -632,8 +701,8 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   // ── JSX ───────────────────────────────────────────────────────────────
   return (
     <>
-    <div className="modal-overlay" onClick={onCerrar}>
-      <div className="modal-contenido" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal-contenido">
         <h3
           style={{
             margin: "0 0 20px 0",
@@ -653,6 +722,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
               setItemsVenta([]);
               const colaborador = clientes.find((c) => c.id === v);
               setAplicarDescuento(colaborador?.tipoComision === "porcentaje");
+              if (
+                colaborador?.tipoComision === "porcentaje" &&
+                typeof colaborador.porcentajeSocio === "number"
+              ) {
+                setPorcentajeSocio(colaborador.porcentajeSocio);
+              }
             }}
             placeholder="-- Seleccionar colaborador --"
             className="select-lg"
@@ -876,7 +951,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 </div>
               )}
 
-              {/* ── COMISIÓN ✅ ── */}
+              {/* ── COMISIÓN (venta) ≠ porcentaje del socio ── */}
               <InputField
                 label="Comisión (%)"
                 value={comision || ""}
@@ -893,6 +968,19 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                   Comisión total automática: {(comisionMensual * mesesRenta).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               )}
+              {tieneComisionPorcentaje && (
+                <InputField
+                  label="Porcentaje del socio (%)"
+                  value={porcentajeSocio || ""}
+                  onChange={(v: any) =>
+                    setPorcentajeSocio((prev) => toNumberSafe(v, prev))
+                  }
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  placeholder="%"
+                />
+              )}
               {/* Campo de costos ocultado por solicitud de flujo */}
               <div className="form-group">
                 <label>Notas</label>
@@ -906,7 +994,17 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 />
               </div>
               {tieneComisionPorcentaje && (
-                <>{/* bloque comisión porcentaje socio */}</>
+                <div className="registro-venta-porc-toolbar">
+                  <button
+                    type="button"
+                    className={`btn btn-sm registro-venta-porc-btn ${aplicarDescuento ? "btn-primary" : "btn-outline"}`}
+                    onClick={() => setAplicarDescuento((prev) => !prev)}
+                  >
+                    {aplicarDescuento
+                      ? `Quitar porcentaje del socio en esta venta (${Number(porcentajeSocio || 0)}%)`
+                      : `Aplicar porcentaje del socio en esta venta (${Number(porcentajeSocio || 0)}%)`}
+                  </button>
+                </div>
               )}
               {fechaInicio &&
                 mesesRenta > 0 &&

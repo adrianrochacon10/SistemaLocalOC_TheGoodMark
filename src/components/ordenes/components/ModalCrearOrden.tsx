@@ -141,6 +141,10 @@ export const ModalCrearOrden: React.FC<Props> = ({
   const [ventasConGastosIncluido, setVentasConGastosIncluido] = useState<
     Set<string>
   >(() => new Set());
+  /** Por venta: incluir en PDF el % del socio sobre pantallas (solo colaboradores tipo porcentaje). */
+  const [ventasConPorcentajeEnOrden, setVentasConPorcentajeEnOrden] = useState<
+    Set<string>
+  >(() => new Set());
   const [guardando, setGuardando] = useState(false);
   const [productosCatalogo, setProductosCatalogo] = useState<Producto[]>([]);
 
@@ -273,6 +277,14 @@ export const ModalCrearOrden: React.FC<Props> = ({
     setVentasConGastosIncluido(next);
   }, [colaboradorId, mes, año, ventaIdsKey]);
 
+  useEffect(() => {
+    const ids = new Set(ventasDelMes.map((v) => String(v.id)));
+    setVentasConPorcentajeEnOrden((prev) => {
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next;
+    });
+  }, [ventaIdsKey]);
+
   const toggleVenta = useCallback((ventaId: string) => {
     setVentasSeleccionadas((prev) => {
       const next = new Set(prev);
@@ -289,6 +301,11 @@ export const ModalCrearOrden: React.FC<Props> = ({
         });
         setVentasConGastosIncluido((prevG) => {
           const n = new Set(prevG);
+          n.delete(String(ventaId));
+          return n;
+        });
+        setVentasConPorcentajeEnOrden((prevP) => {
+          const n = new Set(prevP);
           n.delete(String(ventaId));
           return n;
         });
@@ -377,6 +394,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
     setVentasSeleccionadas(new Set());
     setProductosIncluidosPorVenta({});
     setVentasConGastosIncluido(new Set());
+    setVentasConPorcentajeEnOrden(new Set());
     const porVenta: Record<string, string[]> = {};
     for (const v of ventasDelMes) porVenta[String(v.id)] = [];
     setPantallasSeleccionadasPorVenta(porVenta);
@@ -393,6 +411,16 @@ export const ModalCrearOrden: React.FC<Props> = ({
       return next;
     });
   }, [ventasDelMes]);
+
+  const togglePorcentajeEnOrden = useCallback((ventaId: string) => {
+    if (colaboradorSeleccionado?.tipoComision !== "porcentaje") return;
+    setVentasConPorcentajeEnOrden((prev) => {
+      const next = new Set(prev);
+      if (next.has(ventaId)) next.delete(ventaId);
+      else next.add(ventaId);
+      return next;
+    });
+  }, [colaboradorSeleccionado?.tipoComision]);
 
   const seleccionArrays = useMemo(() => {
     const m = new Map<string, string[]>();
@@ -414,8 +442,12 @@ export const ModalCrearOrden: React.FC<Props> = ({
       const selRaw = productosIncluidosPorVenta[id] ?? [];
       const sel = selRaw.filter((pid) => idsProd.includes(String(pid)));
       const incluirProducto = sel.length > 0;
+      // Precios de producto = los del contrato / Productos del colaborador (no volver a descontar %).
       const precioProdAjustado = round2(
-        sel.reduce((s, pid) => s + precioMensualProductoDesdeDetalle(v, pid), 0),
+        sel.reduce((s, pid) => {
+          const base = precioMensualProductoDesdeDetalle(v, pid);
+          return s + base;
+        }, 0),
       );
       const nombresProd =
         sel.length > 0
@@ -441,12 +473,20 @@ export const ModalCrearOrden: React.FC<Props> = ({
         gastosAdicionales: incluirGastos ? G : 0,
         importeTotal: incluirGastos ? T : totalSinGastos,
         precioTotal: incluirGastos ? T : totalSinGastos,
+        ...(colaboradorSeleccionado?.tipoComision === "porcentaje"
+          ? {
+              aplicarPorcentajeSocioEnOrden:
+                ventasConPorcentajeEnOrden.has(id),
+            }
+          : {}),
       };
     });
   }, [
     ventasParaOrden,
     productosIncluidosPorVenta,
     ventasConGastosIncluido,
+    ventasConPorcentajeEnOrden,
+    colaboradorSeleccionado?.tipoComision,
     productosCatalogo,
   ]);
 
@@ -692,11 +732,16 @@ export const ModalCrearOrden: React.FC<Props> = ({
                       const pantallasDeVenta = [...new Set(v.pantallasIds ?? [])];
                       const pantallasSeleccionadasLocal =
                         pantallasSeleccionadasPorVenta[id] ?? [];
+                      const incluirPctPdf =
+                        colaboradorSeleccionado?.tipoComision === "porcentaje" &&
+                        ventasConPorcentajeEnOrden.has(id);
                       const resumenSeleccion = `${pantallasSeleccionadasLocal.length} pantalla${pantallasSeleccionadasLocal.length !== 1 ? "s" : ""}${
                         nProdSel > 0
                           ? ` + ${nProdSel} producto${nProdSel !== 1 ? "s" : ""}`
                           : ""
-                      }${incluirGastos && gastosVenta > 0 ? " + gastos adic." : ""}`;
+                      }${incluirGastos && gastosVenta > 0 ? " + gastos adic." : ""}${
+                        incluirPctPdf ? " + % socio (PDF)" : ""
+                      }`;
                       const mainChkId = `modal-venta-main-${id}`;
                       return (
                         <li key={id}>
@@ -851,6 +896,53 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                       onClick={() => toggleGastosEnOrden(id)}
                                     >
                                       Agregar gastos adicionales (${fmtMoney(gastosVenta)})
+                                    </button>
+                                  )}
+                                </div>
+                              ) : null}
+                              {colaboradorSeleccionado?.tipoComision ===
+                              "porcentaje" ? (
+                                <div className="modal-venta-section modal-venta-section--gastos-last">
+                                  <div className="modal-venta-section-title">
+                                    Porcentaje del socio (PDF)
+                                  </div>
+                                  {ventasConPorcentajeEnOrden.has(id) ? (
+                                    <div className="modal-venta-gastos-estado">
+                                      <span className="modal-venta-gastos-estado-txt">
+                                        Incluido en la orden:{" "}
+                                        <strong>
+                                          {Number(
+                                            colaboradorSeleccionado.porcentajeSocio ??
+                                              0,
+                                          ) || 0}
+                                          %
+                                        </strong>{" "}
+                                        sobre pantallas al generar el PDF.
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline modal-venta-gastos-quitar"
+                                        onClick={() =>
+                                          togglePorcentajeEnOrden(id)
+                                        }
+                                      >
+                                        Quitar
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-outline modal-venta-gastos-agregar"
+                                      onClick={() =>
+                                        togglePorcentajeEnOrden(id)
+                                      }
+                                    >
+                                      Agregar porcentaje del socio a la orden (
+                                      {Number(
+                                        colaboradorSeleccionado.porcentajeSocio ??
+                                          0,
+                                      ) || 0}
+                                      % en pantallas)
                                     </button>
                                   )}
                                 </div>

@@ -218,6 +218,35 @@
   text-align: right;
 }
 
+/* Toggle porcentaje en registro de venta (colaborador por %) */
+.registro-venta-porc-toolbar {
+  margin: 12px 0 8px;
+}
+.registro-venta-porc-btn {
+  width: auto !important;
+  display: inline-block;
+  padding: 8px 14px !important;
+  font-size: 13px !important;
+}
+.registro-venta-porc-hint {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+.registro-venta-porc-toolbar .btn-outline {
+  background: #fff;
+  color: #1461a1;
+  border: 2px solid #1461a1;
+  width: auto;
+}
+.registro-venta-porc-toolbar .btn-outline:hover {
+  background: #f0f6fc;
+}
+.btn.btn-sm {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 /* BOTONES */
 .btn {
   padding: 10px 20px;

@@ -50,6 +50,18 @@ const mapBackendColaborador = (row: any): Colaborador & ExtrasColaborador => {
     email: row.email ?? undefined,
     productoId: row.producto_id ?? row.productoId ?? row.producto?.id ?? "",
     tipoPagoId: row.tipo_pago_id ?? row.tipoPagoId ?? row.tipo_pago?.id ?? undefined,
+    tipoComision: (() => {
+      const raw = String(row.tipo_comision ?? row.tipoComision ?? "").trim().toLowerCase();
+      if (raw === "porcentaje") return "porcentaje";
+      const nombreTp = String(row.tipo_pago?.nombre ?? "").trim().toLowerCase();
+      return nombreTp.includes("porcentaje") ? "porcentaje" : undefined;
+    })(),
+    porcentajeSocio: Number(
+      row.porcentaje_socio ??
+        row.porcentajeSocio ??
+        row.porcentaje ??
+        0,
+    ) || undefined,
     pantallaId: row.pantalla_id ?? row.pantallaId ?? row.pantalla?.id ?? "",
     pantalla_ids: pantallaIds,
     producto_ids: productoIds,
@@ -72,14 +84,69 @@ const mapBackendColaborador = (row: any): Colaborador & ExtrasColaborador => {
   };
 };
 
+function porcentajeColaboradorDesdeLista(
+  row: any,
+  porcentajes: any[],
+): number | undefined {
+  const tipoNombre = String(row?.tipo_pago?.nombre ?? "").toLowerCase();
+  const esPorcentaje =
+    String(row?.tipo_comision ?? row?.tipoComision ?? "").toLowerCase() ===
+      "porcentaje" || tipoNombre.includes("porcentaje");
+  if (!esPorcentaje) return undefined;
+  const id = String(row?.id ?? "");
+  const nombre = String(row?.nombre ?? "").trim().toLowerCase();
+  const porId = id
+    ? porcentajes.find((p: any) => {
+        const desc = String(p?.descripcion ?? "").toLowerCase();
+        return desc && desc.includes(id.toLowerCase());
+      })
+    : undefined;
+  const hit =
+    porId ??
+    porcentajes.find((p: any) => {
+      const desc = String(p?.descripcion ?? "").toLowerCase();
+      if (!desc) return false;
+      if (nombre && desc.includes(nombre)) return true;
+      return false;
+    });
+  const valor = Number(hit?.valor ?? 0);
+  return Number.isFinite(valor) && valor >= 0 ? valor : undefined;
+}
+
+function descripcionPorcentajeColaborador(colaborador: {
+  id?: string;
+  nombre?: string;
+}): string {
+  const id = String(colaborador?.id ?? "").trim();
+  const nombre = String(colaborador?.nombre ?? "").trim();
+  if (id) return `Porcentaje para colaborador ${nombre} (${id})`;
+  return `Porcentaje para colaborador ${nombre}`;
+}
+
 export function useClientes(profile: any, session: Session | null) {
   const [clientes, setClientes] = useState<Colaborador[]>([]);
 
   const refetchClientes = useCallback(async () => {
     if (!profile || !session?.access_token) return;
-    const data = (await backendApi.get("/api/colaboradores")) as any[];
+    const [data, porcentajes] = await Promise.all([
+      backendApi.get("/api/colaboradores") as Promise<any[]>,
+      backendApi.get("/api/porcentajes").catch(() => []) as Promise<any[]>,
+    ]);
     if (!Array.isArray(data)) return;
-    setClientes(data.map((row: any) => mapBackendColaborador(row)));
+    setClientes(
+      data.map((row: any) => {
+        const c = mapBackendColaborador(row);
+        const pct = porcentajeColaboradorDesdeLista(
+          row,
+          Array.isArray(porcentajes) ? porcentajes : [],
+        );
+        if (pct != null) {
+          c.tipoComision = "porcentaje";
+          c.porcentajeSocio = pct;
+        }
+        return c;
+      }),
+    );
   }, [profile?.id, session?.access_token]);
 
   // Cargar desde backend (solo con sesión lista — evita 401 por token aún no persistido)
@@ -113,13 +180,6 @@ export function useClientes(profile: any, session: Session | null) {
 
     if (extras?.tipo_pago_id) {
       try {
-        if (extras.es_porcentaje && extras.porcentaje !== undefined) {
-          await backendApi.post("/api/porcentajes", {
-            valor: extras.porcentaje,
-            descripcion: `Porcentaje para colaborador ${cliente.nombre}`,
-          });
-        }
-
         const data = await backendApi.post("/api/colaboradores", {
           nombre: cliente.nombre,
           contacto: cliente.alias ?? null,
@@ -132,6 +192,18 @@ export function useClientes(profile: any, session: Session | null) {
 
         if (data) {
           clienteParaEstado = mapBackendColaborador(data);
+          if (extras.es_porcentaje && extras.porcentaje !== undefined) {
+            await backendApi.post("/api/porcentajes", {
+              valor: extras.porcentaje,
+              descripcion: descripcionPorcentajeColaborador({
+                id: clienteParaEstado.id,
+                nombre: clienteParaEstado.nombre,
+              }),
+              colaborador_id: clienteParaEstado.id,
+            });
+            clienteParaEstado.tipoComision = "porcentaje";
+            clienteParaEstado.porcentajeSocio = Number(extras.porcentaje) || 0;
+          }
           (clienteParaEstado as Colaborador & ExtrasColaborador).color = (
             cliente as Colaborador & ExtrasColaborador
           ).color;
@@ -183,12 +255,20 @@ export function useClientes(profile: any, session: Session | null) {
     if (extras?.es_porcentaje && extras.porcentaje !== undefined) {
       await backendApi.post("/api/porcentajes", {
         valor: extras.porcentaje,
-        descripcion: `Porcentaje para colaborador ${cliente.nombre}`,
+        descripcion: descripcionPorcentajeColaborador({
+          id: cliente.id,
+          nombre: cliente.nombre,
+        }),
+        colaborador_id: cliente.id,
       });
     }
 
     const data = await backendApi.patch(`/api/colaboradores/${cliente.id}`, payload);
     const actualizado = mapBackendColaborador(data);
+    if (extras?.es_porcentaje && extras.porcentaje !== undefined) {
+      actualizado.tipoComision = "porcentaje";
+      actualizado.porcentajeSocio = Number(extras.porcentaje) || 0;
+    }
     (actualizado as Colaborador & ExtrasColaborador).color = (
       cliente as Colaborador & ExtrasColaborador
     ).color;
