@@ -20,6 +20,7 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
     telefono: "",
     email: "",
     iva_percentaje: 16,
+    dia_corte_ordenes: 20,
     activo: true,
   });
 
@@ -38,6 +39,7 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
           telefono: data.telefono ?? "",
           email: data.email ?? "",
           iva_percentaje: Number(data.iva_percentaje ?? 16),
+          dia_corte_ordenes: Number(data.dia_corte_ordenes ?? 20),
           activo: Boolean(data.activo ?? true),
         });
       }
@@ -64,6 +66,8 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
           ? checked
           : name === "iva_percentaje"
             ? Number(value)
+            : name === "dia_corte_ordenes"
+              ? Number(value)
             : value,
     }));
   };
@@ -86,6 +90,7 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
         telefono: formData.telefono || null,
         email: formData.email || null,
         ivaPercentaje: Number(formData.iva_percentaje || 0),
+        diaCorteOrdenes: Number(formData.dia_corte_ordenes || 20),
         activo: formData.activo,
       });
       setMensaje("Configuración guardada correctamente");
@@ -143,6 +148,10 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
                 <div className="empresa-info-item">
                   <span className="empresa-info-label">Activo</span>
                   <span className="empresa-info-value">{formData.activo ? "Sí" : "No"}</span>
+                </div>
+                <div className="empresa-info-item">
+                  <span className="empresa-info-label">Día de corte de órdenes</span>
+                  <span className="empresa-info-value">{String(formData.dia_corte_ordenes || 20)}</span>
                 </div>
               </div>
               <div className="form-actions">
@@ -257,6 +266,19 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
                   min={0}
                   max={100}
                   step={0.01}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="dia_corte_ordenes">Día de corte de órdenes</label>
+                <input
+                  type="number"
+                  id="dia_corte_ordenes"
+                  name="dia_corte_ordenes"
+                  value={formData.dia_corte_ordenes}
+                  onChange={handleChange}
+                  min={1}
+                  max={31}
+                  step={1}
                 />
               </div>
               <div className="form-group">

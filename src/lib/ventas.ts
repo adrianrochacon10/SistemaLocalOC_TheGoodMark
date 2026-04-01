@@ -17,7 +17,9 @@ export interface RegistroVentaPayload {
   vendedor_id?: string | null;
   importe_total?: number;
   pago_considerar?: number;
+  consideracion_monto?: number;
   costos?: number;
+  costo_venta?: number;
   comision?: number;
   comision_porcentaje?: number;
   porcentaje_socio?: number;
@@ -28,6 +30,7 @@ export interface RegistroVentaPayload {
   comision_total?: number;
   notas?: string | null;
   fuente_origen?: string | null;
+  identificador_venta?: string | null;
 }
 
 export async function registrarVenta(payload: RegistroVentaPayload) {

@@ -19,7 +19,7 @@ import {
   detallePrecioMensual,
   PREFIJO_LINEA_PRODUCTO,
 } from "../../../utils/ordenApiMapper";
-import { ventaSolapaMesCalendario } from "../../../utils/ordenUtils";
+import { ventaIncluidaEnMesOrdenConCorte } from "../../../utils/ordenUtils";
 import {
   construirDetalleLineas,
   totalesDesdeLineas,
@@ -137,14 +137,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
   const [productosIncluidosPorVenta, setProductosIncluidosPorVenta] = useState<
     Record<string, string[]>
   >({});
-  /** Gastos adicionales de la venta incluidos en el cálculo de la orden (mismo monto que trae la venta). */
-  const [ventasConGastosIncluido, setVentasConGastosIncluido] = useState<
-    Set<string>
-  >(() => new Set());
-  /** Por venta: incluir en PDF el % del socio sobre pantallas (solo colaboradores tipo porcentaje). */
-  const [ventasConPorcentajeEnOrden, setVentasConPorcentajeEnOrden] = useState<
-    Set<string>
-  >(() => new Set());
   const [guardando, setGuardando] = useState(false);
   const [productosCatalogo, setProductosCatalogo] = useState<Producto[]>([]);
 
@@ -219,7 +211,9 @@ export const ModalCrearOrden: React.FC<Props> = ({
         );
         const list = Array.isArray(data) ? data.map(mapVentaFromApi) : [];
         const filtradas = list.filter(
-          (v) => String(v.colaboradorId) === String(colaboradorId),
+          (v) =>
+            String(v.colaboradorId) === String(colaboradorId) &&
+            String(v.estadoVenta ?? "").toLowerCase() === "aceptado",
         );
         if (!cancel) {
           setVentasDelMes(filtradas);
@@ -234,7 +228,13 @@ export const ModalCrearOrden: React.FC<Props> = ({
           const local = ventasRegistradas.filter(
             (v) =>
               String(v.colaboradorId) === String(colaboradorId) &&
-              ventaSolapaMesCalendario(v, mes, año),
+              ventaIncluidaEnMesOrdenConCorte(
+                v,
+                mes,
+                año,
+                Number(config.diaCorteOrdenes ?? 20) || 20,
+              ) &&
+              String(v.estadoVenta ?? "").toLowerCase() === "aceptado",
           );
           setVentasDelMes(local);
           setAvisoVentas(
@@ -250,7 +250,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
     return () => {
       cancel = true;
     };
-  }, [colaboradorId, mes, año, ventasRegistradas]);
+  }, [colaboradorId, mes, año, ventasRegistradas, config.diaCorteOrdenes]);
 
   useEffect(() => {
     const todas = new Set(ventasDelMes.map((v) => String(v.id)));
@@ -267,24 +267,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
     setProductosIncluidosPorVenta({});
   }, [colaboradorId, mes, año, ventaIdsKey]);
 
-  // Gastos adicionales: por defecto se toman de la venta (incluidos si la venta tiene monto > 0).
-  useEffect(() => {
-    const next = new Set<string>();
-    for (const v of ventasDelMes) {
-      const g = Number(v.gastosAdicionales ?? 0) || 0;
-      if (g > 0) next.add(String(v.id));
-    }
-    setVentasConGastosIncluido(next);
-  }, [colaboradorId, mes, año, ventaIdsKey]);
-
-  useEffect(() => {
-    const ids = new Set(ventasDelMes.map((v) => String(v.id)));
-    setVentasConPorcentajeEnOrden((prev) => {
-      const next = new Set([...prev].filter((id) => ids.has(id)));
-      return next;
-    });
-  }, [ventaIdsKey]);
-
   const toggleVenta = useCallback((ventaId: string) => {
     setVentasSeleccionadas((prev) => {
       const next = new Set(prev);
@@ -299,16 +281,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
           delete next[String(ventaId)];
           return next;
         });
-        setVentasConGastosIncluido((prevG) => {
-          const n = new Set(prevG);
-          n.delete(String(ventaId));
-          return n;
-        });
-        setVentasConPorcentajeEnOrden((prevP) => {
-          const n = new Set(prevP);
-          n.delete(String(ventaId));
-          return n;
-        });
       } else {
         next.add(ventaId);
         const venta = ventasDelMes.find((v) => String(v.id) === String(ventaId));
@@ -317,10 +289,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
           ...prevSel,
           [ventaId]: pids,
         }));
-        const g = Number(venta?.gastosAdicionales ?? 0) || 0;
-        if (g > 0) {
-          setVentasConGastosIncluido((prevG) => new Set(prevG).add(String(ventaId)));
-        }
       }
       return next;
     });
@@ -381,46 +349,19 @@ export const ModalCrearOrden: React.FC<Props> = ({
     {
       setVentasSeleccionadas(new Set(ventasDelMes.map((v) => String(v.id))));
       const porVenta: Record<string, string[]> = {};
-      const conGastos = new Set<string>();
       for (const v of ventasDelMes) {
         const id = String(v.id);
         porVenta[id] = [...new Set(v.pantallasIds ?? [])];
-        if ((Number(v.gastosAdicionales ?? 0) || 0) > 0) conGastos.add(id);
       }
       setPantallasSeleccionadasPorVenta(porVenta);
-      setVentasConGastosIncluido(conGastos);
     };
   const quitarTodasVentas = () => {
     setVentasSeleccionadas(new Set());
     setProductosIncluidosPorVenta({});
-    setVentasConGastosIncluido(new Set());
-    setVentasConPorcentajeEnOrden(new Set());
     const porVenta: Record<string, string[]> = {};
     for (const v of ventasDelMes) porVenta[String(v.id)] = [];
     setPantallasSeleccionadasPorVenta(porVenta);
   };
-
-  const toggleGastosEnOrden = useCallback((ventaId: string) => {
-    const venta = ventasDelMes.find((v) => String(v.id) === String(ventaId));
-    const g = Number(venta?.gastosAdicionales ?? 0) || 0;
-    if (g <= 0) return;
-    setVentasConGastosIncluido((prev) => {
-      const next = new Set(prev);
-      if (next.has(ventaId)) next.delete(ventaId);
-      else next.add(ventaId);
-      return next;
-    });
-  }, [ventasDelMes]);
-
-  const togglePorcentajeEnOrden = useCallback((ventaId: string) => {
-    if (colaboradorSeleccionado?.tipoComision !== "porcentaje") return;
-    setVentasConPorcentajeEnOrden((prev) => {
-      const next = new Set(prev);
-      if (next.has(ventaId)) next.delete(ventaId);
-      else next.add(ventaId);
-      return next;
-    });
-  }, [colaboradorSeleccionado?.tipoComision]);
 
   const seleccionArrays = useMemo(() => {
     const m = new Map<string, string[]>();
@@ -455,11 +396,8 @@ export const ModalCrearOrden: React.FC<Props> = ({
               .map((pid) => nombreProductoEnVenta(pid, v, productosCatalogo))
               .join(", ")
           : undefined;
-      const incluirGastos = ventasConGastosIncluido.has(id);
       const precioGeneralActual = Math.max(0, Number(v.precioGeneral ?? 0));
-      const G = Math.max(0, Number(v.gastosAdicionales ?? 0) || 0);
       const T = Math.max(0, Number(v.importeTotal ?? v.precioTotal ?? 0) || 0);
-      const totalSinGastos = Math.max(0, round2(T - G));
       const precioProductoContrato = round2(
         Number(v.productoPrecioMensual ?? 0) || 0,
       );
@@ -470,13 +408,12 @@ export const ModalCrearOrden: React.FC<Props> = ({
         productoPrecioMensualContrato: precioProductoContrato,
         productoNombre: incluirProducto ? nombresProd : undefined,
         precioBaseMensualOrden: precioGeneralActual,
-        gastosAdicionales: incluirGastos ? G : 0,
-        importeTotal: incluirGastos ? T : totalSinGastos,
-        precioTotal: incluirGastos ? T : totalSinGastos,
+        gastosAdicionales: 0,
+        importeTotal: T,
+        precioTotal: T,
         ...(colaboradorSeleccionado?.tipoComision === "porcentaje"
           ? {
-              aplicarPorcentajeSocioEnOrden:
-                ventasConPorcentajeEnOrden.has(id),
+              aplicarPorcentajeSocioEnOrden: true,
             }
           : {}),
       };
@@ -484,20 +421,40 @@ export const ModalCrearOrden: React.FC<Props> = ({
   }, [
     ventasParaOrden,
     productosIncluidosPorVenta,
-    ventasConGastosIncluido,
-    ventasConPorcentajeEnOrden,
     colaboradorSeleccionado?.tipoComision,
     productosCatalogo,
   ]);
 
   const detalleLineas = useMemo(
-    () => construirDetalleLineas(ventasAjustadasParaOrden, seleccionArrays, pantallas),
-    [ventasAjustadasParaOrden, seleccionArrays, pantallas],
+    () =>
+      construirDetalleLineas(
+        ventasAjustadasParaOrden,
+        seleccionArrays,
+        pantallas,
+        mes,
+        año,
+      ),
+    [ventasAjustadasParaOrden, seleccionArrays, pantallas, mes, año],
   );
 
+  const ventasPorIdOrden = useMemo(() => {
+    const m = new Map<string, RegistroVenta>();
+    for (const v of ventasAjustadasParaOrden) m.set(String(v.id), v);
+    return m;
+  }, [ventasAjustadasParaOrden]);
+
   const { subtotal, iva, total } = useMemo(
-    () => totalesDesdeLineas(detalleLineas, config.ivaPercentaje),
-    [detalleLineas, config.ivaPercentaje],
+    () =>
+      totalesDesdeLineas(detalleLineas, config.ivaPercentaje, {
+        tipoComision: colaboradorSeleccionado?.tipoComision,
+        ventasPorId: ventasPorIdOrden,
+      }),
+    [
+      detalleLineas,
+      config.ivaPercentaje,
+      colaboradorSeleccionado?.tipoComision,
+      ventasPorIdOrden,
+    ],
   );
 
   const ventasIds = useMemo(
@@ -726,20 +683,16 @@ export const ModalCrearOrden: React.FC<Props> = ({
                         ? productoTxt || "Producto(s) de la venta"
                         : "Sin producto";
                       const nProdSel = (productosIncluidosPorVenta[id] ?? []).length;
-                      const gastosVenta =
-                        Math.max(0, Number(v.gastosAdicionales ?? 0) || 0);
-                      const incluirGastos = ventasConGastosIncluido.has(id);
                       const pantallasDeVenta = [...new Set(v.pantallasIds ?? [])];
                       const pantallasSeleccionadasLocal =
                         pantallasSeleccionadasPorVenta[id] ?? [];
                       const incluirPctPdf =
-                        colaboradorSeleccionado?.tipoComision === "porcentaje" &&
-                        ventasConPorcentajeEnOrden.has(id);
+                        colaboradorSeleccionado?.tipoComision === "porcentaje";
                       const resumenSeleccion = `${pantallasSeleccionadasLocal.length} pantalla${pantallasSeleccionadasLocal.length !== 1 ? "s" : ""}${
                         nProdSel > 0
                           ? ` + ${nProdSel} producto${nProdSel !== 1 ? "s" : ""}`
                           : ""
-                      }${incluirGastos && gastosVenta > 0 ? " + gastos adic." : ""}${
+                      }${
                         incluirPctPdf ? " + % socio (PDF)" : ""
                       }`;
                       const mainChkId = `modal-venta-main-${id}`;
@@ -768,14 +721,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                       {nombresPantallas(pids, pantallas, v) || "—"}
                                     </span>
                                   </div>
-                                  {gastosVenta > 0 ? (
-                                    <div className="modal-venta-meta-row">
-                                      <span className="modal-venta-meta-k">Gastos adic. (venta)</span>
-                                      <span className="modal-venta-meta-v">
-                                        ${fmtMoney(gastosVenta)}
-                                      </span>
-                                    </div>
-                                  ) : null}
                                 </div>
                                 <p className="modal-venta-resumen">
                                   Incluye en esta orden: <strong>{resumenSeleccion}</strong>
@@ -869,82 +814,25 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                   </div>
                                 </div>
                               ) : null}
-                              {gastosVenta > 0 ? (
-                                <div className="modal-venta-section modal-venta-section--gastos-last">
-                                  <div className="modal-venta-section-title">
-                                    Gastos adicionales
-                                  </div>
-                                  {incluirGastos ? (
-                                    <div className="modal-venta-gastos-estado">
-                                      <span className="modal-venta-gastos-estado-txt">
-                                        Incluidos en la orden:{" "}
-                                        <strong>${fmtMoney(gastosVenta)}</strong>{" "}
-                                        (de la venta)
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className="btn btn-sm btn-outline modal-venta-gastos-quitar"
-                                        onClick={() => toggleGastosEnOrden(id)}
-                                      >
-                                        Quitar
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-outline modal-venta-gastos-agregar"
-                                      onClick={() => toggleGastosEnOrden(id)}
-                                    >
-                                      Agregar gastos adicionales (${fmtMoney(gastosVenta)})
-                                    </button>
-                                  )}
-                                </div>
-                              ) : null}
-                              {colaboradorSeleccionado?.tipoComision ===
+                      {colaboradorSeleccionado?.tipoComision ===
                               "porcentaje" ? (
                                 <div className="modal-venta-section modal-venta-section--gastos-last">
                                   <div className="modal-venta-section-title">
                                     Porcentaje del socio (PDF)
                                   </div>
-                                  {ventasConPorcentajeEnOrden.has(id) ? (
-                                    <div className="modal-venta-gastos-estado">
-                                      <span className="modal-venta-gastos-estado-txt">
-                                        Incluido en la orden:{" "}
-                                        <strong>
-                                          {Number(
-                                            colaboradorSeleccionado.porcentajeSocio ??
-                                              0,
-                                          ) || 0}
-                                          %
-                                        </strong>{" "}
-                                        sobre pantallas al generar el PDF.
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className="btn btn-sm btn-outline modal-venta-gastos-quitar"
-                                        onClick={() =>
-                                          togglePorcentajeEnOrden(id)
-                                        }
-                                      >
-                                        Quitar
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-outline modal-venta-gastos-agregar"
-                                      onClick={() =>
-                                        togglePorcentajeEnOrden(id)
-                                      }
-                                    >
-                                      Agregar porcentaje del socio a la orden (
-                                      {Number(
-                                        colaboradorSeleccionado.porcentajeSocio ??
-                                          0,
-                                      ) || 0}
-                                      % en pantallas)
-                                    </button>
-                                  )}
+                                  <div className="modal-venta-gastos-estado">
+                                    <span className="modal-venta-gastos-estado-txt">
+                                      Aplicado en la orden:{" "}
+                                      <strong>
+                                        {Number(
+                                          colaboradorSeleccionado.porcentajeSocio ??
+                                            0,
+                                        ) || 0}
+                                        %
+                                      </strong>{" "}
+                                      sobre pantallas al generar el PDF.
+                                    </span>
+                                  </div>
                                 </div>
                               ) : null}
                             </div>

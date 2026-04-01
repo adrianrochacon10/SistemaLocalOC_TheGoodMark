@@ -24,16 +24,49 @@ function ventasPayloadSinPorcentajeSocio(p) {
   return rest;
 }
 
+function ventasErrorColumnaConsideracionMonto(error) {
+  return /consideracion_monto|schema cache/i.test(String(error?.message ?? ""));
+}
+
+function ventasPayloadSinConsideracionMonto(p) {
+  if (p == null || typeof p !== "object") return p;
+  const { consideracion_monto, ...rest } = p;
+  return rest;
+}
+
+function ventasErrorIdentificadorDuplicado(error) {
+  const msg = String(error?.message ?? "").toLowerCase();
+  const code = String(error?.code ?? "");
+  return (
+    code === "23505" ||
+    msg.includes("ventas_identificador_venta_uq") ||
+    msg.includes("identificador_venta")
+  );
+}
+
 export async function listar() {
   const { data, error } = await supabase
     .from("ventas")
     .select(SELECT_VENTAS)
     .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (ventasErrorIdentificadorDuplicado(error)) {
+      return {
+        error:
+          "El identificador de venta ya existe. Usa uno diferente (4 letras o numeros).",
+      };
+    }
+    throw new Error(error.message);
+  }
   return data ?? [];
 }
 
 export async function crear(body, vendedorId) {
+  const vendedorFinal =
+    vendedorId ??
+    body.vendedor_id ??
+    body.usuario_registro_id ??
+    null;
   const colaboradorId = body.colaborador_id;
   const estadoVenta = body.estado_venta ?? body.estado;
   const vendidoA =
@@ -44,6 +77,7 @@ export async function crear(body, vendedorId) {
     null;
 
   if (!colaboradorId) return { error: "Colaborador es obligatorio" };
+  if (!vendedorFinal) return { error: "Vendedor es obligatorio" };
   if (!estadoVenta) return { error: "Estado de venta es obligatorio" };
   if (!body.fecha_inicio || !body.fecha_fin)
     return { error: "Fecha inicio y fin son obligatorias" };
@@ -55,6 +89,11 @@ export async function crear(body, vendedorId) {
     return { error: "duracion_meses debe ser > 0" };
 
   const costos = body.costos ?? body.costos_venta ?? body.costo_venta;
+  const costoVenta = body.costo_venta ?? body.costoVenta ?? costos;
+  const consideracionMonto = Number(
+    body.consideracion_monto ?? body.pago_considerar ?? 0,
+  );
+  const identificadorVenta = body.identificador_venta ?? body.identificador ?? null;
   const gastosAdicionales = Number(body.gastos_adicionales ?? 0);
   const precioPantallasMensual = Number(body.precio_pantallas_mensual ?? 0);
   const pantallasDetalle = Array.isArray(body.pantallas_detalle)
@@ -66,8 +105,10 @@ export async function crear(body, vendedorId) {
   if (!Number.isFinite(precioPantallasMensual) || precioPantallasMensual < 0) {
     return { error: "precio_pantallas_mensual debe ser un numero >= 0" };
   }
-  if (costos == null || !Number.isFinite(Number(costos)) || Number(costos) < 0)
-    return { error: "costos (ventas) es obligatorio (>= 0)" };
+  if (costoVenta == null || !Number.isFinite(Number(costoVenta)) || Number(costoVenta) < 0)
+    return { error: "costo_venta es obligatorio (>= 0)" };
+  if (!Number.isFinite(consideracionMonto) || consideracionMonto < 0)
+    return { error: "consideracion_monto debe ser >= 0" };
 
   let precioPorMes =
     body.precio_por_mes ??
@@ -93,7 +134,7 @@ export async function crear(body, vendedorId) {
 
   const { data: colaborador, error: errColab } = await supabase
     .from("colaboradores")
-    .select("id,nombre,tipo_pago_id,producto_id")
+    .select("id,nombre,tipo_pago_id,producto_id,tipo_pago:tipo_pago(nombre)")
     .eq("id", colaboradorId)
     .single();
   if (errColab || !colaborador) return { error: "Colaborador no encontrado" };
@@ -109,8 +150,9 @@ export async function crear(body, vendedorId) {
     precioPorMes = leerPrecioProducto(producto);
   }
 
+  // Gastos adicionales se guardan aparte: no alteran el total de la venta.
   const baseTotal = Math.round(precioPorMes * duracionMeses * 100) / 100;
-  const brutoConExtras = baseTotal;
+  const brutoConExtras = Number(body.importe_total ?? baseTotal) || baseTotal;
   const comisionesCalculadasPorPorcentaje =
     Number.isFinite(comisionPorcentaje) && comisionPorcentaje > 0
       ? Math.round((brutoConExtras * comisionPorcentaje) / 100 * 100) / 100
@@ -122,11 +164,28 @@ export async function crear(body, vendedorId) {
         ? Math.round(comisiones * 100) / 100
         : 0;
   const precioTotal = Math.round(brutoConExtras * 100) / 100;
-  const comisionPorPeriodo = comisionTotalCalculada / Math.max(1, duracionMeses);
-  const utilidadNeta =
-    Math.round(
-      (precioPorMes - comisionPorPeriodo) * 100,
-    ) / 100;
+  const tipoPagoNombre = String(colaborador?.tipo_pago?.nombre ?? "").toLowerCase();
+  const esTipoPorcentaje = tipoPagoNombre.includes("porcentaje");
+  const esTipoCostoFijo =
+    tipoPagoNombre.includes("consideracion") || tipoPagoNombre.includes("precio fijo");
+  const montoPorcentajeSobrePrecio =
+    esTipoPorcentaje && Number.isFinite(porcentajeSocio) && porcentajeSocio > 0
+      ? Math.round((precioTotal * porcentajeSocio) / 100 * 100) / 100
+      : 0;
+  const consideracionAplicada = esTipoCostoFijo ? consideracionMonto : 0;
+  const costoVentaFinal = Math.max(
+    0,
+    Math.round((Number(costoVenta) - consideracionAplicada) * 100) / 100,
+  );
+  const utilidadNeta = esTipoPorcentaje
+    ? Math.max(
+        0,
+        Math.round((precioTotal - montoPorcentajeSobrePrecio) * 100) / 100,
+      )
+    : Math.max(
+        0,
+        Math.round((precioTotal - costoVentaFinal) * 100) / 100,
+      );
 
   const insertPayload = {
     colaborador_id: colaboradorId,
@@ -136,7 +195,7 @@ export async function crear(body, vendedorId) {
     fecha_inicio: body.fecha_inicio,
     fecha_fin: body.fecha_fin,
     duracion_meses: duracionMeses,
-    vendedor_id: vendedorId,
+    vendedor_id: vendedorFinal,
     tipo_pago_id: colaborador.tipo_pago_id,
     producto_ids: Array.isArray(body.producto_ids)
       ? body.producto_ids
@@ -145,8 +204,10 @@ export async function crear(body, vendedorId) {
         : [],
     renovable,
     precio_por_mes: Math.round(precioPorMes * 100) / 100,
-    costos: Math.round(Number(costos) * 100) / 100,
-    utilidad_neta: utilidadNeta,
+    costos: Math.round(costoVentaFinal * 100) / 100,
+    costo_venta: Math.round(costoVentaFinal * 100) / 100,
+    utilidad_neta: Math.round(utilidadNeta * 100) / 100,
+    consideracion_monto: Math.round(consideracionAplicada * 100) / 100,
     gastos_adicionales: Math.round(gastosAdicionales * 100) / 100,
     precio_pantallas_mensual: Math.round(precioPantallasMensual * 100) / 100,
     pantallas_detalle: pantallasDetalle,
@@ -157,7 +218,7 @@ export async function crear(body, vendedorId) {
         ? Math.round(comisionPorcentaje * 100) / 100
         : 0,
     porcentaje_socio:
-      Number.isFinite(porcentajeSocio) && porcentajeSocio >= 0
+      esTipoPorcentaje && Number.isFinite(porcentajeSocio) && porcentajeSocio > 0
         ? Math.round(porcentajeSocio * 100) / 100
         : 0,
     descuento:
@@ -171,6 +232,7 @@ export async function crear(body, vendedorId) {
         : [],
     notas: body.notas ?? null,
     fuente_origen: body.fuente_origen ?? null,
+    identificador_venta: identificadorVenta,
   };
 
   let { data, error } = await supabase
@@ -190,6 +252,18 @@ export async function crear(body, vendedorId) {
     data = r2.data;
     error = r2.error;
   }
+  if (error && ventasErrorColumnaConsideracionMonto(error)) {
+    console.warn(
+      "[ventas] Falta columna ventas.consideracion_monto. Ejecuta: supabase/migrations/20260331183000_ventas_consideracion_monto.sql.",
+    );
+    const r3 = await supabase
+      .from("ventas")
+      .insert(ventasPayloadSinConsideracionMonto(insertPayload))
+      .select(SELECT_VENTAS)
+      .single();
+    data = r3.data;
+    error = r3.error;
+  }
   if (error) throw new Error(error.message);
 
   return { data };
@@ -202,6 +276,21 @@ export async function actualizar(id, body) {
     .eq("id", id)
     .single();
   if (errVenta || !venta) throw new Error("Venta no encontrada");
+
+  const tipoPagoLookupId = body.tipo_pago_id ?? venta.tipo_pago_id ?? null;
+  let tipoPagoNombreActual = "";
+  if (tipoPagoLookupId) {
+    const { data: tipoPagoRow } = await supabase
+      .from("tipo_pago")
+      .select("nombre")
+      .eq("id", tipoPagoLookupId)
+      .maybeSingle();
+    tipoPagoNombreActual = String(tipoPagoRow?.nombre ?? "").toLowerCase();
+  }
+  const esTipoPorcentaje = tipoPagoNombreActual.includes("porcentaje");
+  const esTipoCostoFijo =
+    tipoPagoNombreActual.includes("consideracion") ||
+    tipoPagoNombreActual.includes("precio fijo");
 
   const payload = { updated_at: new Date().toISOString() };
 
@@ -220,6 +309,12 @@ export async function actualizar(id, body) {
 
   let costos =
     body.costos ?? body.costos_venta ?? body.costo_venta ?? venta.costos;
+  let consideracionMonto =
+    body.consideracion_monto ?? body.pago_considerar ?? venta.consideracion_monto ?? 0;
+  consideracionMonto =
+    consideracionMonto != null && consideracionMonto !== ""
+      ? Number(consideracionMonto)
+      : 0;
   costos = costos != null && costos !== "" ? Number(costos) : null;
   let gastosAdicionales =
     body.gastos_adicionales ?? venta.gastos_adicionales ?? 0;
@@ -245,6 +340,9 @@ export async function actualizar(id, body) {
   }
   if (body.notas !== undefined) payload.notas = body.notas;
   if (body.fuente_origen !== undefined) payload.fuente_origen = body.fuente_origen;
+  if (body.identificador_venta !== undefined || body.identificador !== undefined) {
+    payload.identificador_venta = body.identificador_venta ?? body.identificador ?? null;
+  }
   if (body.precio_pantallas_mensual !== undefined) {
     const n = Number(body.precio_pantallas_mensual);
     if (!Number.isFinite(n) || n < 0)
@@ -303,6 +401,8 @@ export async function actualizar(id, body) {
     body.costos !== undefined ||
     body.costos_venta !== undefined ||
     body.costo_venta !== undefined ||
+    body.consideracion_monto !== undefined ||
+    body.pago_considerar !== undefined ||
     body.gastos_adicionales !== undefined ||
     body.duracion_meses !== undefined ||
     !!colaboradorId;
@@ -315,19 +415,22 @@ export async function actualizar(id, body) {
     )
       throw new Error("precio_por_mes (ventas) debe ser >= 0");
     if (costos == null || !Number.isFinite(costos) || costos < 0)
-      throw new Error("costos (ventas) debe ser >= 0");
+      throw new Error("costo_venta (ventas) debe ser >= 0");
+    if (!Number.isFinite(consideracionMonto) || consideracionMonto < 0)
+      throw new Error("consideracion_monto debe ser >= 0");
     if (!Number.isFinite(gastosAdicionales) || gastosAdicionales < 0)
       throw new Error("gastos_adicionales debe ser >= 0");
 
     payload.precio_por_mes = Math.round(precioPorMes * 100) / 100;
-    payload.costos = Math.round(costos * 100) / 100;
+    const consideracionAplicada = esTipoCostoFijo ? consideracionMonto : 0;
+    const costoFinal = Math.max(
+      0,
+      Math.round((costos - consideracionAplicada) * 100) / 100,
+    );
+    payload.costos = Math.round(costoFinal * 100) / 100;
+    payload.costo_venta = Math.round(costoFinal * 100) / 100;
+    payload.consideracion_monto = Math.round(consideracionAplicada * 100) / 100;
     payload.gastos_adicionales = Math.round(gastosAdicionales * 100) / 100;
-    const comisionesBase = Number(payload.comisiones ?? venta.comisiones ?? 0) || 0;
-    const comisionPorPeriodo = comisionesBase / Math.max(1, duracionMeses);
-    payload.utilidad_neta =
-      Math.round(
-        (precioPorMes - comisionPorPeriodo) * 100,
-      ) / 100;
     const baseTotal = Math.round(precioPorMes * duracionMeses * 100) / 100;
     payload.precio_total = Math.round(baseTotal * 100) / 100;
   }
@@ -368,26 +471,40 @@ export async function actualizar(id, body) {
     const ps = Number(body.porcentaje_socio);
     if (!Number.isFinite(ps) || ps < 0)
       throw new Error("porcentaje_socio debe ser un numero >= 0");
-    payload.porcentaje_socio = Math.round(ps * 100) / 100;
+    payload.porcentaje_socio = esTipoPorcentaje ? Math.round(ps * 100) / 100 : 0;
   }
 
   {
     const precioPorMesBase = Number(payload.precio_por_mes ?? venta.precio_por_mes ?? 0) || 0;
-    const comisionesBase = Number(payload.comisiones ?? venta.comisiones ?? 0) || 0;
     const duracionBase = Number(payload.duracion_meses ?? venta.duracion_meses ?? 1) || 1;
     const baseTotal = Math.round(precioPorMesBase * duracionBase * 100) / 100;
     payload.precio_total = Math.round(baseTotal * 100) / 100;
   }
 
-  if (payload.utilidad_neta === undefined) {
-    const precioPorMesBase = Number(payload.precio_por_mes ?? venta.precio_por_mes ?? 0) || 0;
-    const comisionesBase = Number(payload.comisiones ?? venta.comisiones ?? 0) || 0;
-    const duracionBase = Number(payload.duracion_meses ?? venta.duracion_meses ?? 1) || 1;
-    const comisionPorPeriodo = comisionesBase / Math.max(1, duracionBase);
-    payload.utilidad_neta =
-      Math.round(
-        (precioPorMesBase - comisionPorPeriodo) * 100,
-      ) / 100;
+  {
+    const tid = payload.tipo_pago_id ?? venta.tipo_pago_id;
+    let nombreTipo = tipoPagoNombreActual;
+    if (tid && (body.colaborador_id !== undefined || body.tipo_pago_id !== undefined)) {
+      const { data: row } = await supabase
+        .from("tipo_pago")
+        .select("nombre")
+        .eq("id", tid)
+        .maybeSingle();
+      nombreTipo = String(row?.nombre ?? "").toLowerCase();
+    }
+    const esPct = nombreTipo.includes("porcentaje");
+    const precioFin = Number(payload.precio_total ?? venta.precio_total ?? 0) || 0;
+    const costoFin =
+      Number(payload.costo_venta ?? payload.costos ?? venta.costo_venta ?? venta.costos ?? 0) ||
+      0;
+    const psFin = Number(payload.porcentaje_socio ?? venta.porcentaje_socio ?? 0) || 0;
+    if (esPct) {
+      const m =
+        psFin > 0 ? Math.round(((precioFin * psFin) / 100) * 100) / 100 : 0;
+      payload.utilidad_neta = Math.max(0, Math.round((precioFin - m) * 100) / 100);
+    } else {
+      payload.utilidad_neta = Math.max(0, Math.round((precioFin - costoFin) * 100) / 100);
+    }
   }
 
   let { data, error } = await supabase
@@ -408,6 +525,19 @@ export async function actualizar(id, body) {
       .single();
     data = r2.data;
     error = r2.error;
+  }
+  if (error && ventasErrorColumnaConsideracionMonto(error)) {
+    console.warn(
+      "[ventas] Falta columna ventas.consideracion_monto. Ejecuta: supabase/migrations/20260331183000_ventas_consideracion_monto.sql.",
+    );
+    const r3 = await supabase
+      .from("ventas")
+      .update(ventasPayloadSinConsideracionMonto(payload))
+      .eq("id", id)
+      .select(SELECT_VENTAS)
+      .single();
+    data = r3.data;
+    error = r3.error;
   }
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Venta no encontrada");
@@ -464,12 +594,7 @@ export async function renovar(id, body) {
       : Number(venta.descuento ?? 0);
   const precioTotal = Math.round(baseTotal * 100) / 100;
 
-  const comisionPorPeriodoRen =
-    (Number(comisionesRen) || 0) / Math.max(1, Number(duracion) || 1);
-  utilidadNeta =
-    Math.round(
-      (Number(precioPorMes) - comisionPorPeriodoRen) * 100,
-    ) / 100;
+  utilidadNeta = Math.round(Number(costos) * 100) / 100;
 
   const insertPayload = {
     colaborador_id: venta.colaborador_id,

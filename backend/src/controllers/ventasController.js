@@ -12,10 +12,13 @@ export async function listar(_req, res) {
 
 export async function crear(req, res) {
   const body = req.body || {};
-  const vendedorId = req.user?.id ?? body.vendedor_id ?? null;
-  const result = await ventasService.crear(body, vendedorId);
-  if (result.error) return res.status(400).json({ error: result.error });
+  const vendedorId =
+    req.user?.rol === "admin"
+      ? body.vendedor_id ?? req.user?.id ?? null
+      : req.user?.id ?? null;
   try {
+    const result = await ventasService.crear(body, vendedorId);
+    if (result.error) return res.status(400).json({ error: result.error });
     res.status(201).json(result.data);
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
@@ -36,6 +39,12 @@ export async function actualizar(req, res) {
     res.json(data);
   } catch (e) {
     if (e.message === "Venta no encontrada") return res.status(404).json({ error: e.message });
+    if (String(e?.message ?? "").toLowerCase().includes("identificador_venta")) {
+      return res.status(400).json({
+        error:
+          "El identificador de venta ya existe. Usa uno diferente (4 letras o numeros).",
+      });
+    }
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
   }
 }

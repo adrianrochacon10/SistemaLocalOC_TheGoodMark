@@ -272,27 +272,6 @@ export function useGestorColaboradores(props: Props) {
     setErrorPantalla("");
     setMensajeGuardado("");
 
-    if (!nombre.trim()) {
-      setErrorColaborador("El nombre del colaborador es requerido");
-      return;
-    }
-    if (!alias.trim()) {
-      setErrorColaborador("El alias es requerido");
-      return;
-    }
-    if (!telefono.trim()) {
-      setErrorColaborador("El teléfono es requerido");
-      return;
-    }
-    if (!email.trim()) {
-      setErrorColaborador("El email es requerido");
-      return;
-    }
-    if (!color.trim()) {
-      setErrorColaborador("El color es requerido");
-      return;
-    }
-
     const pantallasValidas = pantallasForm.filasValidas() as Array<{
       tempId: string;
       nombre?: string;
@@ -321,10 +300,6 @@ export function useGestorColaboradores(props: Props) {
       .filter((p) => p.nombre);
 
     const tipoPagoFinal = tipoPagoId || "";
-    if (!tipoPagoFinal) {
-      setErrorColaborador("Selecciona un tipo de pago");
-      return;
-    }
     if (esTipoPagoPorcentaje && (!Number.isFinite(porcentaje) || porcentaje < 0)) {
       setErrorColaborador("Captura un porcentaje valido");
       return;

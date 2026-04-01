@@ -101,25 +101,29 @@ export interface RegistroVenta {
   fechaFin: Date;
   mesesRenta: number;
   importeTotal: number;
+  /** Precio total del contrato en BD; en líneas de orden a veces `precioTotal` es solo la porción del mes. */
+  precioTotalContrato?: number;
   activo: boolean;
   usuarioRegistroId: string;
   estadoVenta?: "Aceptado" | "Rechazado" | "Prospecto";
   tipoPagoId?: string;
   vendedorId?: string;
   costos?: number;
+  costoVenta?: number;
+  /** Persistida en BD; gráficas y KPI usan suma en ventas aceptadas. */
+  utilidadNeta?: number;
   comision?: number;
   comisionPorcentaje?: number;
+  identificadorVenta?: string;
   /** % del socio (renta); distinto de la comisión de venta. */
   porcentajeSocio?: number;
   gastosAdicionales?: number;
   /** En líneas de orden: si los gastos adicionales de la venta entraron en el importe. */
   gastosIncluidosEnOrden?: boolean;
-  /**
-   * En orden/PDF: si se aplica el % del socio a pantallas en esta línea.
-   * `false` = no descontar; `undefined` = compatibilidad (antes se aplicaba si el colaborador era tipo porcentaje).
-   */
+  /** `false`: no descontar el % del socio en importe de OC/PDF. */
   aplicarPorcentajeSocioEnOrden?: boolean;
   pagoConsiderar?: number;
+  consideracionMonto?: number;
   notas?: string;
 }
 
@@ -199,4 +203,5 @@ export interface ConfiguracionEmpresa {
   bancoTarjeta?: string;
   bancoCuenta?: string;
   bancoClabe?: string;
+  diaCorteOrdenes?: number;
 }

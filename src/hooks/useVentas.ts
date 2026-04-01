@@ -9,6 +9,7 @@ import {
   detallePrecioMensual,
   esLineaPrecioProductoEnDetalle,
 } from "../utils/ordenApiMapper";
+import { utilidadNetaDesdeFilaApi } from "../utils/utilidadVenta";
 
 export function useVentas(profile: any, session: Session | null) {
   const [ventasRegistradas, setVentasRegistradas] = useState<RegistroVenta[]>(
@@ -77,6 +78,8 @@ export function useVentas(profile: any, session: Session | null) {
       precioGeneral: precioMensualVenta,
       cantidad: row.cantidad ?? 1,
       precioTotal: row.precio_total ?? row.importe_total ?? 0,
+      precioTotalContrato:
+        Number(row.precio_total ?? row.importe_total ?? 0) || undefined,
       fechaRegistro: row.created_at
         ? new Date(row.created_at)
         : row.fecha_registro
@@ -102,14 +105,19 @@ export function useVentas(profile: any, session: Session | null) {
       tipoPagoId: row.tipo_pago_id ?? row.tipo_pago?.id,
 
       costos: row.costos ?? 0,
+      costoVenta: row.costo_venta ?? row.costos ?? 0,
       comision: row.comisiones ?? row.comision ?? 0,
       comisionPorcentaje: Number(row.comision_porcentaje ?? 0) || 0,
+      identificadorVenta: row.identificador_venta ?? undefined,
       porcentajeSocio:
         row.porcentaje_socio != null && row.porcentaje_socio !== ""
           ? Number(row.porcentaje_socio) || 0
           : undefined,
       gastosAdicionales: Number(row.gastos_adicionales ?? 0) || 0,
+      utilidadNeta: utilidadNetaDesdeFilaApi(row),
       pagoConsiderar: row.pago_considerar ?? undefined,
+      consideracionMonto:
+        row.consideracion_monto ?? row.pago_considerar ?? undefined,
       fuenteOrigen: row.fuente_origen ?? undefined,
       notas: row.notas ?? undefined,
     };
@@ -145,9 +153,6 @@ export function useVentas(profile: any, session: Session | null) {
   // ── Registrar venta ───────────────────────────────────────────────────
   const handleRegistrarVentaConSupabase = async (venta: RegistroVenta) => {
     setErrorVenta(null);
-    console.log("=== VENTA A REGISTRAR ===");
-    console.log("pantallasIds:", venta.pantallasIds);
-    console.log("longitud:", venta.pantallasIds.length);
 
     const estadoApi = venta.estadoVenta?.toLowerCase() ?? "prospecto";
 
@@ -167,8 +172,10 @@ export function useVentas(profile: any, session: Session | null) {
       vendido_a: venta.vendidoA,
       vendedor_id: venta.vendedorId ?? venta.usuarioRegistroId ?? null,
       importe_total: venta.importeTotal ?? venta.precioTotal,
-      pago_considerar: venta.pagoConsiderar ?? 0,
-      costos: venta.costos ?? 0,
+      pago_considerar: 0,
+      consideracion_monto: 0,
+      costos: venta.costoVenta ?? venta.costos ?? 0,
+      costo_venta: venta.costoVenta ?? venta.costos ?? 0,
       comision: venta.comision ?? 0,
       comision_porcentaje: venta.comisionPorcentaje ?? 0,
       porcentaje_socio: venta.porcentajeSocio ?? 0,
@@ -182,10 +189,8 @@ export function useVentas(profile: any, session: Session | null) {
       pantallas_ids: venta.pantallasIds, // ✅ array completo
       notas: venta.notas ?? null,
       fuente_origen: venta.fuenteOrigen ?? null,
+      identificador_venta: venta.identificadorVenta ?? null,
     };
-
-    console.log("=== PAYLOAD ENVIADO AL BACKEND ===");
-    console.log(JSON.stringify(payload, null, 2));
 
     try {
       const { data, error } = await registrarVenta(payload); // ← una sola llamada
@@ -231,8 +236,10 @@ export function useVentas(profile: any, session: Session | null) {
       duracion_meses: venta.mesesRenta,
       vendido_a: venta.vendidoA,
       importe_total: venta.importeTotal ?? venta.precioTotal,
-      pago_considerar: venta.pagoConsiderar ?? 0,
-      costos: venta.costos ?? 0,
+      pago_considerar: 0,
+      consideracion_monto: 0,
+      costos: venta.costoVenta ?? venta.costos ?? 0,
+      costo_venta: venta.costoVenta ?? venta.costos ?? 0,
       comision: venta.comision ?? 0,
       comision_porcentaje: venta.comisionPorcentaje ?? 0,
       porcentaje_socio: venta.porcentajeSocio ?? 0,
@@ -242,6 +249,7 @@ export function useVentas(profile: any, session: Session | null) {
       pantallas_ids: venta.pantallasIds,
       notas: venta.notas ?? null,
       fuente_origen: venta.fuenteOrigen ?? null,
+      identificador_venta: venta.identificadorVenta ?? null,
     };
     if (venta.codigoEdicion) payload.codigo_edicion = venta.codigoEdicion;
 

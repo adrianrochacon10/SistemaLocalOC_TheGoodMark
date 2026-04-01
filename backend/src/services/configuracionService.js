@@ -15,6 +15,7 @@ export const obtener = async () => {
     telefono: null,
     email: null,
     iva_percentaje: 16,
+    dia_corte_ordenes: 20,
     activo: true,
   };
 };
@@ -27,6 +28,8 @@ export const guardar = async (body) => {
     telefono: body.telefono ?? null,
     email: body.email ?? null,
     iva_percentaje: body.ivaPercentaje ?? 16,
+    dia_corte_ordenes:
+      body.diaCorteOrdenes != null ? Number(body.diaCorteOrdenes) : 20,
     activo: body.activo ?? true,
   };
 

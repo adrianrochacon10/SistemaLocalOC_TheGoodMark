@@ -1,4 +1,5 @@
 import type { OrdenDeCompra, RegistroVenta } from "../types";
+import { utilidadNetaDesdeFilaApi } from "./utilidadVenta";
 
 /** `pantallas_detalle` JSON puede venir en camelCase o snake_case (API/BD). */
 export function detallePantallaId(p: any): string {
@@ -78,6 +79,8 @@ export function mapVentaFromApi(row: any): RegistroVenta {
     precioGeneral: precioMensualVenta,
     cantidad: row.cantidad ?? 1,
     precioTotal: row.precio_total ?? row.importe_total ?? 0,
+    precioTotalContrato:
+      Number(row.precio_total ?? row.importe_total ?? 0) || undefined,
     fechaRegistro: row.created_at
       ? new Date(row.created_at)
       : new Date(),
@@ -96,6 +99,10 @@ export function mapVentaFromApi(row: any): RegistroVenta {
         ? Number(row.porcentaje_socio) || 0
         : undefined,
     gastosAdicionales: Number(row.gastos_adicionales ?? 0) || 0,
+    costos: row.costos ?? 0,
+    costoVenta: row.costo_venta ?? row.costos ?? 0,
+    comision: row.comisiones ?? row.comision ?? 0,
+    utilidadNeta: utilidadNetaDesdeFilaApi(row),
   };
 }
 
@@ -248,6 +255,16 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
         activo: true,
         usuarioRegistroId: "",
         estadoVenta: "Aceptado",
+        costos: Number(ventaSrc?.costos ?? 0) || 0,
+        costoVenta:
+          Number(ventaSrc?.costo_venta ?? ventaSrc?.costos ?? 0) || 0,
+        porcentajeSocio:
+          ventaSrc?.porcentaje_socio != null && ventaSrc?.porcentaje_socio !== ""
+            ? Number(ventaSrc.porcentaje_socio) || 0
+            : undefined,
+        precioTotalContrato:
+          Number(ventaSrc?.precio_total ?? ventaSrc?.importe_total ?? 0) ||
+          undefined,
       };
     });
   } else {

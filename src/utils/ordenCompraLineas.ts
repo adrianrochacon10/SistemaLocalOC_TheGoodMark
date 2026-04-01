@@ -4,6 +4,12 @@ import {
   detallePrecioMensual,
   esLineaPrecioProductoEnDetalle,
 } from "./ordenApiMapper";
+import {
+  colaboradorUsaCostoComoBaseOrden,
+  costoVentaProporcionalImporte,
+  importeLineaOrdenTrasPorcentajeSocio,
+  importeVentaEnMesOrden,
+} from "./ordenUtils";
 
 /** Nombre legible para una pantalla: snapshot de la venta primero, luego catálogo. */
 export function nombrePantallaDesdeVentaYCatalogo(
@@ -60,10 +66,6 @@ export type DetalleLineaOrden = {
   producto_nombre?: string;
   producto_precio_mensual?: number;
   producto_incluido?: boolean;
-  /** Monto de gastos adicionales de la venta incluido en esta línea (0 si no aplica). */
-  gastos_adicionales?: number;
-  gastos_incluidos_en_orden?: boolean;
-  /** Si en PDF se aplica el % del socio a pantallas en esta venta (solo colaboradores tipo porcentaje). */
   aplicar_porcentaje_socio?: boolean;
   precio_base_mensual?: number;
   importe: number;
@@ -104,9 +106,9 @@ export type PartesImporteOrden = {
   importe: number;
   /** Cuota proporcional del producto dentro del importe total (según peso en la venta). */
   productoPart: number;
-  /** Resto del importe atribuible a pantallas (+ gastos prorrateados en el total). */
+  /** Resto del importe atribuible a pantallas. */
   basePantallasPart: number;
-  /** Denominador usado (pantallas + producto + gastos). */
+  /** Denominador usado (pantallas + producto). */
   denom: number;
   /** Total de venta usado como base (importeTotal / precioTotal). */
   totalContrato: number;
@@ -114,9 +116,9 @@ export type PartesImporteOrden = {
 
 /**
  * Reparte el **importe total de la venta** (precioTotal / importeTotal del contrato) según lo
- * seleccionado: suma de precios de pantallas + producto + **gastos adicionales** como pesos.
+ * seleccionado: suma de precios de pantallas + producto como pesos.
  * No usa solo precios “por mes” aislados: el total del contrato es la base y los pesos salen
- * del desglose (pantallas + producto + gastos).
+ * del desglose (pantallas + producto).
  */
 export function partesImporteOrdenVenta(
   venta: RegistroVenta,
@@ -142,7 +144,6 @@ export function partesImporteOrdenVenta(
     typeof venta.productoPrecioMensualContrato === "number"
       ? Math.max(0, venta.productoPrecioMensualContrato)
       : precioProductoSeleccion;
-  const G = Math.max(0, Number(venta.gastosAdicionales ?? 0) || 0);
   const T_raw = Math.max(
     0,
     Number(venta.importeTotal ?? venta.precioTotal ?? 0) || 0,
@@ -190,7 +191,7 @@ export function partesImporteOrdenVenta(
     sumSel = sumAllPant;
   }
 
-  const denom = sumAllPant + precioProductoContrato + G;
+  const denom = sumAllPant + precioProductoContrato;
   const mesesContrato = mesesRentaDesdeVenta(venta);
   /**
    * Si `importeTotal` difiere en centavos de (pesos mensuales del contrato × meses),
@@ -199,15 +200,14 @@ export function partesImporteOrdenVenta(
    * en el peso o el desvío es claramente redondeo (< 5 centavos).
    */
   let T = T_raw;
-  if (G === 0 && denom > 0 && mesesContrato >= 1) {
+  if (denom > 0 && mesesContrato >= 1) {
     const refTotal = round2(denom * mesesContrato);
     if (Math.abs(T_raw - refTotal) < 0.05) {
       T = refTotal;
     }
   }
 
-  const sinSeleccion =
-    sel.length === 0 && !productoIncluido && G <= 0;
+  const sinSeleccion = sel.length === 0 && !productoIncluido;
   if (sinSeleccion) {
     return {
       importe: 0,
@@ -218,12 +218,9 @@ export function partesImporteOrdenVenta(
     };
   }
 
-  // G entra en numerador y denominador: si está incluido en la orden (G>0 en venta ajustada),
-  // al tener todo seleccionado num === denom e importe === T.
   const num =
     sumSel +
-    (productoIncluido ? precioProductoSeleccion : 0) +
-    G;
+    (productoIncluido ? precioProductoSeleccion : 0);
 
   let importe: number;
   let productoPart: number;
@@ -276,6 +273,8 @@ export function construirDetalleLineas(
   ventas: RegistroVenta[],
   seleccion: Map<string, string[]>,
   pantallas: Pantalla[],
+  mesOrden0: number,
+  añoOrden: number,
 ): DetalleLineaOrden[] {
   const precios = preciosPantallasMap(pantallas);
   const lineas: DetalleLineaOrden[] = [];
@@ -283,14 +282,19 @@ export function construirDetalleLineas(
   for (const v of ventas) {
     const sel = seleccion.get(String(v.id)) ?? [];
     const productoIncluido = Boolean(v.productoIncluidoEnOrden);
-    const gastosG = Math.max(0, Number(v.gastosAdicionales ?? 0) || 0);
-    if (sel.length === 0 && !productoIncluido && gastosG <= 0) continue;
+    if (sel.length === 0 && !productoIncluido) continue;
 
     const partes = partesImporteOrdenVenta(v, sel, precios);
-    const imp = Math.max(0, partes.importe);
+    const T = round2(Math.max(0, partes.totalContrato));
+    let imp = Math.max(0, partes.importe);
+    if (T > 0) {
+      const mesCompleto = importeVentaEnMesOrden(v, mesOrden0, añoOrden, T);
+      imp = round2((imp / T) * mesCompleto);
+    } else {
+      imp = round2(imp);
+    }
     const productoMensual = Number(v.productoPrecioMensual ?? 0) || 0;
     const baseMensual = Math.max(0, partes.basePantallasPart);
-    const gastosIncluidos = gastosG > 0;
     const fi = new Date(v.fechaInicio);
     const ff = new Date(v.fechaFin);
     const pantallasDetalleVenta = Array.isArray(v.pantallasDetalle)
@@ -328,8 +332,6 @@ export function construirDetalleLineas(
       producto_nombre: v.productoNombre ?? undefined,
       producto_precio_mensual: productoMensual,
       producto_incluido: productoIncluido,
-      gastos_adicionales: gastosIncluidos ? gastosG : 0,
-      gastos_incluidos_en_orden: gastosIncluidos,
       ...(typeof v.aplicarPorcentajeSocioEnOrden === "boolean"
         ? { aplicar_porcentaje_socio: v.aplicarPorcentajeSocioEnOrden }
         : {}),
@@ -347,9 +349,27 @@ export function construirDetalleLineas(
 export function totalesDesdeLineas(
   lineas: DetalleLineaOrden[],
   ivaPercentaje: number,
+  opts?: {
+    tipoComision?: string;
+    ventasPorId?: Map<string, RegistroVenta>;
+  },
 ): { subtotal: number; iva: number; total: number } {
+  const usarCosto = colaboradorUsaCostoComoBaseOrden(opts?.tipoComision);
+  const map = opts?.ventasPorId;
   const subtotal = round2(
-    lineas.reduce((s, l) => s + (Number(l.importe) || 0), 0),
+    lineas.reduce((s, l) => {
+      const imp = Number(l.importe) || 0;
+      if (!map) return s + imp;
+      const v = map.get(String(l.venta_id));
+      if (usarCosto) {
+        if (!v) return s + imp;
+        return s + costoVentaProporcionalImporte(v, imp);
+      }
+      const facturable = v
+        ? importeLineaOrdenTrasPorcentajeSocio(imp, v, opts?.tipoComision)
+        : imp;
+      return s + facturable;
+    }, 0),
   );
   const iva = round2(subtotal * (ivaPercentaje / 100));
   return { subtotal, iva, total: round2(subtotal + iva) };

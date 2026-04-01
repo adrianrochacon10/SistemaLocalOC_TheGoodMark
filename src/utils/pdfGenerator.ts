@@ -13,6 +13,13 @@ import {
   detallePrecioMensual,
   esLineaPrecioProductoEnDetalle,
 } from "./ordenApiMapper";
+import {
+  importeLineaRespectoOrden,
+  importeVentaEnMesOrden,
+  costoVentaProporcionalImporte,
+  colaboradorUsaCostoComoBaseOrden,
+  importeLineaOrdenTrasPorcentajeSocio,
+} from "./ordenUtils";
 
 const COL_BLUE: [number, number, number] = [23, 58, 95];
 const COL_GREY: [number, number, number] = [110, 110, 110];
@@ -248,7 +255,7 @@ function drawResumenFinanciero(
     { label: `I.V.A. (${pct}%)`, value: fmtMoney(iva) },
   ];
   const titleH = 7;
-  const totalBlockH = 9;
+  const totalBlockH = 11;
   const h = titleH + rows.length * lineH + totalBlockH + pad * 2;
   drawRoundedFrame(doc, x, y, w, h);
   doc.setFont("helvetica", "bold");
@@ -295,21 +302,6 @@ export async function exportarPDFOrden(
   const colab = colaboradores.find(
     (c) => String(c.id) === String(orden.colaboradorId),
   );
-  const porcentajeDescuento = Math.max(
-    0,
-    colab?.tipoComision === "porcentaje"
-      ? Number(colab?.porcentajeSocio ?? 0) || 0
-      : 0,
-  );
-  /** Por fila: solo si la venta trae `aplicarPorcentajeSocioEnOrden !== false` (false = no aplicar en PDF). */
-  const aplicaDescuentoFila = (v: RegistroVenta) =>
-    porcentajeDescuento > 0 &&
-    colab?.tipoComision === "porcentaje" &&
-    v.aplicarPorcentajeSocioEnOrden !== false;
-  const aplicarDescuentoFila = (monto: number, v: RegistroVenta) =>
-    aplicaDescuentoFila(v)
-      ? round2(Math.max(0, monto) * (1 - porcentajeDescuento / 100))
-      : round2(Math.max(0, monto));
   const fechaDoc = new Date().toLocaleDateString("es-MX");
   const mesFormatoRaw = new Date(
     orden.año ?? 0,
@@ -379,32 +371,24 @@ export async function exportarPDFOrden(
     0,
   );
 
-  const vendidosUnicos = [
-    ...new Set(
-      registros
-        .map((v) => String(v.vendidoA ?? "").trim())
-        .filter(Boolean),
-    ),
-  ];
-  const vendidoHeader =
-    vendidosUnicos.length === 0
-      ? "—"
-      : vendidosUnicos.length === 1
-        ? vendidosUnicos[0]!
-        : vendidosUnicos.join(", ");
-
   let inicioMin = new Date();
   let finMax = new Date(0);
+  const iniciosUnicos = new Set<string>();
   for (const v of registros) {
     const fi = new Date(v.fechaInicio);
     const ff = new Date(v.fechaFin);
     if (fi < inicioMin) inicioMin = fi;
     if (ff > finMax) finMax = ff;
+    if (!Number.isNaN(fi.getTime())) {
+      iniciosUnicos.add(fi.toLocaleDateString("es-MX"));
+    }
   }
   if (registros.length === 0) {
     inicioMin = new Date(orden.año ?? 0, orden.mes ?? 0, 1);
     finMax = inicioMin;
+    iniciosUnicos.add(inicioMin.toLocaleDateString("es-MX"));
   }
+  const mostrarInicioUnico = iniciosUnicos.size <= 1;
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -434,15 +418,22 @@ export async function exportarPDFOrden(
   const gap = 4;
   const boxW = (pageW - 2 * margin - gap) / 2;
 
-  const h1 = drawInfoBox(doc, margin, y, boxW, "INFORMACION DEL SERVICIO", [
-    {
+  const infoRows: { label: string; value: string }[] = [];
+  if (mostrarInicioUnico) {
+    infoRows.push({
       label: "Inicio",
       value: inicioMin.toLocaleDateString("es-MX"),
-    },
-    { label: "Periodo", value: mesFormato },
-    { label: "Vendido a", value: vendidoHeader },
-    { label: "Total de productos", value: String(numProductos) },
-  ]);
+    });
+  }
+  infoRows.push({ label: "Periodo", value: mesFormato });
+  const h1 = drawInfoBox(
+    doc,
+    margin,
+    y,
+    boxW,
+    "INFORMACION DEL SERVICIO",
+    infoRows,
+  );
 
   const pantallasBeneficio =
     numPantallas > 0
@@ -469,7 +460,8 @@ export async function exportarPDFOrden(
   /** Texto «Precio por mes» bajo columnas PAQUETE+PRECIO (índice fila body 0-based). */
   const precioPorMesByRow = new Map<number, string>();
 
-  let subtotalPdf = 0;
+  let sumLineasPdf = 0;
+  const numRegPdf = registros.length;
 
   const tableBody: string[][] = [];
   let idx = 0;
@@ -515,21 +507,19 @@ export async function exportarPDFOrden(
             const precioCat = Number(pMap.get(key)?.precio ?? 0) || 0;
             return { nombre, precio: precioCat };
           });
-    const pantallasConPrecio = pantallasConPrecioBase.length
-      ? pantallasConPrecioBase.map((p) => {
-          const precioFinal = aplicarDescuentoFila(p.precio, venta);
-          if (aplicaDescuentoFila(venta)) {
-            return `- ${p.nombre}: ${fmtMoney(p.precio)} -> ${fmtMoney(precioFinal)}`;
-          }
-          return `- ${p.nombre}: ${fmtMoney(p.precio)}`;
-        })
-      : ["- Sin pantallas"];
-    const titulo = "SERVICIO";
-    const paqueteTxt = paqueteDesdeVenta(venta);
-    const mesesContrato = Math.max(1, Math.floor(Number(venta.mesesRenta) || 1));
-    const paqueteEsPorDias = paqueteTxt.toLowerCase().includes("dia");
+    const titulo = "VENTA";
+    const paqueteOriginal = paqueteDesdeVenta(venta);
+    const paqueteEsPorDias = paqueteOriginal.toLowerCase().includes("dia");
+    const paqueteTxt = paqueteEsPorDias ? paqueteOriginal : "1 Mes";
     const fi = new Date(venta.fechaInicio).toLocaleDateString("es-MX");
     const ff = new Date(venta.fechaFin).toLocaleDateString("es-MX");
+    const pantallasSoloEtiquetas = pantallasConPrecioBase.length
+      ? pantallasConPrecioBase.map((p) =>
+          paqueteEsPorDias
+            ? `- ${p.nombre} (tarifa fija por días)`
+            : `- ${p.nombre}`,
+        )
+      : ["- Sin pantallas"];
     const prod = (venta.productoNombre ?? "").trim();
     const productosDetalleRaw = Array.isArray(venta.pantallasDetalle)
       ? venta.pantallasDetalle.filter((p: any) =>
@@ -559,80 +549,87 @@ export async function exportarPDFOrden(
       venta.productoIncluidoEnOrden === true ||
       (venta.productoIncluidoEnOrden !== false &&
         (precioProd > 0 || productosDetalle.length > 0));
-    const gastosMonto = round2(Number(venta.gastosAdicionales) || 0);
-    const gastosIncluidos =
-      venta.gastosIncluidosEnOrden === true ||
-      (venta.gastosIncluidosEnOrden !== false && gastosMonto > 0);
-    const precioPantallasBase = round2(
-      pantallasConPrecioBase.reduce((s, p) => s + (Number(p.precio) || 0), 0),
-    );
-    const precioProductosBase = round2(prodIncluido ? precioProd : 0);
-    const precioPantallasFinal = aplicarDescuentoFila(precioPantallasBase, venta);
-    const precioProductosFinal = aplicarDescuentoFila(
-      precioProductosBase,
-      venta,
-    );
-    const baseDescontableFinal = round2(precioPantallasFinal + precioProductosFinal);
-    const gastosFinal = gastosIncluidos ? gastosMonto : 0;
-    const precio = round2(baseDescontableFinal + gastosFinal);
-    const lineaPrecioPorMes =
-      mesesContrato > 1 && !paqueteEsPorDias
-        ? `Precio por mes: ${fmtMoney(round2(precio / mesesContrato))}`
-        : null;
+    const precioVentaLinea = (() => {
+      let pv = round2(importeLineaRespectoOrden(venta, orden, numRegPdf));
+      if (!(pv > 0)) {
+        const contrato =
+          Number(venta.precioTotalContrato ?? venta.precioTotal ?? venta.importeTotal) ||
+          0;
+        if (contrato > 0) {
+          pv = round2(
+            importeVentaEnMesOrden(
+              venta,
+              orden.mes ?? 0,
+              orden.año ?? new Date().getFullYear(),
+              contrato,
+            ),
+          );
+        } else {
+          pv = round2(precioLineaOrden(venta));
+        }
+      }
+      return pv;
+    })();
+    const usarCostoPdf = colaboradorUsaCostoComoBaseOrden(colab?.tipoComision);
+    const precioColumna = usarCostoPdf
+      ? round2(costoVentaProporcionalImporte(venta, precioVentaLinea))
+      : round2(
+          importeLineaOrdenTrasPorcentajeSocio(
+            precioVentaLinea,
+            venta,
+            colab?.tipoComision,
+          ),
+        );
+    const lineaPrecioPorMes = null;
     if (lineaPrecioPorMes) {
       precioPorMesByRow.set(idx - 1, lineaPrecioPorMes);
     }
-    const precioProdUnitFallback =
-      productosDetalle.length > 0
-        ? round2(precioProd / productosDetalle.length)
-        : round2(precioProd);
-    const productosConPrecio = productosDetalle.map((p) => ({
-      nombre: p.nombre,
-      precio:
-        typeof p.precio === "number" && Number.isFinite(p.precio)
-          ? Number(p.precio)
-          : precioProdUnitFallback,
-    }));
-    const lineaDescuento = aplicaDescuentoFila(venta)
-      ? `Descuento por porcentaje (${porcentajeDescuento.toFixed(2)}%) aplicado sobre productos y pantallas (gastos adicionales no incluidos)`
-      : null;
-    const lineaGastos =
-      gastosMonto > 0 && gastosIncluidos
-        ? `Gastos adicionales (incluidos en la orden): ${fmtMoney(gastosMonto)}`
-        : venta.gastosIncluidosEnOrden === false
-          ? "Gastos adicionales: no incluidos en esta orden"
-          : null;
+    const porcentajeColaboradorFila = Math.max(
+      0,
+      Number(venta.porcentajeSocio ?? 0) || 0,
+    );
+    const productosSoloNombres =
+      prodIncluido && productosDetalle.length > 0
+        ? [
+            `Producto(s) (${productosDetalle.length}):`,
+            ...productosDetalle.map((p) => `- ${p.nombre}`),
+          ]
+        : [];
+    const extraDesc: string[] = [];
+    if (colab?.tipoComision === "porcentaje" && porcentajeColaboradorFila > 0) {
+      extraDesc.push(
+        `Colaborador por porcentaje: ${porcentajeColaboradorFila.toFixed(2)}% sobre precio de venta del mes`,
+      );
+    }
+    if (usarCostoPdf && precioVentaLinea > 0) {
+      extraDesc.push(`Precio de venta del mes: ${fmtMoney(precioVentaLinea)}`);
+    } else if (
+      !usarCostoPdf &&
+      colab?.tipoComision === "porcentaje" &&
+      porcentajeColaboradorFila > 0 &&
+      venta.aplicarPorcentajeSocioEnOrden !== false &&
+      precioVentaLinea > 0 &&
+      Math.abs(precioColumna - precioVentaLinea) > 0.005
+    ) {
+      extraDesc.push(`Precio de venta del mes: ${fmtMoney(precioVentaLinea)}`);
+    }
     descByRow.set(idx - 1, {
       title: titulo,
       details: [
         `Vendido a: ${String(venta.vendidoA ?? "").trim() || "—"}`,
         `Pantallas (${ids.length}):`,
-        ...pantallasConPrecio,
-        ...(prodIncluido && productosDetalle.length > 0
-          ? [
-              `Producto(s) (${productosDetalle.length}):`,
-              ...productosConPrecio.map((p) => {
-                if (p.precio == null || !(p.precio > 0)) return `- ${p.nombre}`;
-                const bruto = p.precio;
-                const final = aplicarDescuentoFila(bruto, venta);
-                if (aplicaDescuentoFila(venta)) {
-                  return `- ${p.nombre}: ${fmtMoney(bruto)} -> ${fmtMoney(final)}`;
-                }
-                return `- ${p.nombre}: ${fmtMoney(bruto)}`;
-              }),
-            ]
-          : []),
-        ...(lineaDescuento ? [lineaDescuento] : []),
-        ...(lineaGastos ? [lineaGastos] : []),
+        ...pantallasSoloEtiquetas,
+        ...productosSoloNombres,
+        ...extraDesc,
         `Periodo: ${fi} - ${ff}`,
       ],
     });
-    subtotalPdf = round2(subtotalPdf + precio);
+    sumLineasPdf = round2(sumLineasPdf + precioColumna);
     tableBody.push([
       String(idx),
       " ",
       paqueteTxt,
-      fmtMoney(precio),
+      fmtMoney(precioColumna),
     ]);
   }
 
@@ -645,6 +642,7 @@ export async function exportarPDFOrden(
   }
 
   const pctIva = Number(orden.ivaPercentaje) || 16;
+  const subtotalPdf = round2(sumLineasPdf);
   const ivaPdf = round2(subtotalPdf * (pctIva / 100));
   const totalPdf = round2(subtotalPdf + ivaPdf);
 
@@ -652,7 +650,7 @@ export async function exportarPDFOrden(
 
   autoTable(doc, {
     startY: y,
-    head: [["#", "DESCRIPCION", "PAQUETE", "PRECIO"]],
+    head: [["#", "DESCRIPCION", "PAQUETE", "PRECIO/MES"]],
     body: tableBody,
     styles: {
       fontSize: 8,

@@ -7,21 +7,18 @@ interface EstadisticasVentasProps {
   ventasFiltradas: RegistroVenta[];
 }
 
-/** Ingreso/utilidad del contrato: total del periodo, no el precio mensual. */
-function importeContratoVenta(v: RegistroVenta): number {
-  const directo = Number(v.importeTotal ?? v.precioTotal ?? 0) || 0;
-  if (directo > 0) return directo;
-  const mensual = Number(v.precioGeneral ?? 0) || 0;
-  const meses = Math.max(1, Math.floor(Number(v.mesesRenta ?? 1) || 1));
-  return mensual * meses;
+function utilidadAceptada(v: RegistroVenta): number {
+  const u = v.utilidadNeta;
+  if (u != null && Number.isFinite(Number(u))) return Number(u);
+  return 0;
 }
 
 export const EstadisticasVentas: React.FC<EstadisticasVentasProps> = ({
   ventasFiltradas,
 }) => {
   const aceptadas = ventasFiltradas.filter((v) => v.estadoVenta === "Aceptado");
-  const ingresosAceptados = aceptadas.reduce(
-    (sum, v) => sum + importeContratoVenta(v),
+  const utilidadAceptadas = aceptadas.reduce(
+    (sum, v) => sum + utilidadAceptada(v),
     0,
   );
   const comisionesAceptadas = aceptadas.reduce(
@@ -36,10 +33,10 @@ export const EstadisticasVentas: React.FC<EstadisticasVentasProps> = ({
         <span className="stat-label">Ventas del mes</span>
       </div>
       <div className="stat-card">
-        <span className="stat-number">{formatearMoneda(ingresosAceptados)}</span>
+        <span className="stat-number">{formatearMoneda(utilidadAceptadas)}</span>
         <span className="stat-label">Utilidad neta</span>
         <span className="stat-hint">
-          Suma del importe total por venta (no solo el precio por periodo). Comisiones:{" "}
+          Suma de utilidad neta en ventas aceptadas. Comisiones:{" "}
           {formatearMoneda(comisionesAceptadas)}
         </span>
       </div>

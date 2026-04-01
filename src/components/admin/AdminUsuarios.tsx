@@ -167,6 +167,7 @@
 import React, { useEffect, useState } from "react";
 import { backendApi } from "../../lib/backendApi";
 import { InputField } from "../ui/InputField";
+import { SelectField } from "../ui/SelectField";
 import { BotonAccion } from "../ui/BotonAccion";
 import "./AdminUsuarios.css";
 
@@ -199,6 +200,10 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
   const [rolEdicion, setRolEdicion] = useState("vendedor");
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
+  const OPCIONES_ROL = [
+    { value: "vendedor", label: "Vendedor" },
+    { value: "admin", label: "Administrador" },
+  ];
 
   const cargarUsuarios = async () => {
     setCargando(true);
@@ -236,7 +241,7 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
         nombre: nombre.trim(),
         email: email.trim(),
         password: password.trim(),
-        rol: "vendedor",
+        rol: rolEdicion,
         creado_por: usuarioActualId,
       })) as UsuarioRow;
 
@@ -244,6 +249,7 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
       setNombre("");
       setEmail("");
       setPassword("");
+      setRolEdicion("vendedor");
       setExito("Usuario creado correctamente");
       setTimeout(() => setExito(null), 3000);
     } catch (e) {
@@ -351,7 +357,12 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
                 : "Contraseña inicial"
             }
           />
-          <InputField label="Rol" value="Vendedor" readOnly />
+          <SelectField
+            label="Rol"
+            value={rolEdicion}
+            onChange={(v: any) => setRolEdicion(String(v ?? "vendedor"))}
+            options={OPCIONES_ROL}
+          />
 
           {error && <div className="error-message">{error}</div>}
           {exito && <div className="success-message">{exito}</div>}

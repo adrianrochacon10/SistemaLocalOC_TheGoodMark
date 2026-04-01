@@ -39,6 +39,8 @@ export function useConfiguracion(profile: any, session: Session | null) {
             bancoTarjeta: data.banco_tarjeta ?? data.bancoTarjeta ?? undefined,
             bancoCuenta: data.banco_cuenta ?? data.bancoCuenta ?? undefined,
             bancoClabe: data.banco_clabe ?? data.bancoClabe ?? undefined,
+            diaCorteOrdenes:
+              Number(data.dia_corte_ordenes ?? data.diaCorteOrdenes ?? 20) || 20,
           });
         }
       } catch (e) {
@@ -97,6 +99,7 @@ export function useConfiguracion(profile: any, session: Session | null) {
         telefono: config.telefono ?? null,
         email: config.email ?? null,
         ivaPercentaje: config.ivaPercentaje,
+        diaCorteOrdenes: Number(config.diaCorteOrdenes ?? 20) || 20,
         activo: config.activo,
       });
       if (data?.id) setConfig((prev) => ({ ...prev, id: data.id }));

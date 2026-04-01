@@ -79,6 +79,12 @@ export const VentaDetalleModal: React.FC<Props> = ({
                 </span>
               </div>
               <div className="vd-dato">
+                <span className="vd-dato-label">Identificador</span>
+                <span className="vd-dato-valor">
+                  {venta.identificadorVenta?.trim() || "—"}
+                </span>
+              </div>
+              <div className="vd-dato">
                 <span className="vd-dato-label">Vendido a</span>
                 <span className="vd-dato-valor">
                   {venta.vendidoA && venta.vendidoA !== "-"
@@ -146,18 +152,15 @@ export const VentaDetalleModal: React.FC<Props> = ({
               {(() => {
                 const meses = venta.mesesRenta || 1;
                 const precioMes = Number(venta.precioGeneral ?? 0) || 0;
-                // Bruto del contrato: nunca usar importeTotal aquí (ese campo puede ser solo monto socio).
-                const totalBruto =
-                  Number(venta.precioTotal ?? 0) > 0
-                    ? Number(venta.precioTotal)
-                    : precioMes * meses;
+                // Total de venta: gastos adicionales se manejan aparte, no dentro de la venta.
+                const totalBruto = precioMes * meses;
 
                 const totalCostos = venta.costos ?? 0;
                 const totalComision = venta.comision ?? 0;
                 const totalPagoCons = venta.pagoConsiderar ?? 0;
                 const gastosAdic = Number(venta.gastosAdicionales ?? 0) || 0;
-                // % del socio solo sobre productos + pantallas (mismo criterio que al registrar).
-                const baseSocioSinGastos = Math.max(0, totalBruto - gastosAdic);
+                // % del socio sobre monto de venta.
+                const baseSocioSinGastos = Math.max(0, totalBruto);
 
                 const pctGuardado =
                   venta.porcentajeSocio != null &&
@@ -193,7 +196,10 @@ export const VentaDetalleModal: React.FC<Props> = ({
                   }
                 }
 
-                const montoSocioMes = meses > 0 ? totalMontoSocio / meses : 0;
+                const precioNetoPorMesTrasSocio =
+                  meses > 0
+                    ? Math.max(0, totalBruto - totalMontoSocio) / meses
+                    : 0;
 
                 const porcentajeSocio =
                   pctGuardado != null && Number.isFinite(pctGuardado)
@@ -204,9 +210,9 @@ export const VentaDetalleModal: React.FC<Props> = ({
                         )
                       : 0;
 
+                // Regla actual: costos se muestran por separado, no descuentan aquí.
                 const utilidad =
                   totalBruto -
-                  totalCostos -
                   totalComision -
                   totalPagoCons -
                   (esPorcentaje ? totalMontoSocio : 0);
@@ -246,16 +252,16 @@ export const VentaDetalleModal: React.FC<Props> = ({
 
                     {/* ── COSTOS ── */}
                     {totalCostos > 0 && (
-                      <div className="resumen-fin-bloque resumen-fin-bloque-negativo">
-                        <div className="resumen-fin-row resumen-fin-principal resumen-fin-negativo">
+                      <div className="resumen-fin-bloque">
+                        <div className="resumen-fin-row resumen-fin-principal">
                           <span>
                             Costos ({meses} {meses === 1 ? "mes" : "meses"})
                           </span>
-                          <span>− {fmt(totalCostos)}</span>
+                          <span>{fmt(totalCostos)}</span>
                         </div>
                         <div className="resumen-fin-row resumen-fin-sub">
                           <span>↳ Costo por mes</span>
-                          <span>− {fmt(totalCostos / meses)}</span>
+                          <span>{fmt(totalCostos / meses)}</span>
                         </div>
                       </div>
                     )}
@@ -291,10 +297,12 @@ export const VentaDetalleModal: React.FC<Props> = ({
                             <span>↳ Porcentaje</span>
                             <span>{porcentajeSocio}%</span>
                           </div>
-                          <div className="resumen-fin-row resumen-fin-sub">
-                            <span>↳ Monto socio por mes</span>
-                            <span>− {fmt(montoSocioMes)}</span>
-                          </div>
+                          {meses > 1 ? (
+                            <div className="resumen-fin-row resumen-fin-sub">
+                              <span>↳ Precio por mes con porcentaje</span>
+                              <span>{fmt(precioNetoPorMesTrasSocio)}</span>
+                            </div>
+                          ) : null}
                         </div>
                       )}
 

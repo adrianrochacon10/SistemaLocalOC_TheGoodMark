@@ -78,7 +78,72 @@ function boundsMesCalendario(anio, mes) {
  * Muchas rentas cruzan meses; la query anterior las excluía y no generaba órdenes.
  */
 function queryVentasSolapanMes(q, inicio, finStr) {
-  return q.lte("fecha_inicio", finStr).gte("fecha_fin", inicio);
+  return q
+    .lte("fecha_inicio", finStr)
+    .gte("fecha_fin", inicio)
+    .eq("estado_venta", "aceptado");
+}
+
+const DIA_CORTE_ORDEN_DEFAULT = 20;
+
+async function obtenerDiaCorteOrdenes() {
+  const { data, error } = await supabase
+    .from("configuracion")
+    .select("dia_corte_ordenes")
+    .limit(1)
+    .maybeSingle();
+  if (error) return DIA_CORTE_ORDEN_DEFAULT;
+  const raw = Number(data?.dia_corte_ordenes);
+  if (!Number.isFinite(raw)) return DIA_CORTE_ORDEN_DEFAULT;
+  return Math.min(31, Math.max(1, Math.floor(raw)));
+}
+
+/** YYYY-MM-DD desde fila venta */
+function ymdInicioVenta(venta) {
+  const s = String(venta?.fecha_inicio ?? venta?.fechaInicio ?? "").slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return { y: Number(m[1]), mo: Number(m[2]), d: Number(m[3]) };
+}
+
+/**
+ * Primer día en que la venta cuenta para órdenes de compra:
+ * si día(fecha_inicio) > dia_corte → 1 del mes siguiente; si no → 1 del mismo mes.
+ * Ej.: corte 29, inicio 30-mar → inicio efectivo 1-abr (no entra en OC de marzo).
+ */
+function inicioEfectivoOrdenesVenta(venta, diaCorte) {
+  const p = ymdInicioVenta(venta);
+  if (!p) return null;
+  const { y, mo, d } = p;
+  if (d > diaCorte) {
+    return new Date(y, mo, 1);
+  }
+  return new Date(y, mo - 1, 1);
+}
+
+function ymdFinVenta(venta) {
+  return String(venta?.fecha_fin ?? venta?.fechaFin ?? "").slice(0, 10);
+}
+
+/** Solapa el mes calendario (mes 1–12) considerando inicio efectivo por corte. */
+function ventaIncluidaEnMesOrden(venta, mes1a12, anio, diaCorte) {
+  const eff = inicioEfectivoOrdenesVenta(venta, diaCorte);
+  if (!eff || Number.isNaN(eff.getTime())) return false;
+  const finS = ymdFinVenta(venta);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(finS)) return false;
+  const { inicio, finStr } = boundsMesCalendario(anio, mes1a12);
+  const ms = new Date(`${inicio}T12:00:00`);
+  const me = new Date(`${finStr}T12:00:00`);
+  const feff = new Date(
+    eff.getFullYear(),
+    eff.getMonth(),
+    eff.getDate(),
+    12,
+    0,
+    0,
+  );
+  const ffin = new Date(`${finS}T12:00:00`);
+  return feff <= me && ffin >= ms;
 }
 
 /** Prorratea precio_total por días que caen dentro del mes vs duración total de la venta. */
@@ -98,6 +163,87 @@ function importeVentaEnMes(venta, inicioMes, finMes) {
   const diasTotal = Math.max(1, Math.round((vf - vi) / day) + 1);
   const diasOverlap = Math.max(0, Math.round((end - start) / day) + 1);
   return round2((pt * diasOverlap) / diasTotal);
+}
+
+function costoVentaEnMes(venta, inicioMes, finMes) {
+  const cv = Number(venta.costo_venta ?? venta.costos ?? 0) || 0;
+  const s = String(venta.fecha_inicio).slice(0, 10);
+  const e = String(venta.fecha_fin).slice(0, 10);
+  if (!s || !e) return round2(cv);
+  if (!(cv > 0)) return 0;
+  const vi = new Date(`${s}T12:00:00`);
+  const vf = new Date(`${e}T12:00:00`);
+  const ms = new Date(`${inicioMes}T12:00:00`);
+  const me = new Date(`${finMes}T12:00:00`);
+  const start = vi > ms ? vi : ms;
+  const end = vf < me ? vf : me;
+  if (start > end) return 0;
+  const day = 86400000;
+  const diasTotal = Math.max(1, Math.round((vf - vi) / day) + 1);
+  const diasOverlap = Math.max(0, Math.round((end - start) / day) + 1);
+  return round2((cv * diasOverlap) / diasTotal);
+}
+
+function colaboradorUsaCostoEnOrden(row) {
+  if (!row) return false;
+  const tc = String(row.tipo_comision ?? "").toLowerCase();
+  if (tc === "consideracion" || tc === "precio_fijo") return true;
+  const nom = String(row.tipo_pago?.nombre ?? "").toLowerCase();
+  return (
+    nom.includes("consideracion") ||
+    nom.includes("precio fijo") ||
+    nom.includes("precio_fijo")
+  );
+}
+
+function colaboradorEsTipoPorcentaje(row) {
+  if (!row) return false;
+  const tc = String(row.tipo_comision ?? "").toLowerCase();
+  if (tc === "porcentaje") return true;
+  const nom = String(row.tipo_pago?.nombre ?? "").toLowerCase();
+  return nom.includes("porcentaje");
+}
+
+/**
+ * Importe de línea o mes en OC: colaborador por % descuenta `porcentaje_socio` del bruto.
+ * `aplicarPorcentajeEnLinea === false` (detalle_lineas) no aplica el descuento.
+ */
+function importeTrasPorcentajeSocio(venta, importeBruto, colabRow, aplicarPorcentajeEnLinea) {
+  const bruto = round2(Number(importeBruto) || 0);
+  if (!(bruto > 0)) return bruto;
+  if (colaboradorUsaCostoEnOrden(colabRow)) return bruto;
+  if (!colaboradorEsTipoPorcentaje(colabRow)) return bruto;
+  if (aplicarPorcentajeEnLinea === false) return bruto;
+  const pct = Number(venta?.porcentaje_socio ?? 0) || 0;
+  if (!(pct > 0)) return bruto;
+  return round2(bruto * (1 - Math.min(100, pct) / 100));
+}
+
+function costoProporcionalImporteVenta(venta, importeLinea) {
+  const cv = Number(venta?.costo_venta ?? venta?.costos ?? 0) || 0;
+  if (cv <= 0 || importeLinea <= 0) return 0;
+  const ref = Number(venta?.precio_total ?? 0) || 0;
+  if (!(ref > 0)) return round2(cv);
+  return round2((cv * importeLinea) / ref);
+}
+
+async function subtotalGrupoOrden(colaboradorId, groupVentas, inicio, finStr) {
+  const { data: c } = await supabase
+    .from("colaboradores")
+    .select("tipo_comision, tipo_pago:tipo_pago(nombre)")
+    .eq("id", colaboradorId)
+    .maybeSingle();
+  if (colaboradorUsaCostoEnOrden(c)) {
+    return round2(
+      groupVentas.reduce((sum, v) => sum + costoVentaEnMes(v, inicio, finStr), 0),
+    );
+  }
+  return round2(
+    groupVentas.reduce((sum, v) => {
+      const im = importeVentaEnMes(v, inicio, finStr);
+      return sum + importeTrasPorcentajeSocio(v, im, c, undefined);
+    }, 0),
+  );
 }
 
 export async function listar(mes, anio) {
@@ -127,7 +273,9 @@ export async function listarVentasPorMes(mes, anio) {
   q = queryVentasSolapanMes(q, inicio, finStr);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return data ?? [];
+  const diaCorte = await obtenerDiaCorteOrdenes();
+  const list = data ?? [];
+  return list.filter((v) => ventaIncluidaEnMesOrden(v, m, a, diaCorte));
 }
 
 export async function generarOrden(mes, anio, userId) {
@@ -139,17 +287,22 @@ export async function generarOrden(mes, anio, userId) {
 
   let vq = supabase
     .from("ventas")
-    .select("id,colaborador_id,precio_total,fecha_inicio,fecha_fin");
+    .select(
+      "id,colaborador_id,precio_total,costo_venta,costos,fecha_inicio,fecha_fin,porcentaje_socio",
+    );
   vq = queryVentasSolapanMes(vq, inicio, finStr);
   const { data: ventas, error: errVentas } = await vq;
 
   if (errVentas) throw new Error(errVentas.message);
-  const ventasList = ventas ?? [];
-  if (ventasList.length === 0) return { ordenes: [] };
+  const diaCorte = await obtenerDiaCorteOrdenes();
+  const ventasPeriodo = (ventas ?? []).filter((v) =>
+    ventaIncluidaEnMesOrden(v, m, a, diaCorte),
+  );
+  if (ventasPeriodo.length === 0) return { ordenes: [] };
 
   // Agrupar ventas por colaborador (Orden de compra por colaborador y mes/año)
   const grupos = new Map();
-  for (const v of ventasList) {
+  for (const v of ventasPeriodo) {
     const key = v.colaborador_id;
     if (!key) continue;
     if (!grupos.has(key)) grupos.set(key, []);
@@ -159,11 +312,12 @@ export async function generarOrden(mes, anio, userId) {
   const ordenesActualizadas = [];
   for (const [colaboradorId, groupVentas] of grupos.entries()) {
     const ventasIds = groupVentas.map((v) => v.id);
-    const subtotalRaw = groupVentas.reduce(
-      (sum, v) => sum + importeVentaEnMes(v, inicio, finStr),
-      0,
+    const subtotal = await subtotalGrupoOrden(
+      colaboradorId,
+      groupVentas,
+      inicio,
+      finStr,
     );
-    const subtotal = round2(subtotalRaw);
     const iva = round2(subtotal * IVA_RATE);
     const total = round2(subtotal + iva);
 
@@ -234,14 +388,19 @@ export async function generarOrdenColaborador(mes, anio, colaborador_id, userId)
 
   let vq = supabase
     .from("ventas")
-    .select("id,colaborador_id,precio_total,fecha_inicio,fecha_fin")
+    .select(
+      "id,colaborador_id,precio_total,costo_venta,costos,fecha_inicio,fecha_fin,porcentaje_socio",
+    )
     .eq("colaborador_id", cid);
   vq = queryVentasSolapanMes(vq, inicio, finStr);
   const { data: ventasRows, error: errVentas } = await vq;
 
   if (errVentas) throw new Error(errVentas.message);
-  const groupVentas = ventasRows ?? [];
-  if (groupVentas.length === 0) return { ordenes: [], sinVentas: true };
+  const diaCorte = await obtenerDiaCorteOrdenes();
+  const groupVentasPeriodo = (ventasRows ?? []).filter((v) =>
+    ventaIncluidaEnMesOrden(v, m, a, diaCorte),
+  );
+  if (groupVentasPeriodo.length === 0) return { ordenes: [], sinVentas: true };
 
   const { data: yaHayOrdenes } = await supabase
     .from("orden_de_compra")
@@ -253,12 +412,13 @@ export async function generarOrdenColaborador(mes, anio, colaborador_id, userId)
 
   if (yaHayOrdenes?.length) return { ordenes: [], skipped: true };
 
-  const ventasIds = groupVentas.map((v) => v.id);
-  const subtotalRaw = groupVentas.reduce(
-    (sum, v) => sum + importeVentaEnMes(v, inicio, finStr),
-    0,
+  const ventasIds = groupVentasPeriodo.map((v) => v.id);
+  const subtotal = await subtotalGrupoOrden(
+    cid,
+    groupVentasPeriodo,
+    inicio,
+    finStr,
   );
-  const subtotal = round2(subtotalRaw);
   const iva = round2(subtotal * IVA_RATE);
   const total = round2(subtotal + iva);
 
@@ -326,9 +486,6 @@ export async function crearManual({
     : [];
   if (ventasIds.length === 0) return { error: "Selecciona al menos una venta o pantalla" };
 
-  const sub = round2(subtotal);
-  const iv = round2(iva);
-  const tot = round2(total);
   const ivaPct =
     iva_porcentaje != null && !Number.isNaN(Number(iva_porcentaje))
       ? round2(Number(iva_porcentaje))
@@ -336,7 +493,9 @@ export async function crearManual({
 
   const { data: ventasRows, error: errV } = await supabase
     .from("ventas")
-    .select("id,colaborador_id")
+    .select(
+      "id,colaborador_id,estado_venta,precio_total,costo_venta,costos,porcentaje_socio",
+    )
     .in("id", ventasIds);
   if (errV) throw new Error(errV.message);
   const list = ventasRows ?? [];
@@ -345,16 +504,45 @@ export async function crearManual({
     if (String(v.colaborador_id) !== String(cid)) {
       return { error: "Todas las ventas deben pertenecer al colaborador seleccionado" };
     }
+    if (String(v.estado_venta ?? "").toLowerCase() !== "aceptado") {
+      return { error: "Solo se pueden crear órdenes con ventas en estado Aceptado" };
+    }
   }
+
+  const { data: colabOrdenRow } = await supabase
+    .from("colaboradores")
+    .select("tipo_comision, tipo_pago:tipo_pago(nombre)")
+    .eq("id", cid)
+    .maybeSingle();
+
+  let subRecalc = round2(subtotal);
+  if (Array.isArray(detalle_lineas) && detalle_lineas.length > 0) {
+    const usarCosto = colaboradorUsaCostoEnOrden(colabOrdenRow);
+    let sumB = 0;
+    for (const line of detalle_lineas) {
+      const wid = String(line.venta_id ?? "");
+      const ventaRow = list.find((x) => String(x.id) === wid);
+      const imp = Number(line.importe) || 0;
+      const aplicarPct = line.aplicar_porcentaje_socio;
+      sumB += usarCosto
+        ? costoProporcionalImporteVenta(ventaRow, imp)
+        : importeTrasPorcentajeSocio(ventaRow, imp, colabOrdenRow, aplicarPct);
+    }
+    subRecalc = round2(sumB);
+  }
+  const ivRecalc = round2(
+    subRecalc * (ivaPct != null ? ivaPct / 100 : IVA_RATE),
+  );
+  const totRecalc = round2(subRecalc + ivRecalc);
 
   const payload = {
     colaborador_id: cid,
     mes: m,
     anio: a,
     ventas_ids: ventasIds,
-    subtotal: sub,
-    iva: iv,
-    total: tot,
+    subtotal: subRecalc,
+    iva: ivRecalc,
+    total: totRecalc,
     ...(genPor ? { generado_por: genPor } : {}),
   };
   if (Array.isArray(detalle_lineas) && detalle_lineas.length > 0) {

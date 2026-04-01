@@ -30,6 +30,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/tipo-pago", tipoPagoRoutes);
+app.use("/api/tipos-pago", tipoPagoRoutes); // compatibilidad con clientes antiguos
 app.use("/api/colaboradores", colaboradoresRoutes);
 app.use("/api/ventas", ventasRoutes);
 app.use("/api/pantallas", pantallasRoutes);

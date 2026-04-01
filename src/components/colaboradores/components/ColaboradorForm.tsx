@@ -68,7 +68,7 @@ export const ColaboradorForm: React.FC<Props> = ({
         <h4>Datos del Colaborador</h4>
 
         <div className="form-group">
-          <label>Nombre del Colaborador *</label>
+          <label>Nombre del Colaborador</label>
           <input
             type="text"
             value={nombre}
