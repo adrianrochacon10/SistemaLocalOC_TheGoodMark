@@ -36,7 +36,7 @@ export function ordenApareceEnMesVista(
 }
 
 /* ------------------------------------------------------------------ */
-/*  1️⃣  Asignación de mes (misma lógica que ya tenías)               */
+/*  1️⃣  Asignación de mes (corte sobre día de fechaInicio, = backend) */
 /* ------------------------------------------------------------------ */
 export type AsignacionOrden = "actual" | "siguiente" | "otro_mes";
 
@@ -46,31 +46,19 @@ export function asignarOrdenMes(
   añoOrden: number,
   diaCorte: number = 5,
 ): AsignacionOrden {
-  // Aseguramos que trabajemos con objetos Date (las APIs a veces devuelven strings)
-  const fechaInicio = new Date(venta.fechaInicio);
-  const fechaRegistro = new Date(venta.fechaRegistro);
-  const fechaFin = new Date(venta.fechaFin);
-
-  const fechaCorte = new Date(añoOrden, mesOrden, diaCorte, 0, 0, 0);
-
-  const iniciaEnMes =
-    fechaInicio.getMonth() === mesOrden &&
-    fechaInicio.getFullYear() === añoOrden;
-
-  const mesSig = new Date(añoOrden, mesOrden + 1, 1);
-  const iniciaEnMesSiguiente =
-    fechaInicio.getMonth() === mesSig.getMonth() &&
-    fechaInicio.getFullYear() === mesSig.getFullYear();
-
-  if (iniciaEnMes) return fechaRegistro < fechaCorte ? "actual" : "siguiente";
-  if (iniciaEnMesSiguiente)
-    return fechaRegistro < fechaCorte ? "actual" : "otro_mes";
-
+  if (ventaIncluidaEnMesOrdenConCorte(venta, mesOrden, añoOrden, diaCorte)) {
+    return "actual";
+  }
+  const mesSig0 = mesOrden === 11 ? 0 : mesOrden + 1;
+  const añoSig = mesOrden === 11 ? añoOrden + 1 : añoOrden;
+  if (ventaIncluidaEnMesOrdenConCorte(venta, mesSig0, añoSig, diaCorte)) {
+    return "siguiente";
+  }
   return "otro_mes";
 }
 
 /* ------------------------------------------------------------------ */
-/*  2️⃣  Obtener las ventas que pertenecen a un mes (con corte)       */
+/*  2️⃣  Ventas que entran en OC del mes (misma regla que backend)     */
 /* ------------------------------------------------------------------ */
 export function obtenerRegistrosDelMes(
   ventas: RegistroVenta[],
@@ -78,24 +66,9 @@ export function obtenerRegistrosDelMes(
   año: number,
   diaCorte: number = 5,
 ): RegistroVenta[] {
-  return ventas.filter((v) => {
-    const fechaInicio = new Date(v.fechaInicio);
-    const fechaRegistro = new Date(v.fechaRegistro);
-    const fechaFin = new Date(v.fechaFin);
-
-    const inicioEnMes =
-      fechaInicio.getMonth() === mes && fechaInicio.getFullYear() === año;
-    const mesSig = new Date(año, mes + 1, 1);
-    const iniciaEnMesSiguiente =
-      fechaInicio.getMonth() === mesSig.getMonth() &&
-      fechaInicio.getFullYear() === mesSig.getFullYear();
-
-    const fechaCorte = new Date(año, mes, diaCorte, 0, 0, 0);
-
-    if (inicioEnMes) return fechaRegistro < fechaCorte;
-    if (iniciaEnMesSiguiente) return fechaRegistro < fechaCorte;
-    return false;
-  });
+  return ventas.filter((v) =>
+    ventaIncluidaEnMesOrdenConCorte(v, mes, año, diaCorte),
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -230,6 +203,9 @@ function round2Orden(n: number): number {
   return Math.round(Number(n) * 100) / 100;
 }
 
+const DIA_CORTE_ORDEN = 20;
+const EPS_IMP_ORDEN = 0.05;
+
 function ymdVenta(d: Date): string {
   const x = d instanceof Date ? d : new Date(d);
   if (Number.isNaN(x.getTime())) return "";
@@ -280,7 +256,75 @@ export function importeVentaEnMesOrden(
   return round2Orden((pt * diasOverlap) / diasTotal);
 }
 
-const EPS_IMP_ORDEN = 0.05;
+/** Meses de duración del contrato (`mesesRenta` o diferencia inicio–fin). */
+export function mesesContratoVentaOrden(v: RegistroVenta): number {
+  const mr = Number(v.mesesRenta);
+  if (Number.isFinite(mr) && mr > 0) return Math.max(1, Math.floor(mr));
+  const fi = new Date(v.fechaInicio);
+  const ff = new Date(v.fechaFin);
+  if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return 1;
+  const n =
+    (ff.getFullYear() - fi.getFullYear()) * 12 +
+    (ff.getMonth() - fi.getMonth());
+  return Math.max(1, n);
+}
+
+/**
+ * Consideración / precio fijo: cuota mensual de costo = costo total ÷ meses de contrato,
+ * solo si la venta cuenta en el mes de la OC (corte sobre día de `fechaInicio`).
+ */
+export function costoVentaCuotaMensualConsideracionPrecioFijo(
+  v: RegistroVenta,
+  mes0: number,
+  año: number,
+  diaCorte: number = DIA_CORTE_ORDEN,
+): number {
+  const cv = round2Orden(Number(v.costoVenta ?? v.costos ?? 0) || 0);
+  if (!(cv > 0)) return 0;
+  if (!ventaIncluidaEnMesOrdenConCorte(v, mes0, año, diaCorte)) return 0;
+  const meses = mesesContratoVentaOrden(v);
+  return round2Orden(cv / meses);
+}
+
+/**
+ * Costo de la línea en OC: cuota mensual × (importe línea / importe de la venta en ese mes),
+ * para subselección de pantallas o producto.
+ */
+export function costoLineaOrdenConsideracionPrecioFijo(
+  v: RegistroVenta,
+  mes0: number,
+  año: number,
+  importeLineaVentaMes: number,
+  diaCorte: number = DIA_CORTE_ORDEN,
+): number {
+  const cuota = costoVentaCuotaMensualConsideracionPrecioFijo(
+    v,
+    mes0,
+    año,
+    diaCorte,
+  );
+  if (!(cuota > 0)) return 0;
+  const imp = round2Orden(Number(importeLineaVentaMes) || 0);
+  if (!(imp > 0)) return 0;
+  const contrato = round2Orden(
+    Number(v.precioTotalContrato ?? 0) > 0
+      ? Number(v.precioTotalContrato)
+      : Number(v.precioTotal ?? v.importeTotal ?? 0) || 0,
+  );
+  const ventaMesFull = importeVentaEnMesOrden(
+    v,
+    mes0,
+    año,
+    contrato > 0 ? contrato : undefined,
+  );
+  if (!(ventaMesFull > 0.01)) {
+    return cuota;
+  }
+  if (Math.abs(imp - ventaMesFull) < EPS_IMP_ORDEN) {
+    return cuota;
+  }
+  return round2Orden((cuota * imp) / ventaMesFull);
+}
 
 /**
  * Importe de línea en OC/PDF: **mes de la orden** (prorrateo por días en ese mes).
@@ -315,17 +359,41 @@ export function importeLineaRespectoOrden(
     return mesCompleto;
   }
 
-  if (numLineas === 1 && sub > 0) return sub;
+  if (_numLineas === 1 && sub > 0) return sub;
   if (imp > 0) return imp;
   return importeVentaEnMesOrden(v, mes0, año, undefined);
 }
 
-/** Precio fijo / consideración: la OC factura sobre costo; porcentaje (y resto): sobre precio de venta. */
+/**
+ * Consideración / precio fijo: OC sobre costo de venta.
+ * Por porcentaje: sobre precio de venta (neto tras %).
+ * Si `tipoComision` no viene, se infiere por nombre de `tipo_pago` (como en backend).
+ */
 export function colaboradorUsaCostoComoBaseOrden(
   tipoComision?: string,
+  tipoPagoNombre?: string,
 ): boolean {
   const t = String(tipoComision ?? "").toLowerCase();
-  return t === "consideracion" || t === "precio_fijo";
+  if (t === "porcentaje") return false;
+  if (t === "consideracion" || t === "precio_fijo") return true;
+  const nom = String(tipoPagoNombre ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (!nom) return false;
+  if (nom.includes("porcentaje")) return false;
+  if (
+    nom.includes("consideracion") ||
+    nom.includes("consideración")
+  )
+    return true;
+  if (
+    nom.includes("precio fijo") ||
+    nom.includes("precio_fijo") ||
+    nom.includes("pago fijo")
+  )
+    return true;
+  return false;
 }
 
 /**
@@ -365,8 +433,6 @@ export function costoVentaProporcionalImporte(
   if (ref <= 0) return cv;
   return round2Orden((cv * importeLinea) / ref);
 }
-
-const DIA_CORTE_ORDEN = 20;
 
 function fechaValidaOr(v: any, fallback: Date): Date {
   const d = new Date(v);

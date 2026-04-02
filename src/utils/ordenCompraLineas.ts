@@ -6,6 +6,7 @@ import {
 } from "./ordenApiMapper";
 import {
   colaboradorUsaCostoComoBaseOrden,
+  costoLineaOrdenConsideracionPrecioFijo,
   costoVentaProporcionalImporte,
   importeLineaOrdenTrasPorcentajeSocio,
   importeVentaEnMesOrden,
@@ -351,11 +352,22 @@ export function totalesDesdeLineas(
   ivaPercentaje: number,
   opts?: {
     tipoComision?: string;
+    tipoPagoNombre?: string;
+    /** Mes de la orden 0–11 (requerido con año y corte para costo consideración/precio fijo). */
+    mesOrden0?: number;
+    añoOrden?: number;
+    diaCorteOrdenes?: number;
     ventasPorId?: Map<string, RegistroVenta>;
   },
 ): { subtotal: number; iva: number; total: number } {
-  const usarCosto = colaboradorUsaCostoComoBaseOrden(opts?.tipoComision);
+  const usarCosto = colaboradorUsaCostoComoBaseOrden(
+    opts?.tipoComision,
+    opts?.tipoPagoNombre,
+  );
   const map = opts?.ventasPorId;
+  const mes0 = opts?.mesOrden0;
+  const añoOrd = opts?.añoOrden;
+  const diaCorte = Number(opts?.diaCorteOrdenes ?? 20) || 20;
   const subtotal = round2(
     lineas.reduce((s, l) => {
       const imp = Number(l.importe) || 0;
@@ -363,6 +375,18 @@ export function totalesDesdeLineas(
       const v = map.get(String(l.venta_id));
       if (usarCosto) {
         if (!v) return s + imp;
+        if (mes0 != null && añoOrd != null) {
+          return (
+            s +
+            costoLineaOrdenConsideracionPrecioFijo(
+              v,
+              mes0,
+              añoOrd,
+              imp,
+              diaCorte,
+            )
+          );
+        }
         return s + costoVentaProporcionalImporte(v, imp);
       }
       const facturable = v

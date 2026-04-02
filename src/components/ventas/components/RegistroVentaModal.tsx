@@ -12,6 +12,7 @@ import {
   AsignacionProductoExtra,
 } from "../../../types";
 import { calcularFechaFinDuracion, stringAFecha } from "../../../utils/formateoFecha";
+import { parseIndiceGastoAdicionalDesdeNotas } from "../../../utils/utilidadVenta";
 import {
   PREFIJO_LINEA_PRODUCTO,
   detallePantallaId,
@@ -24,10 +25,39 @@ import { InputField } from "../../ui/InputField";
 import { ResumenVenta } from "./ResumenVenta";
 import { BotonAccion } from "../../ui/BotonAccion";
 
-/** Costo en BD coincide con lo capturado (el % del socio no se resta del costo). */
+/** Costo tal como lo debe ver el usuario: si en BD quedó neto de consideración, se reconstruye el bruto. */
 function costoBrutoParaFormulario(venta: RegistroVenta | null): number {
   if (!venta) return 0;
-  return Number(venta.costoVenta ?? venta.costos ?? 0);
+  const neto = Number(venta.costoVenta ?? venta.costos ?? 0) || 0;
+  const cons =
+    Number(venta.consideracionMonto ?? venta.pagoConsiderar ?? 0) || 0;
+  if (cons > 0 && neto >= 0) {
+    return Math.round((neto + cons) * 100) / 100;
+  }
+  return neto;
+}
+
+function inferirDuracionUnidad(venta: RegistroVenta | null): "meses" | "dias" {
+  if (!venta?.fechaInicio || !venta?.fechaFin) return "meses";
+  const fi = new Date(venta.fechaInicio);
+  const ff = new Date(venta.fechaFin);
+  if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return "meses";
+  const dias = Math.max(
+    1,
+    Math.round((ff.getTime() - fi.getTime()) / 86400000) + 1,
+  );
+  const mr = Math.max(1, Number(venta.mesesRenta) || 1);
+  const tarifasDias = [1, 3, 7, 15];
+  if (tarifasDias.includes(mr) && dias === mr) return "dias";
+  return "meses";
+}
+
+function limpiarLineaGastoEnNotas(s: string): string {
+  return String(s)
+    .replace(/\(\s*Gasto adicional aplicado al mes \d+:\s*[\d.]+\s*\)/gi, "")
+    .replace(/\(\s*Gasto adicional aplicado al día \d+:\s*[\d.]+\s*\)/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 interface RegistroVentaModalProps {
@@ -78,7 +108,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const [mesesRenta, setMesesRenta] = useState<number>(
     ventaInicial?.mesesRenta ?? 1,
   );
-  const [duracionUnidad, setDuracionUnidad] = useState<"meses" | "dias">("meses");
+  const [duracionUnidad, setDuracionUnidad] = useState<"meses" | "dias">(() =>
+    inferirDuracionUnidad(ventaInicial),
+  );
   const [vendidoA, setVendidoA] = useState<string>(
     ventaInicial?.vendidoA ?? "",
   );
@@ -163,8 +195,16 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const [gastosAdicionales, setGastosAdicionales] = useState<number>(
     ventaInicial?.gastosAdicionales ?? 0,
   );
-  const [mesGastoAdicional, setMesGastoAdicional] = useState<number>(1);
-  const [pagoConsiderar, setPagoConsiderar] = useState<number>(0);
+  const [mesGastoAdicional, setMesGastoAdicional] = useState<number>(() => {
+    const p = parseIndiceGastoAdicionalDesdeNotas(ventaInicial?.notas);
+    const contratoEnDias = inferirDuracionUnidad(ventaInicial) === "dias";
+    if (p && p.enDias === contratoEnDias) return p.indice;
+    return 1;
+  });
+  const [pagoConsiderar, setPagoConsiderar] = useState<number>(() =>
+    Number(ventaInicial?.consideracionMonto ?? ventaInicial?.pagoConsiderar ?? 0) ||
+      0,
+  );
   const [notas, setNotas] = useState<string>(ventaInicial?.notas ?? "");
   const [fuenteOrigen, setFuenteOrigen] = useState<string>(
     ventaInicial?.fuenteOrigen ?? "",
@@ -251,6 +291,8 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
 
   // ── Derivados ─────────────────────────────────────────────────────────
   const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId);
+  /** Clave estable para detectar cambios de líneas (pantallas / productos) sin re-render espurio. */
+  const lineasPrecioKey = `${[...pantallasSeleccionadas].sort().join("\0")}\0${[...productosSeleccionados].sort().join("\0")}`;
 
   const opcionesClientes = clientes
     .map((c) => ({
@@ -454,7 +496,8 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       (Number(precioVentaPantallaMap[String(p.id)] ?? p.precio ?? 0) || 0),
     0,
   );
-  const precioMensualAuto = Math.round(
+  /** Precio mensual automático = Σ precios pantallas seleccionadas + Σ precios productos seleccionados. */
+  const precioMensualSumaItems = Math.round(
     (Number(precioPantallasSeleccionadas || 0) +
       Number(precioProductosSeleccionados || 0)) *
       100,
@@ -462,11 +505,24 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const precioMensualFinal =
     precioMensualManual != null
       ? Math.max(0, Number(precioMensualManual || 0))
-      : precioMensualAuto;
+      : precioMensualSumaItems;
+  /** `??` no sustituye el 0: si el manual queda en 0 (p. ej. campo vacío), el auto dejaba de aplicarse. */
+  const tarifaDiasCatalogo = Number(
+    TARIFAS_DIAS[Number(mesesRenta)] ?? TARIFAS_DIAS[1] ?? 0,
+  );
   const precioBasePorDuracion =
     duracionUnidad === "dias"
-      ? Number(precioTotalManual ?? precioMensualFinal ?? TARIFAS_DIAS[Number(mesesRenta)] ?? TARIFAS_DIAS[1])
-      : Number(precioTotalManual ?? (precioMensualFinal * Math.max(1, mesesRenta)));
+      ? precioTotalManual != null
+        ? Number(precioTotalManual)
+        : Number(
+            precioMensualFinal > 0 ? precioMensualFinal : tarifaDiasCatalogo,
+          )
+      : precioTotalManual != null
+        ? Number(precioTotalManual)
+        : // Contrato por meses: total = precio mensual (ítems o manual) × meses
+          Math.round(
+            Number(precioMensualFinal) * Math.max(1, mesesRenta) * 100,
+          ) / 100;
   // Gastos adicionales son informativos/aparte: NO se integran al total de venta.
   const precioTotalCalculado = Math.round(precioBasePorDuracion * 100) / 100;
   const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
@@ -496,6 +552,21 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       costosTotales - (tieneConsideracion ? consideracionTotal : 0),
     ) * 100,
   ) / 100;
+
+  /** Al cambiar pantallas o productos, volver al precio calculado desde ítems (no dejar bloqueado un manual viejo). */
+  useEffect(() => {
+    setPrecioTotalManual(null);
+    setPrecioMensualManual(null);
+  }, [lineasPrecioKey]);
+
+  /** Si el usuario fijó el precio por mes, al cambiar la duración en meses se actualiza el total (mes × meses). */
+  useEffect(() => {
+    if (duracionUnidad !== "meses") return;
+    if (precioMensualManual == null) return;
+    const next =
+      Math.round(precioMensualManual * Math.max(1, mesesRenta) * 100) / 100;
+    setPrecioTotalManual(next);
+  }, [mesesRenta, duracionUnidad, precioMensualManual]);
 
   // Al editar: si guardó porcentaje_socio > 0, el toggle «aplicar socio» queda activo (solo afecta utilidad / monto mostrado).
   useEffect(() => {
@@ -757,26 +828,29 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
           ? Number(porcentajeSocio || 0)
           : 0,
       gastosAdicionales: Number(gastosAdicionales || 0),
+      ...(Number(gastosAdicionales || 0) > 0
+        ? {
+            gastoAdicionalMesIndice: mesGastoAdicional,
+            gastoAdicionalEnDias: duracionUnidad === "dias",
+          }
+        : {
+            gastoAdicionalMesIndice: undefined,
+            gastoAdicionalEnDias: undefined,
+          }),
       pagoConsiderar: tieneConsideracion
         ? 0
         : undefined,
       consideracionMonto: 0,
-      notas: notas.trim() || undefined,
-      // Temporal: hasta usar tabla `venta_gastos_mensuales`, registramos referencia en notas.
-      ...(gastosAdicionales > 0
-        ? {
-            notas: [
-              notas.trim(),
-              `(${
-                duracionUnidad === "dias"
-                  ? `Gasto adicional aplicado al día ${mesGastoAdicional}`
-                  : `Gasto adicional aplicado al mes ${mesGastoAdicional}`
-              }: ${Number(gastosAdicionales || 0).toFixed(2)})`,
-            ]
-              .filter(Boolean)
-              .join(" "),
-          }
-        : { notas: notas.trim() || undefined }),
+      notas: (() => {
+        const base = limpiarLineaGastoEnNotas(notas);
+        if (Number(gastosAdicionales || 0) <= 0) return base || undefined;
+        const frag = `(${
+          duracionUnidad === "dias"
+            ? `Gasto adicional aplicado al día ${mesGastoAdicional}`
+            : `Gasto adicional aplicado al mes ${mesGastoAdicional}`
+        }: ${Number(gastosAdicionales || 0).toFixed(2)})`;
+        return [base, frag].filter(Boolean).join(" ").trim() || undefined;
+      })(),
       codigoEdicion: codigoEdicion.trim() || undefined,
     };
     try {
@@ -1071,8 +1145,13 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
               </div>
               <InputField
                 label="Precio de la venta (total)"
-                value={precioTotalCalculado || ""}
+                value={precioTotalCalculado}
                 onChange={(v: any) => {
+                  if (String(v).trim() === "") {
+                    setPrecioTotalManual(null);
+                    setPrecioMensualManual(null);
+                    return;
+                  }
                   const n = Math.max(0, toNumberSafe(v, Number(precioTotalCalculado || 0)));
                   setPrecioTotalManual(n);
                   if (duracionUnidad === "dias") {
@@ -1097,9 +1176,14 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 value={
                   duracionUnidad === "dias"
                     ? Number(precioTotalCalculado || 0)
-                    : precioMensualFinal || 0
+                    : precioMensualFinal
                 }
                 onChange={(v: any) => {
+                  if (String(v).trim() === "") {
+                    setPrecioMensualManual(null);
+                    setPrecioTotalManual(null);
+                    return;
+                  }
                   const n = Math.max(0, toNumberSafe(v, Number(precioMensualFinal || 0)));
                   setPrecioMensualManual(n);
                   if (duracionUnidad === "dias") {
@@ -1114,10 +1198,78 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 min={0}
                 step={0.01}
               />
+              {!tieneConsideracion ? (
+                <InputField
+                  label="Costo de la venta"
+                  value={costos}
+                  onChange={(v: any) => setCostos((prev) => toNumberSafe(v, prev))}
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  placeholder="0.00"
+                />
+              ) : null}
+              {tieneConsideracion ? (
+                <div className="form-row">
+                  <InputField
+                    label="Costo de la venta (total)"
+                    value={costos}
+                    onChange={(v: any) => {
+                      const n = Math.max(0, toNumberSafe(v, Number(costos || 0)));
+                      setCostos(n);
+                    }}
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="0.00"
+                  />
+                  <InputField
+                    label={
+                      duracionUnidad === "dias"
+                        ? "Costo por duración (días)"
+                        : "Costo de la venta (por mes)"
+                    }
+                    value={
+                      duracionUnidad === "dias"
+                        ? Number(costos || 0)
+                        : Math.round((Number(costos || 0) / Math.max(1, mesesRenta)) * 100) / 100
+                    }
+                    onChange={(v: any) => {
+                      const n = Math.max(
+                        0,
+                        toNumberSafe(
+                          v,
+                          duracionUnidad === "dias"
+                            ? Number(costos || 0)
+                            : Number(costos || 0) / Math.max(1, mesesRenta),
+                        ),
+                      );
+                      if (duracionUnidad === "dias") {
+                        setCostos(n);
+                      } else {
+                        setCostos(Math.round(n * Math.max(1, mesesRenta) * 100) / 100);
+                      }
+                    }}
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="0.00"
+                  />
+                </div>
+              ) : null}
+              {tieneConsideracion && consideracionTotal > 0 && (
+                <div className="hint-text">
+                  Costo final (descontando consideración):{" "}
+                  {costoVentaFinal.toLocaleString("es-MX", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </div>
+              )}
               <div className="form-row">
                 <InputField
                   label="Gastos adicionales"
-                  value={gastosAdicionales || ""}
+                  value={gastosAdicionales}
                   onChange={(v: any) =>
                     setGastosAdicionales((prev) => toNumberSafe(v, prev))
                   }
@@ -1198,24 +1350,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                   ) : null}
                 </div>
               )}
-              <InputField
-                label="Costo de la venta"
-                value={costos || ""}
-                onChange={(v: any) => setCostos((prev) => toNumberSafe(v, prev))}
-                type="number"
-                min={0}
-                step={0.01}
-                placeholder="0.00"
-              />
-              {tieneConsideracion && consideracionTotal > 0 && (
-                <div className="hint-text">
-                  Costo final (descontando consideración):{" "}
-                  {costoVentaFinal.toLocaleString("es-MX", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </div>
-              )}
               <div className="form-group">
                 <label>Notas</label>
                 <input
@@ -1267,8 +1401,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                     gastosAdicionales={gastosAdicionales}
                     precioPantallas={precioPantallasSeleccionadas}
                     productoNombre={productosActuales.map((p) => p.nombre).join(", ")}
+                    nombresProductos={productosActuales.map((p) => p.nombre)}
                     precioProductos={precioProductosSeleccionados}
-                    pagoConsiderar={0}
+                    pagoConsiderar={pagoConsiderar}
                     tipoComision={clienteActual?.tipoComision ?? ""}
                   />
                 )}

@@ -43,6 +43,8 @@ export interface Colaborador {
   // tipoPdf?: 1 | 2;
   // activo: boolean;
   tipoComision?: "porcentaje" | "ninguno" | "consideracion" | "precio_fijo";
+  /** Nombre legible de `tipo_pago` (fallback si `tipoComision` no viene en API). */
+  tipoPagoNombre?: string;
   porcentajeSocio?: number;
 }
 
@@ -118,6 +120,10 @@ export interface RegistroVenta {
   /** % del socio (renta); distinto de la comisión de venta. */
   porcentajeSocio?: number;
   gastosAdicionales?: number;
+  /** 1-based: mes del contrato o día (tarifa por días) donde aplica el gasto adicional (gráficas). Opcional si ya va en notas. */
+  gastoAdicionalMesIndice?: number;
+  /** true si `gastoAdicionalMesIndice` es día 1..N desde fecha inicio; false = mes contractual. */
+  gastoAdicionalEnDias?: boolean;
   /** En líneas de orden: si los gastos adicionales de la venta entraron en el importe. */
   gastosIncluidosEnOrden?: boolean;
   /** `false`: no descontar el % del socio en importe de OC/PDF. */

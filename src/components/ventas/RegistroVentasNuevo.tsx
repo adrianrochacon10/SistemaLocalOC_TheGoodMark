@@ -47,9 +47,11 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   const [ventaEditando, setVentaEditando] = useState<RegistroVenta | null>(
     null,
   );
+  const [modalVentaKey, setModalVentaKey] = useState(0);
 
   const handleNuevaVenta = () => {
     setVentaEditando(null);
+    setModalVentaKey((k) => k + 1);
     setMostrarModalVenta(true);
   };
 
@@ -76,10 +78,16 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
         }}
       />
 
-      <VentasGraficas ventasRegistradas={ventasRegistradas} />
+      {usuarioActual?.rol === "admin" ? (
+        <VentasGraficas
+          ventasRegistradas={ventasRegistradas}
+          colaboradores={clientes}
+        />
+      ) : null}
 
       {mostrarModalVenta && (
         <RegistroVentaModal
+          key={ventaEditando?.id ?? `nueva-${modalVentaKey}`}
           pantallas={pantallas}
           asignaciones={asignaciones}
           clientes={clientes}

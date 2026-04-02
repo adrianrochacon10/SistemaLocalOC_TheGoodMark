@@ -3,11 +3,103 @@
 /* Vista normal en Configuración (sin bloquear la pantalla) */
 .empresa-config-inline {
   width: 100%;
-  max-width: 640px;
+  max-width: 920px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: stretch;
+}
+
+.empresa-config-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 20px;
+  width: 100%;
+}
+
+.empresa-config-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.empresa-config-layout .empresa-form-container--inline {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+}
+
+.empresa-config-main--form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.empresa-form--edit-split {
+  gap: 20px;
+}
+
+.empresa-config-layout--modal {
+  align-items: stretch;
+}
+
+.empresa-form-container--edit-wide {
+  max-width: 760px !important;
+}
+
+.empresa-corte-box {
+  flex: 0 0 200px;
+  align-self: flex-start;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+}
+
+.empresa-corte-box__title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.empresa-corte-box__label {
+  font-size: 0.82rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.empresa-corte-box__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.empresa-corte-box--edit .form-group {
+  margin: 0;
+}
+
+.empresa-corte-box--edit .form-group label {
+  font-size: 0.82rem;
+}
+
+.empresa-form-group--checkbox {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.empresa-form-group--checkbox input[type="checkbox"] {
+  width: auto;
+  align-self: flex-start;
+  margin: 0;
 }
 
 .empresa-form-container--inline {
@@ -94,6 +186,26 @@
 
 .empresa-info-value--multiline {
   white-space: pre-wrap;
+}
+
+@media (max-width: 720px) {
+  .empresa-config-layout {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .empresa-corte-box {
+    flex: none;
+    width: 100%;
+    max-width: 560px;
+    margin-left: auto;
+    margin-right: auto;
+    align-self: center;
+  }
+
+  .empresa-form-container--edit-wide {
+    max-width: 95vw !important;
+  }
 }
 
 @media (max-width: 680px) {

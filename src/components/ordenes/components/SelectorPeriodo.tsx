@@ -1,14 +1,14 @@
 import React from "react";
-import { Colaborador } from "../../../types";
 
 interface Props {
   mesSeleccionado: number;
   añoSeleccionado: number;
   onCambiarMes: (mes: number) => void;
   onCambiarAño: (año: number) => void;
-  colaboradorFiltroId?: string;
-  onCambiarColaborador?: (colaboradorId: string) => void;
-  clientes?: Colaborador[];
+  identificadorFiltro?: string;
+  onCambiarIdentificador?: (value: string) => void;
+  busquedaTexto?: string;
+  onCambiarBusquedaTexto?: (value: string) => void;
 }
 
 const MESES = [
@@ -31,9 +31,10 @@ export const SelectorPeriodo: React.FC<Props> = ({
   añoSeleccionado,
   onCambiarMes,
   onCambiarAño,
-  colaboradorFiltroId = "",
-  onCambiarColaborador,
-  clientes = [],
+  identificadorFiltro = "",
+  onCambiarIdentificador,
+  busquedaTexto = "",
+  onCambiarBusquedaTexto,
 }) => {
   const hoy = new Date();
   const años = Array.from({ length: 4 }, (_, i) => hoy.getFullYear() - 2 + i);
@@ -68,25 +69,34 @@ export const SelectorPeriodo: React.FC<Props> = ({
             ))}
           </select>
         </div>
-        {onCambiarColaborador ? (
-          <div className="selector-group">
-            <label>Colaborador:</label>
-            <select
-              value={colaboradorFiltroId}
-              onChange={(e) => onCambiarColaborador(e.target.value)}
-            >
-              <option value="">Todos</option>
-              {clientes
-                .slice()
-                .sort((a, b) =>
-                  String(a.nombre ?? "").localeCompare(String(b.nombre ?? "")),
-                )
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre}
-                  </option>
-                ))}
-            </select>
+        {onCambiarIdentificador && onCambiarBusquedaTexto ? (
+          <div className="selector-fila-busqueda">
+            <div className="selector-group selector-group-busqueda-oc">
+              <label htmlFor="filtro-identificador-oc">Identificador</label>
+              <input
+                id="filtro-identificador-oc"
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                value={identificadorFiltro}
+                onChange={(e) => onCambiarIdentificador(e.target.value)}
+                maxLength={32}
+                className="selector-input-texto-oc"
+              />
+            </div>
+            <div className="selector-group selector-group-busqueda-oc">
+              <label htmlFor="filtro-nombre-oc">Nombre</label>
+              <input
+                id="filtro-nombre-oc"
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                value={busquedaTexto}
+                onChange={(e) => onCambiarBusquedaTexto(e.target.value)}
+                maxLength={120}
+                className="selector-input-texto-oc"
+              />
+            </div>
           </div>
         ) : null}
       </div>

@@ -22,6 +22,8 @@ interface ResumenVentaProps {
   pagoConsiderar?: number;
   tipoComision?: string;
   productoNombre?: string;
+  /** Lista de nombres de productos (prioridad sobre `productoNombre` unido por comas). */
+  nombresProductos?: string[];
   precioProductos?: number;
   precioPantallas?: number;
   gastosAdicionales?: number;
@@ -45,11 +47,39 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   pagoConsiderar = 0,
   tipoComision = "",
   productoNombre = "",
+  nombresProductos,
   precioProductos = 0,
   precioPantallas = 0,
   gastosAdicionales = 0,
 }) => {
   const esPorDias = duracionUnidad === "dias";
+
+  const nombresPantallasLista = pantallasActuales
+    .map((p) => String(p.nombre ?? "").trim())
+    .filter(Boolean);
+  const textoPantallasResumen =
+    nombresPantallasLista.length === 0
+      ? "Sin pantallas seleccionadas"
+      : nombresPantallasLista.length > 2
+        ? `${nombresPantallasLista.length} pantallas`
+        : nombresPantallasLista.join(", ");
+
+  const nombresProductosLista: string[] =
+    nombresProductos !== undefined
+      ? nombresProductos.map((n) => String(n ?? "").trim()).filter(Boolean)
+      : productoNombre.trim()
+        ? productoNombre
+            .split(/\s*,\s*/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
+  const textoProductosResumen =
+    nombresProductosLista.length === 0
+      ? "Sin producto"
+      : nombresProductosLista.length > 2
+        ? `${nombresProductosLista.length} productos`
+        : nombresProductosLista.join(", ");
+
   const etiquetaDuracion = (n: number) =>
     esPorDias
       ? `${n} ${n === 1 ? "día" : "días"}`
@@ -83,15 +113,29 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
 
   const precioVentaFinal = totalBruto;
   const esTipoPorcentaje = tipoComision === "porcentaje";
+  const esTipoFijoOConsideracion =
+    tipoComision === "consideracion" || tipoComision === "precio_fijo";
   /**
-   * Porcentaje: utilidad sobre precio de venta (precio total − monto del socio si aplica).
-   * Otros tipos: margen precio − costo de venta.
+   * Porcentaje: utilidad neta = precio de venta total (− % del socio si aplica).
+   * Precio fijo / consideración: utilidad neta = costo de la venta (no precio − costo).
+   * Otros: margen precio − costo.
    */
   const utilidad = esTipoPorcentaje
     ? aplicarDescuento
       ? Math.max(0, Math.round((totalBruto - montoSocio) * 100) / 100)
-      : totalBruto
-    : Math.max(0, Math.round((totalBruto - totalCostos) * 100) / 100);
+      : Math.max(0, Math.round(totalBruto * 100) / 100)
+    : esTipoFijoOConsideracion
+      ? Math.max(0, Math.round(totalCostos * 100) / 100)
+      : Math.max(0, Math.round((totalBruto - totalCostos) * 100) / 100);
+  const utilidadPorMes =
+    !esPorDias && mesesRenta > 0
+      ? Math.round((utilidad / Math.max(1, mesesRenta)) * 100) / 100
+      : utilidad;
+
+  const costoPorMes =
+    !esPorDias && mesesRenta > 0 && totalCostos > 0
+      ? Math.round((totalCostos / Math.max(1, mesesRenta)) * 100) / 100
+      : null;
 
   return (
     <div className="resumen-venta">
@@ -100,11 +144,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
       <div className="resumen-grid">
         <div className="resumen-item">
           <span className="label">Pantallas:</span>
-          <span className="valor">
-            {pantallasActuales.length > 0
-              ? pantallasActuales.map((p) => p.nombre).join(", ")
-              : "Sin pantallas seleccionadas"}
-          </span>
+          <span className="valor">{textoPantallasResumen}</span>
         </div>
 
         <div className="resumen-item">
@@ -121,7 +161,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
         </div>
         <div className="resumen-item">
           <span className="label">Productos:</span>
-          <span className="valor">{productoNombre || "Sin producto"}</span>
+          <span className="valor">{textoProductosResumen}</span>
         </div>
         <div className="resumen-item">
           <span className="label">Vendido a:</span>
@@ -175,6 +215,20 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
               <span>{esPorDias ? "Tarifa por duración (días)" : "Precio por mes"}</span>
               <span>{formatearMoneda(precioGeneral)}</span>
             </div>
+            {totalCostos > 0 && (
+              <>
+                <div className="resumen-fin-row resumen-fin-sub">
+                  <span>Costo de la venta (total)</span>
+                  <span>{formatearMoneda(totalCostos)}</span>
+                </div>
+                {costoPorMes != null && (
+                  <div className="resumen-fin-row resumen-fin-sub">
+                    <span>↳ Costo por mes</span>
+                    <span>{formatearMoneda(costoPorMes)}</span>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* ── CONSIDERACIÓN (descuento sobre costo) ── */}
@@ -189,16 +243,6 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
                 <span>
                   {formatearMoneda(totalPagoConsiderar / (mesesRenta || 1))}
                 </span>
-              </div>
-            </div>
-          )}
-
-          {/* ── COSTOS ── */}
-          {totalCostos > 0 && (
-            <div className="resumen-fin-bloque">
-              <div className="resumen-fin-row resumen-fin-principal">
-                <span>Costo de la venta</span>
-                <span>{formatearMoneda(totalCostos)}</span>
               </div>
             </div>
           )}
@@ -267,6 +311,12 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
             <span>Utilidad neta</span>
             <span>{formatearMoneda(utilidad)}</span>
           </div>
+          {!esPorDias && mesesRenta > 1 && (
+            <div className="resumen-fin-row resumen-fin-sub">
+              <span>↳ Utilidad neta por mes</span>
+              <span>{formatearMoneda(utilidadPorMes)}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

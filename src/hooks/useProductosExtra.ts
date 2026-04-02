@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { toast } from "react-toastify";
 import { Producto, AsignacionProductoExtra } from "../types";
 import { backendApi } from "../lib/backendApi";
 
@@ -91,8 +92,12 @@ export function useProductosExtra(profile: any, session: Session | null) {
           ? prev.map((a) => (a.id === nueva.id ? nueva : a))
           : [...prev, nueva];
       });
+      toast.success("Producto asignado al colaborador.");
     } catch (e) {
       console.error("Error asignando producto:", e);
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo asignar el producto.",
+      );
     }
   };
 
@@ -106,9 +111,13 @@ export function useProductosExtra(profile: any, session: Session | null) {
       );
       if (asignacion?.id) {
         await backendApi.del(`/api/asignaciones/productos/${asignacion.id}`);
+        toast.success("Producto desasignado.");
       }
     } catch (e) {
       console.error("Error desasignando producto:", e);
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo desasignar el producto.",
+      );
     }
     setAsignacionesProductos((prev) =>
       prev.filter(

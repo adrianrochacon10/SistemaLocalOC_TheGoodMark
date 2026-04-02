@@ -1,6 +1,7 @@
 // src/hooks/useVentas.ts
 import { useState, useEffect } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { toast } from "react-toastify";
 import { RegistroVenta } from "../types";
 import { backendApi } from "../lib/backendApi";
 import { registrarVenta } from "../lib/ventas";
@@ -9,7 +10,10 @@ import {
   detallePrecioMensual,
   esLineaPrecioProductoEnDetalle,
 } from "../utils/ordenApiMapper";
-import { utilidadNetaDesdeFilaApi } from "../utils/utilidadVenta";
+import {
+  parseIndiceGastoAdicionalDesdeNotas,
+  utilidadNetaDesdeFilaApi,
+} from "../utils/utilidadVenta";
 
 export function useVentas(profile: any, session: Session | null) {
   const [ventasRegistradas, setVentasRegistradas] = useState<RegistroVenta[]>(
@@ -48,6 +52,8 @@ export function useVentas(profile: any, session: Session | null) {
       nombre: p?.nombre,
       precioMensual: detallePrecioMensual(p),
     }));
+
+    const gastoDesdeNotas = parseIndiceGastoAdicionalDesdeNotas(row.notas);
 
     return {
       id: row.id,
@@ -114,6 +120,12 @@ export function useVentas(profile: any, session: Session | null) {
           ? Number(row.porcentaje_socio) || 0
           : undefined,
       gastosAdicionales: Number(row.gastos_adicionales ?? 0) || 0,
+      ...(gastoDesdeNotas
+        ? {
+            gastoAdicionalMesIndice: gastoDesdeNotas.indice,
+            gastoAdicionalEnDias: gastoDesdeNotas.enDias,
+          }
+        : {}),
       utilidadNeta: utilidadNetaDesdeFilaApi(row),
       pagoConsiderar: row.pago_considerar ?? undefined,
       consideracionMonto:
@@ -134,7 +146,14 @@ export function useVentas(profile: any, session: Session | null) {
       try {
         await refetchVentas();
       } catch (e) {
-        console.error("Error cargando ventas:", e);
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/fetch|Failed to fetch|NETWORK|refused|reset/i.test(msg)) {
+          console.warn(
+            "[ventas] Sin conexión al API (¿backend en el puerto configurado?).",
+          );
+        } else {
+          console.error("Error cargando ventas:", e);
+        }
       }
     };
     cargar();
@@ -210,12 +229,14 @@ export function useVentas(profile: any, session: Session | null) {
 
       if (data) {
         setVentasRegistradas((prev) => [...prev, mapVentaFromApi(data)]);
+        toast.success("Venta registrada correctamente.");
       }
     } catch (e) {
       console.error("Excepción al guardar venta:", e);
-      setErrorVenta(
-        e instanceof Error ? `Error: ${e.message}` : "Error desconocido.",
-      );
+      const msg =
+        e instanceof Error ? `Error: ${e.message}` : "Error desconocido.";
+      setErrorVenta(msg);
+      toast.error(msg);
       // Propagar para que RegistroVentaModal pueda capturarlo y no cerrar.
       throw e;
     }
@@ -259,10 +280,12 @@ export function useVentas(profile: any, session: Session | null) {
         prev.map((v) => (String(v.id) === String(venta.id) ? mapVentaFromApi(data) : v)),
       );
       await refetchVentas();
+      toast.success("Cambios guardados correctamente.");
     } catch (e) {
-      setErrorVenta(
-        e instanceof Error ? `Error: ${e.message}` : "No se pudo actualizar la venta",
-      );
+      const msg =
+        e instanceof Error ? `Error: ${e.message}` : "No se pudo actualizar la venta";
+      setErrorVenta(msg);
+      toast.error(msg);
       throw e;
     }
   };
@@ -272,10 +295,12 @@ export function useVentas(profile: any, session: Session | null) {
     try {
       await backendApi.del(`/api/ventas/${ventaId}`);
       setVentasRegistradas((prev) => prev.filter((v) => v.id !== ventaId));
+      toast.success("Venta eliminada correctamente.");
     } catch (e) {
-      setErrorVenta(
-        e instanceof Error ? `Error: ${e.message}` : "No se pudo eliminar la venta",
-      );
+      const msg =
+        e instanceof Error ? `Error: ${e.message}` : "No se pudo eliminar la venta";
+      setErrorVenta(msg);
+      toast.error(msg);
     }
   };
 

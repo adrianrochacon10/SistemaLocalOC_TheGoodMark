@@ -14,6 +14,55 @@ import { ModalCrearOrden } from "./components/ModalCrearOrden";
 import type { CrearOrdenPayload } from "../../utils/ordenCompraLineas";
 import { ordenApareceEnMesVista } from "../../utils/ordenUtils";
 
+function colaboradorTextoCoincide(
+  colaboradorId: string | undefined,
+  busqNorm: string,
+  clientes: Colaborador[] | undefined,
+  nombreFallback?: string,
+): boolean {
+  if (!busqNorm) return true;
+  const list = clientes ?? [];
+  const c = list.find((x) => String(x.id) === String(colaboradorId ?? ""));
+  if (c) {
+    const n = String(c.nombre ?? "").toLowerCase();
+    const a = String(c.alias ?? "").toLowerCase();
+    return n.includes(busqNorm) || a.includes(busqNorm);
+  }
+  const fb = String(nombreFallback ?? "").toLowerCase().trim();
+  return fb.length > 0 && fb.includes(busqNorm);
+}
+
+function ventaCoincideBusquedaNombre(
+  v: RegistroVenta,
+  busqNorm: string,
+  clientes: Colaborador[] | undefined,
+): boolean {
+  if (!busqNorm) return true;
+  const vendido = String(v.vendidoA ?? "").toLowerCase().trim();
+  if (vendido.includes(busqNorm)) return true;
+  return colaboradorTextoCoincide(v.colaboradorId, busqNorm, clientes);
+}
+
+/** Colaborador (nombre/alias) de la orden o ventas, o texto vendido en alguna venta. */
+function ordenCoincideBusquedaTexto(
+  o: OrdenDeCompra,
+  busqNorm: string,
+  clientes: Colaborador[] | undefined,
+): boolean {
+  if (!busqNorm) return true;
+  if (
+    colaboradorTextoCoincide(
+      o.colaboradorId,
+      busqNorm,
+      clientes,
+      o.colaboradorNombre,
+    )
+  )
+    return true;
+  const regs = o.registrosVenta ?? [];
+  return regs.some((v) => ventaCoincideBusquedaNombre(v, busqNorm, clientes));
+}
+
 const MESES = [
   "Enero",
   "Febrero",
@@ -58,27 +107,49 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
   const [expandidoId, setExpandido] = useState<string | null>(null);
   const [modalAbierto, setModal] = useState(false);
   const [error, setError] = useState("");
-  const [exito, setExito] = useState("");
-  const [colaboradorFiltroId, setColaboradorFiltroId] = useState<string>("");
+  const [identificadorFiltro, setIdentificadorFiltro] = useState("");
+  const [busquedaTexto, setBusquedaTexto] = useState("");
 
-  const ordenesEsteMes = ordenes.filter((o) => {
-    if (!ordenApareceEnMesVista(o, mes, año)) return false;
-    if (!colaboradorFiltroId) return true;
-    return String(o.colaboradorId ?? "") === String(colaboradorFiltroId);
+  const idBusq = identificadorFiltro.trim();
+  const textoBusq = busquedaTexto.trim().toLowerCase();
+  const busquedaSinMes = idBusq.length > 0 || textoBusq.length > 0;
+  const identificadorNorm = idBusq.toUpperCase();
+
+  const ordenesMostradas = ordenes.filter((o) => {
+    if (!ordenCoincideBusquedaTexto(o, textoBusq, clientes)) return false;
+
+    if (busquedaSinMes) {
+      const regs = o.registrosVenta ?? [];
+      if (idBusq && textoBusq) {
+        const ok = regs.some((v) => {
+          const idV = String(v.identificadorVenta ?? "").trim().toUpperCase();
+          return (
+            idV.length > 0 &&
+            idV.includes(identificadorNorm) &&
+            ventaCoincideBusquedaNombre(v, textoBusq, clientes)
+          );
+        });
+        if (!ok) return false;
+      } else if (idBusq) {
+        const okId = regs.some((v) => {
+          const idV = String(v.identificadorVenta ?? "").trim().toUpperCase();
+          return idV.length > 0 && idV.includes(identificadorNorm);
+        });
+        if (!okId) return false;
+      }
+    } else {
+      if (!ordenApareceEnMesVista(o, mes, año)) return false;
+    }
+    return true;
   });
 
   const handleConfirmarModal = async (payload: CrearOrdenPayload) => {
     setError("");
-    setExito("");
     try {
       await onCrearOrdenEnBackend(payload);
       setMes(payload.mes);
       setAño(payload.año);
       setModal(false);
-      setExito(
-        "Orden guardada. Se añadió a la lista de abajo; las anteriores del mismo mes se mantienen.",
-      );
-      setTimeout(() => setExito(""), 5000);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "No se pudo guardar la orden",
@@ -104,21 +175,16 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
         </div>
       </div>
 
-      {exito ? (
-        <div className="orden-exito-banner" role="status">
-          {exito}
-        </div>
-      ) : null}
-
       <div className="contenido-ordenes">
         <SelectorPeriodo
           mesSeleccionado={mes}
           añoSeleccionado={año}
           onCambiarMes={setMes}
           onCambiarAño={setAño}
-          colaboradorFiltroId={colaboradorFiltroId}
-          onCambiarColaborador={setColaboradorFiltroId}
-          clientes={clientes}
+          identificadorFiltro={identificadorFiltro}
+          onCambiarIdentificador={setIdentificadorFiltro}
+          busquedaTexto={busquedaTexto}
+          onCambiarBusquedaTexto={setBusquedaTexto}
         />
 
         {error && !modalAbierto && (
@@ -131,11 +197,26 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
 
       <div className="ordenes-generadas-section">
         <h3>
-          Órdenes de {MESES[mes]} {año}
+          {busquedaSinMes ? (
+            <>
+              Órdenes
+              {idBusq ? <> · {idBusq}</> : null}
+              {textoBusq ? <> · {busquedaTexto.trim()}</> : null}
+            </>
+          ) : (
+            <>
+              Órdenes de {MESES[mes]} {año}
+              {textoBusq ? <> · {busquedaTexto.trim()}</> : null}
+            </>
+          )}
         </h3>
         <OrdenesGrid
-          ordenes={ordenesEsteMes}
-          vacioMensaje={`Todavía no hay órdenes para ${MESES[mes]} ${año}. Usa «Crear orden» para añadir una.`}
+          ordenes={ordenesMostradas}
+          vacioMensaje={
+            busquedaSinMes
+              ? "Sin resultados."
+              : `Todavía no hay órdenes para ${MESES[mes]} ${año}. Usa «Crear orden» para añadir una.`
+          }
           clientes={clientes}
           pantallas={pantallas}
           config={config}

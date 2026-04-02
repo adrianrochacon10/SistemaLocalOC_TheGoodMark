@@ -258,6 +258,38 @@
   box-shadow: 0 0 0 3px rgba(20, 97, 161, 0.1);
 }
 
+.selector-fila-busqueda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  flex: 1 1 100%;
+  width: 100%;
+  align-items: flex-end;
+}
+
+.selector-group-busqueda-oc {
+  flex: 1;
+  min-width: 160px;
+  max-width: 320px;
+}
+
+.selector-input-texto-oc {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+  transition: border-color 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.selector-input-texto-oc:focus {
+  outline: none;
+  border-color: #1461a1;
+  box-shadow: 0 0 0 3px rgba(20, 97, 161, 0.1);
+}
+
 /* ORDEN EXISTENTE */
 .orden-existente-section {
   margin-bottom: 20px;
@@ -707,6 +739,13 @@
 }
 
 .detalle-item p strong {
+  color: #1461a1;
+}
+
+.detalle-orden-subtitulo {
+  margin-top: 10px;
+  margin-bottom: 4px;
+  font-size: 12px;
   color: #1461a1;
 }
 
@@ -1838,6 +1877,22 @@
   color: #64748b;
   font-size: 0.8125rem;
   white-space: nowrap;
+}
+
+.modal-venta-costo-venta-row {
+  cursor: default;
+}
+
+.modal-venta-costo-venta-row:hover {
+  border-color: #e2e8f0;
+  background: #fff;
+}
+
+.modal-venta-costo-venta-total {
+  font-size: 0.75rem;
+  color: #64748b;
+  padding: 2px 8px 0;
+  margin: 0;
 }
 
 .modal-venta-gastos-agregar {

@@ -1,6 +1,12 @@
 // src/components/ventas/components/VentasGraficas.tsx
 import React, { useMemo } from "react";
-import { RegistroVenta } from "../../../types";
+import { Colaborador, RegistroVenta } from "../../../types";
+import {
+  precioVentaTotalContratoParaKpi,
+  prorratearMontoPorMesesContrato,
+  bucketCalendarioGastoAdicional,
+  costoVentaTotalAgregados,
+} from "../../../utils/utilidadVenta";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -31,6 +37,7 @@ ChartJS.register(
 
 interface Props {
   ventasRegistradas: RegistroVenta[];
+  colaboradores: Colaborador[];
 }
 
 const MESES = [
@@ -48,66 +55,93 @@ const MESES = [
   "Dic",
 ];
 
-export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
+export const VentasGraficas: React.FC<Props> = ({
+  ventasRegistradas,
+  colaboradores: _colaboradores,
+}) => {
   const esAceptada = (v: RegistroVenta) =>
     String(v.estadoVenta ?? "").toLowerCase() === "aceptado";
-
-  const utilidadNetaVenta = (v: RegistroVenta) =>
-    Number(v.utilidadNeta ?? 0) || 0;
-
-  const costoVenta = (v: RegistroVenta) =>
-    Number(v.costoVenta ?? v.costos ?? 0) || 0;
 
   const gastoAdicionalVenta = (v: RegistroVenta) =>
     Number(v.gastosAdicionales ?? 0) || 0;
 
   const comisionVenta = (v: RegistroVenta) => Number(v.comision ?? 0) || 0;
 
-  // ── Agrupar por mes/año (todas las aceptadas, incluyendo años pasados) ──
+  // ── Por mes natural del contrato (prorrateo por días): precio de venta, costos, gastos y comisión por mes que cubre cada venta aceptada ──
   const datos = useMemo(() => {
     const result: Array<{
       label: string;
       año: number;
       mes: number;
-      utilidadNeta: number;
+      precioVentaTotal: number;
       costos: number;
       gastos: number;
       comision: number;
-      egresos: number;
       ventasAceptadas: number;
     }> = [];
     const buckets = new Map<string, {
       año: number;
       mes: number;
-      utilidadNeta: number;
+      precioVentaTotal: number;
       costos: number;
       gastos: number;
       comision: number;
       ventasAceptadas: number;
     }>();
 
-    for (const v of ventasRegistradas) {
-      if (!esAceptada(v)) continue;
-      const f = new Date(v.fechaRegistro);
-      if (Number.isNaN(f.getTime())) continue;
-      const año = f.getFullYear();
-      const mes = f.getMonth();
-      const key = `${año}-${String(mes + 1).padStart(2, "0")}`;
-      const curr = buckets.get(key) ?? {
+    const ensureBucket = (key: string, año: number, mes0: number) => {
+      const prev = buckets.get(key);
+      if (prev) return prev;
+      const init = {
         año,
-        mes,
-        utilidadNeta: 0,
+        mes: mes0,
+        precioVentaTotal: 0,
         costos: 0,
         gastos: 0,
         comision: 0,
         ventasAceptadas: 0,
       };
-      curr.utilidadNeta += utilidadNetaVenta(v);
-      curr.costos += costoVenta(v);
-      curr.gastos += gastoAdicionalVenta(v);
-      curr.comision += comisionVenta(v);
-      curr.ventasAceptadas += 1;
-      buckets.set(key, curr);
+      buckets.set(key, init);
+      return init;
+    };
+
+    const addProrrateo = (
+      v: RegistroVenta,
+      monto: number,
+      field: "precioVentaTotal" | "costos" | "gastos" | "comision",
+    ) => {
+      if (!(monto > 0)) return;
+      for (const [key, val] of prorratearMontoPorMesesContrato(v, monto)) {
+        const [ys, ms] = key.split("-");
+        const año = Number(ys);
+        const mes0 = Number(ms) - 1;
+        const curr = ensureBucket(key, año, mes0);
+        curr[field] += val;
+      }
+    };
+
+    const addGastoEnMesElegido = (v: RegistroVenta, monto: number) => {
+      if (!(monto > 0)) return;
+      for (const [key, val] of bucketCalendarioGastoAdicional(v, monto)) {
+        const [ys, ms] = key.split("-");
+        const año = Number(ys);
+        const mes0 = Number(ms) - 1;
+        const curr = ensureBucket(key, año, mes0);
+        curr.gastos += val;
+      }
+    };
+
+    for (const v of ventasRegistradas) {
+      if (!esAceptada(v)) continue;
+      addProrrateo(v, precioVentaTotalContratoParaKpi(v), "precioVentaTotal");
+      addProrrateo(v, costoVentaTotalAgregados(v), "costos");
+      addGastoEnMesElegido(v, gastoAdicionalVenta(v));
+      addProrrateo(v, comisionVenta(v), "comision");
+      for (const [key, frac] of prorratearMontoPorMesesContrato(v, 1)) {
+        if (!(frac > 0)) continue;
+        const [ys, ms] = key.split("-");
+        ensureBucket(key, Number(ys), Number(ms) - 1).ventasAceptadas += 1;
+      }
     }
 
     const ordenados = Array.from(buckets.values()).sort(
@@ -118,70 +152,40 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
         label: `${MESES[d.mes]} ${d.año}`,
         año: d.año,
         mes: d.mes,
-        utilidadNeta: d.utilidadNeta,
+        precioVentaTotal: d.precioVentaTotal,
         costos: d.costos,
         gastos: d.gastos,
         comision: d.comision,
-        egresos: d.costos + d.gastos + d.comision,
         ventasAceptadas: d.ventasAceptadas,
       });
     }
     return result;
   }, [ventasRegistradas]);
 
-  // Si hay 0/1 puntos, completar ventana de 6 meses para que la gráfica se vea.
-  const datosTendencia = useMemo(() => {
-    if (datos.length >= 2) return datos;
-    const base =
-      datos[0] ??
-      ({
-        label: "",
-        año: new Date().getFullYear(),
-        mes: new Date().getMonth(),
-        utilidadNeta: 0,
-        costos: 0,
-        gastos: 0,
-        comision: 0,
-        egresos: 0,
-        ventasAceptadas: 0,
-      } as (typeof datos)[number]);
-    const map = new Map<string, (typeof datos)[number]>();
-    for (const d of datos) map.set(`${d.año}-${d.mes}`, d);
-    const out: typeof datos = [];
-    for (let i = 5; i >= 0; i--) {
-      const dt = new Date(base.año, base.mes - i, 1);
-      const y = dt.getFullYear();
-      const m = dt.getMonth();
-      const hit = map.get(`${y}-${m}`);
-      out.push(
-        hit ?? {
-          label: `${MESES[m]} ${y}`,
-          año: y,
-          mes: m,
-          utilidadNeta: 0,
-          costos: 0,
-          gastos: 0,
-          comision: 0,
-          egresos: 0,
-          ventasAceptadas: 0,
-        },
-      );
-    }
-    return out;
-  }, [datos]);
+  // Solo meses con datos reales (sin rellenar meses vacíos: evita que una venta de un mes parezca “todo el año”).
+  const datosTendencia = datos;
 
-  // ── Totales para las tarjetas KPI ──────────────────────────────────
-  const totales = useMemo(
-    () => ({
-      utilidadNeta: datos.reduce((s, d) => s + d.utilidadNeta, 0),
-      costos: datos.reduce((s, d) => s + d.costos, 0),
-      gastos: datos.reduce((s, d) => s + d.gastos, 0),
-      comision: datos.reduce((s, d) => s + d.comision, 0),
-      egresos: datos.reduce((s, d) => s + d.egresos, 0),
-      ventasAceptadas: datos.reduce((s, d) => s + d.ventasAceptadas, 0),
-    }),
-    [datos],
-  );
+  // ── KPI: totales del contrato por cada venta aceptada (precio bruto, costos, gastos, comisiones) ──
+  const totales = useMemo(() => {
+    const aceptadas = ventasRegistradas.filter(esAceptada);
+    let precioVentaTotal = 0;
+    let costos = 0;
+    let gastos = 0;
+    let comision = 0;
+    for (const v of aceptadas) {
+      precioVentaTotal += precioVentaTotalContratoParaKpi(v);
+      costos += costoVentaTotalAgregados(v);
+      gastos += gastoAdicionalVenta(v);
+      comision += comisionVenta(v);
+    }
+    return {
+      precioVentaTotal,
+      costos,
+      gastos,
+      comision,
+      ventasAceptadas: aceptadas.length,
+    };
+  }, [ventasRegistradas]);
 
   const fmt = (n: number) =>
     n.toLocaleString("es-MX", {
@@ -257,8 +261,8 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
       labels: datosTendencia.map((d) => d.label),
       datasets: [
         {
-          label: "Utilidad neta",
-          data: datosTendencia.map((d) => d.utilidadNeta),
+          label: "Precio de venta total",
+          data: datosTendencia.map((d) => d.precioVentaTotal),
           borderColor: "#10b981",
           backgroundColor: "rgba(16,185,129,0.10)",
           pointBackgroundColor: "#10b981",
@@ -266,14 +270,14 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
           pointBorderWidth: 2,
           pointRadius: 4,
           pointHoverRadius: 6,
-          tension: 0.35,
-          fill: true,
+          tension: 0.2,
+          fill: false,
           borderWidth: 3,
           yAxisID: "y",
         },
         {
-          label: "Egresos (costos + gastos adicionales + comisiones)",
-          data: datosTendencia.map((d) => d.egresos),
+          label: "Gastos adicionales",
+          data: datosTendencia.map((d) => d.gastos),
           borderColor: "#ef4444",
           backgroundColor: "rgba(239,68,68,0.2)",
           pointBackgroundColor: "#ef4444",
@@ -282,7 +286,7 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
           pointRadius: 4,
           pointHoverRadius: 6,
           borderDash: [5, 4],
-          tension: 0.35,
+          tension: 0.2,
           fill: false,
           borderWidth: 3,
           yAxisID: "y1",
@@ -313,11 +317,16 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
 
   const dataPie = useMemo(
     () => ({
-      labels: ["Utilidad neta", "Costos de la venta", "Gastos adicionales", "Comisiones"],
+      labels: [
+        "Precio de venta total",
+        "Costos de la venta",
+        "Gastos adicionales",
+        "Comisiones",
+      ],
       datasets: [
         {
           data: [
-            totales.utilidadNeta,
+            totales.precioVentaTotal,
             totales.costos,
             totales.gastos,
             totales.comision,
@@ -351,7 +360,7 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
         legend: { position: "right" as const },
         title: {
           display: true,
-          text: "Utilidad neta vs gastos adicionales",
+          text: "Precio de venta vs gastos adicionales",
         },
         tooltip: {
           callbacks: {
@@ -382,8 +391,8 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
       labels: datos.map((d) => d.label),
       datasets: [
         {
-          label: "Utilidad neta",
-          data: datos.map((d) => d.utilidadNeta),
+          label: "Precio de venta total",
+          data: datos.map((d) => d.precioVentaTotal),
           borderColor: "rgb(16, 185, 129)",
           backgroundColor: "rgba(16, 185, 129, 0.45)",
         },
@@ -402,28 +411,25 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
     <div className="ventas-graficas">
       {/* ── KPI Cards ── */}
       <div className="kpi-grid">
-        <div className="kpi-card kpi-ingreso">
+        <div className="kpi-card kpi-utilidad">
           <span className="kpi-icon">💰</span>
           <div>
-            <p className="kpi-label">Utilidad neta</p>
-            <p className="kpi-valor">{fmt(totales.utilidadNeta)}</p>
-            <p className="kpi-hint">Suma de utilidad neta en ventas aceptadas.</p>
+            <p className="kpi-label">Precio de venta total</p>
+            <p className="kpi-valor">{fmt(totales.precioVentaTotal)}</p>
           </div>
         </div>
-        <div className="kpi-card kpi-costos">
+        <div className="kpi-card kpi-costo-venta">
           <span className="kpi-icon">🧾</span>
           <div>
             <p className="kpi-label">Costos de la venta</p>
             <p className="kpi-valor">{fmt(totales.costos)}</p>
-            <p className="kpi-hint">Costo de la venta registrado por operación.</p>
           </div>
         </div>
-        <div className="kpi-card kpi-costos">
+        <div className="kpi-card kpi-gastos-adicionales">
           <span className="kpi-icon">💸</span>
           <div>
             <p className="kpi-label">Gastos adicionales</p>
             <p className="kpi-valor">{fmt(totales.gastos)}</p>
-            <p className="kpi-hint">Gastos adicionales registrados en ventas aceptadas.</p>
           </div>
         </div>
         <div className="kpi-card kpi-comision">
@@ -431,9 +437,6 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
           <div>
             <p className="kpi-label">Comisiones</p>
             <p className="kpi-valor">{fmt(totales.comision)}</p>
-            <p className="kpi-hint">
-              Suma de comisiones registradas en cada venta aceptada.
-            </p>
           </div>
         </div>
       </div>
@@ -454,7 +457,7 @@ export const VentasGraficas: React.FC<Props> = ({ ventasRegistradas }) => {
 
       {/* ── Gráfica de línea: tendencia (Chart.js multi-axis) ── */}
       <div className="grafica-card grafica-card-tendencia">
-        <h4>📉 Tendencia — Utilidad neta vs egresos (multi-eje)</h4>
+        <h4>📉 Tendencia — Precio de venta vs gastos adicionales (multi-eje)</h4>
         <div className="grafica-linea-wrap grafica-linea-chartjs" style={{ height: 260 }}>
           <Line options={opcionesTendencia} data={dataTendencia} />
         </div>

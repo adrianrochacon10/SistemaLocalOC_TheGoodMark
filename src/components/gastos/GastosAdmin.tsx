@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { toast } from "react-toastify";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -83,6 +84,44 @@ function actualizarNotasConPeriodo(
   return `${base}${base ? " " : ""}${tag}:${periodo}`.trim();
 }
 
+function normalizarTexto(v: string): string {
+  return String(v ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function etiquetaPeriodoVenta(v: RegistroVenta): string {
+  const base = new Date(v.fechaInicio as any);
+  const periodos = leerPeriodosGasto(v);
+  if (Number.isNaN(base.getTime())) {
+    return periodos
+      .map((n) => `${esVentaPorDias(v) ? "Día" : "Mes"} ${n}`)
+      .join(", ");
+  }
+  if (esVentaPorDias(v)) {
+    return periodos
+      .map((numero) => {
+        const d = new Date(base);
+        d.setDate(d.getDate() + (numero - 1));
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yyyy = d.getFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+      })
+      .join(", ");
+  }
+  return periodos
+    .map((numero) => {
+      const d = new Date(base.getFullYear(), base.getMonth() + (numero - 1), 1);
+      const mes = d.toLocaleDateString("es-MX", { month: "long" });
+      const mesFmt = mes.charAt(0).toUpperCase() + mes.slice(1);
+      return `${mesFmt} ${d.getFullYear()}`;
+    })
+    .join(", ");
+}
+
 function actualizarNotasConPeriodos(
   notas: string | undefined,
   periodos: number[],
@@ -109,23 +148,32 @@ function actualizarNotasConPeriodos(
   return `${base}${base ? " " : ""}${tag}`.trim();
 }
 
+/** Quita del campo notas los marcadores de gasto adicional (mismo criterio que al reasignar periodo). */
+function limpiarNotasGasto(notas: string | undefined): string {
+  return String(notas ?? "")
+    .replace(/\(Gasto adicional aplicado al (mes|día|dia)\s+\d+:[^)]+\)/gi, "")
+    .replace(/GASTO_(MES|DIA|MESES)\s*:\s*[0-9,\s]+/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export const GastosAdmin: React.FC<Props> = ({
   ventasRegistradas,
   clientes,
   usuarios = [],
   onActualizarVenta,
 }) => {
-  const [busquedaId, setBusquedaId] = useState("");
+  const [busquedaVenta, setBusquedaVenta] = useState("");
+  const [ventaElegidaId, setVentaElegidaId] = useState<string | null>(null);
   const [busquedaGastos, setBusquedaGastos] = useState("");
   const [fechaBusquedaGastos, setFechaBusquedaGastos] = useState("");
   const [mesGasto, setMesGasto] = useState(1);
   const [periodosGasto, setPeriodosGasto] = useState<number[]>([1]);
   const [montoGasto, setMontoGasto] = useState(0);
   const [guardando, setGuardando] = useState(false);
-  const [mensaje, setMensaje] = useState("");
-  const [tipoMensaje, setTipoMensaje] = useState<"ok" | "warn" | "error">("ok");
   const [ventaDetalleActivaId, setVentaDetalleActivaId] = useState<string | null>(null);
   const [ventaModalId, setVentaModalId] = useState<string | null>(null);
+  const formGastosRef = React.useRef<HTMLDivElement>(null);
 
   const ventasAceptadas = useMemo(
     () =>
@@ -135,15 +183,51 @@ export const GastosAdmin: React.FC<Props> = ({
     [ventasRegistradas],
   );
 
-  const ventasPorIdentificador = useMemo(() => {
-    const q = busquedaId.trim().toLowerCase();
-    if (!q) return [];
-    return ventasAceptadas.filter(
-      (v) => String(v.identificadorVenta ?? "").trim().toLowerCase() === q,
-    );
-  }, [ventasAceptadas, busquedaId]);
+  const candidatosVentaGasto = useMemo(() => {
+    const qRaw = busquedaVenta.trim();
+    if (!qRaw) return [];
+    const porIdInterno = ventasAceptadas.filter((v) => String(v.id) === qRaw);
+    if (porIdInterno.length > 0) return porIdInterno;
 
-  const ventaSeleccionada = ventasPorIdentificador[0];
+    const qId = qRaw.toLowerCase();
+    const qNorm = normalizarTexto(qRaw);
+
+    const porIdExacto = ventasAceptadas.filter(
+      (v) => String(v.identificadorVenta ?? "").trim().toLowerCase() === qId,
+    );
+    if (porIdExacto.length > 0) return porIdExacto;
+
+    const porIdParcial =
+      qId.length >= 2
+        ? ventasAceptadas.filter((v) => {
+            const id = String(v.identificadorVenta ?? "").trim().toLowerCase();
+            return id.length > 0 && id.includes(qId);
+          })
+        : [];
+    if (porIdParcial.length > 0) return porIdParcial;
+
+    if (qNorm.length < 2) return [];
+
+    return ventasAceptadas.filter((v) => {
+      const vendido = normalizarTexto(v.vendidoA);
+      const colab = clientes.find((c) => String(c.id) === String(v.colaboradorId));
+      const cn = normalizarTexto(colab?.nombre ?? "");
+      return vendido.includes(qNorm) || cn.includes(qNorm);
+    });
+  }, [ventasAceptadas, busquedaVenta, clientes]);
+
+  const ventaSeleccionada = useMemo(() => {
+    if (candidatosVentaGasto.length === 0) return null;
+    if (candidatosVentaGasto.length === 1) return candidatosVentaGasto[0];
+    if (ventaElegidaId) {
+      return (
+        candidatosVentaGasto.find((v) => String(v.id) === String(ventaElegidaId)) ??
+        null
+      );
+    }
+    return null;
+  }, [candidatosVentaGasto, ventaElegidaId]);
+
   const ventaSeleccionadaPorDias = ventaSeleccionada
     ? esVentaPorDias(ventaSeleccionada)
     : false;
@@ -192,36 +276,6 @@ export const GastosAdmin: React.FC<Props> = ({
     setMesGasto(periodos[0] ?? leerPeriodoGasto(ventaSeleccionada));
   }, [ventaSeleccionada?.id]);
 
-  const etiquetaPeriodoVenta = (v: RegistroVenta) => {
-    const base = new Date(v.fechaInicio as any);
-    const periodos = leerPeriodosGasto(v);
-    if (Number.isNaN(base.getTime())) {
-      return periodos
-        .map((n) => `${esVentaPorDias(v) ? "Día" : "Mes"} ${n}`)
-        .join(", ");
-    }
-    if (esVentaPorDias(v)) {
-      return periodos
-        .map((numero) => {
-          const d = new Date(base);
-          d.setDate(d.getDate() + (numero - 1));
-          const dd = String(d.getDate()).padStart(2, "0");
-          const mm = String(d.getMonth() + 1).padStart(2, "0");
-          const yyyy = d.getFullYear();
-          return `${dd}/${mm}/${yyyy}`;
-        })
-        .join(", ");
-    }
-    return periodos
-      .map((numero) => {
-        const d = new Date(base.getFullYear(), base.getMonth() + (numero - 1), 1);
-        const mes = d.toLocaleDateString("es-MX", { month: "long" });
-        const mesFmt = mes.charAt(0).toUpperCase() + mes.slice(1);
-        return `${mesFmt} ${d.getFullYear()}`;
-      })
-      .join(", ");
-  };
-
   const ventasConGastoTop = useMemo(
     () =>
       ventasAceptadas
@@ -233,7 +287,7 @@ export const GastosAdmin: React.FC<Props> = ({
 
   const chartData = useMemo(() => {
     return {
-      labels: ventasConGastoTop.map((v) => `${v.identificadorVenta || "SIN-ID"} · ${etiquetaPeriodoVenta(v)}`),
+      labels: ventasConGastoTop.map((v) => etiquetaPeriodoVenta(v)),
       datasets: [
         {
           label: "Gastos adicionales",
@@ -275,25 +329,31 @@ export const GastosAdmin: React.FC<Props> = ({
     };
   }, [ventasAceptadas, usuarios]);
 
-  const chartOptions = useMemo(
+  const chartOptionsGastos = useMemo(
     () => ({
       indexAxis: "y" as const,
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: { position: "right" as const },
-        title: { display: true, text: "Gastos adicionales por venta" },
+        title: {
+          display: true,
+          text: "Gastos adicionales por periodo del gasto",
+        },
+        tooltip: {
+          callbacks: {
+            afterLabel: (ctx: { dataIndex: number }) => {
+              const v = ventasConGastoTop[ctx.dataIndex];
+              if (!v) return "";
+              const id = String(v.identificadorVenta ?? "").trim() || "SIN-ID";
+              return `Venta: ${id}`;
+            },
+          },
+        },
       },
     }),
-    [],
+    [ventasConGastoTop],
   );
-
-  const normalizar = (v: string) =>
-    String(v ?? "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .trim();
 
   const fechaKeysVenta = (v: RegistroVenta) => {
     const out: string[] = [];
@@ -311,13 +371,13 @@ export const GastosAdmin: React.FC<Props> = ({
   };
 
   const gastosFiltrados = useMemo(() => {
-    const q = normalizar(busquedaGastos);
+    const q = normalizarTexto(busquedaGastos);
     const qFecha = String(fechaBusquedaGastos ?? "").trim();
     return ventasAceptadas
       .filter((v) => (Number(v.gastosAdicionales ?? 0) || 0) > 0)
       .filter((v) => {
         const colab = clientes.find((c) => String(c.id) === String(v.colaboradorId));
-        const baseTexto = normalizar(
+        const baseTexto = normalizarTexto(
           [
             v.identificadorVenta || "SIN-ID",
             v.vendidoA || "",
@@ -344,22 +404,18 @@ export const GastosAdmin: React.FC<Props> = ({
 
   const guardarGasto = async () => {
     if (!ventaSeleccionada) {
-      setTipoMensaje("warn");
-      setMensaje("Selecciona una venta por identificador antes de guardar.");
+      toast.warning("Busca y selecciona una venta antes de guardar.");
       return;
     }
     if ((periodosGasto?.length ?? 0) === 0) {
-      setTipoMensaje("warn");
-      setMensaje("Selecciona al menos un mes/día para registrar el gasto.");
+      toast.warning("Selecciona al menos un mes/día para registrar el gasto.");
       return;
     }
     if (!Number.isFinite(Number(montoGasto)) || Number(montoGasto) < 0) {
-      setTipoMensaje("warn");
-      setMensaje("El monto del gasto debe ser un número mayor o igual a 0.");
+      toast.warning("El monto del gasto debe ser un número mayor o igual a 0.");
       return;
     }
     setGuardando(true);
-    setMensaje("");
     try {
       const actualizado: RegistroVenta = {
         ...ventaSeleccionada,
@@ -373,11 +429,46 @@ export const GastosAdmin: React.FC<Props> = ({
         ),
       };
       await onActualizarVenta(actualizado);
-      setTipoMensaje("ok");
-      setMensaje("Gasto actualizado correctamente.");
     } catch (e) {
-      setTipoMensaje("error");
-      setMensaje(e instanceof Error ? e.message : "No se pudo guardar el gasto.");
+      /* Error ya notificado por handleActualizarVenta (toast) */
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const cargarVentaParaEdicionGasto = (v: RegistroVenta) => {
+    const idStr = String(v.identificadorVenta ?? "").trim();
+    const nombre = String(v.vendidoA ?? "").trim();
+    setBusquedaVenta(idStr || nombre || String(v.id));
+    setVentaElegidaId(String(v.id));
+    setVentaModalId(null);
+    requestAnimationFrame(() => {
+      formGastosRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const borrarGastoAdicional = async (v: RegistroVenta) => {
+    const etiqueta = v.identificadorVenta || v.vendidoA || "esta venta";
+    if (
+      !window.confirm(
+        `¿Eliminar el gasto adicional de ${etiqueta}? Se pondrá en 0 y se quitará el periodo en notas.`,
+      )
+    ) {
+      return;
+    }
+    setGuardando(true);
+    try {
+      await onActualizarVenta({
+        ...v,
+        gastosAdicionales: 0,
+        notas: limpiarNotasGasto(v.notas),
+      });
+      setVentaModalId(null);
+      if (String(ventaDetalleActivaId) === String(v.id)) {
+        setVentaDetalleActivaId(null);
+      }
+    } catch (e) {
+      /* Error ya notificado por handleActualizarVenta (toast) */
     } finally {
       setGuardando(false);
     }
@@ -385,16 +476,19 @@ export const GastosAdmin: React.FC<Props> = ({
 
   return (
     <div className="registro-ventas-nuevo">
-      <div className="formulario-section">
+      <div className="formulario-section" ref={formGastosRef}>
         <h3>💸 Gastos adicionales</h3>
         <div className="form-row">
           <div className="form-group">
-            <label>Buscar venta por identificador</label>
+            <label>Buscar venta (identificador o nombre)</label>
             <input
               type="text"
-              value={busquedaId}
-              onChange={(e) => setBusquedaId(e.target.value.toUpperCase())}
-              placeholder="Ej: RNAM"
+              value={busquedaVenta}
+              onChange={(e) => {
+                setBusquedaVenta(e.target.value);
+                setVentaElegidaId(null);
+              }}
+              placeholder="Ej: RNAM o nombre del cliente"
             />
           </div>
           <div className="form-group">
@@ -405,159 +499,172 @@ export const GastosAdmin: React.FC<Props> = ({
               value={
                 ventaSeleccionada
                   ? `${ventaSeleccionada.identificadorVenta || "SIN-ID"} · ${ventaSeleccionada.vendidoA}`
-                  : "— Sin coincidencia exacta —"
+                  : !busquedaVenta.trim()
+                    ? "— Escribe para buscar —"
+                    : candidatosVentaGasto.length === 0
+                      ? "— Sin coincidencias —"
+                      : candidatosVentaGasto.length > 1
+                        ? "— Elige una venta en la lista de abajo —"
+                        : "— Sin coincidencias —"
               }
             />
           </div>
         </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label>
-              {ventaSeleccionadaPorDias
-                ? "Gastos del día:"
-                : "Gastos del mes:"}
-            </label>
-            <div
-              style={{
-                border: "1px solid #dbe3ee",
-                borderRadius: 12,
-                padding: 12,
-                background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 8,
-                  marginBottom: 10,
-                  flexWrap: "wrap",
-                }}
-              >
-                <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
-                  Puedes seleccionar uno o varios periodos
-                </span>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  style={{ borderRadius: 999, padding: "6px 10px", fontSize: 12 }}
-                  onClick={() => {
-                    const todos = opcionesPeriodo.map((o) => Number(o.value));
-                    setPeriodosGasto(todos.length > 0 ? todos : [1]);
-                    setMesGasto(todos[0] ?? 1);
-                  }}
-                >
-                  Seleccionar todos
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  style={{ borderRadius: 999, padding: "6px 10px", fontSize: 12 }}
-                  onClick={() => {
-                    setPeriodosGasto([1]);
-                    setMesGasto(1);
-                  }}
-                >
-                  Limpiar
-                </button>
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))",
-                  gap: 10,
-                  maxHeight: 170,
-                  overflowY: "auto",
-                  paddingRight: 4,
-                }}
-              >
-                {opcionesPeriodo.map((opt) => {
-                  const n = Number(opt.value);
-                  const checked = periodosGasto.includes(n);
-                  return (
-                    <label
-                      key={opt.value}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "10px 10px",
-                        border: checked ? "1px solid #93c5fd" : "1px solid #e2e8f0",
-                        borderRadius: 10,
-                        cursor: "pointer",
-                        background: checked ? "#eff6ff" : "#ffffff",
-                        boxShadow: checked ? "0 0 0 2px rgba(59,130,246,.12)" : "none",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          const next = e.target.checked
-                            ? Array.from(new Set([...periodosGasto, n])).sort((a, b) => a - b)
-                            : periodosGasto.filter((x) => x !== n);
-                          const safe = next.length > 0 ? next : [1];
-                          setPeriodosGasto(safe);
-                          setMesGasto(safe[0] ?? 1);
-                        }}
-                        style={{ width: 16, height: 16 }}
-                      />
-                      <span style={{ fontWeight: checked ? 700 : 500, color: "#0f172a" }}>
-                        {opt.label}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
+        {candidatosVentaGasto.length > 1 ? (
+          <div className="gastos-candidatos-venta" role="listbox" aria-label="Ventas que coinciden con la búsqueda">
+            <p className="gastos-candidatos-venta__hint">
+              {candidatosVentaGasto.length} ventas coinciden; selecciona una:
+            </p>
+            <div className="gastos-candidatos-venta__list">
+              {candidatosVentaGasto.map((v) => {
+                const colab = clientes.find((c) => String(c.id) === String(v.colaboradorId));
+                const sel = ventaElegidaId != null && String(v.id) === String(ventaElegidaId);
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    role="option"
+                    aria-selected={sel}
+                    className={`gastos-candidatos-venta__chip${sel ? " gastos-candidatos-venta__chip--selected" : ""}`}
+                    onClick={() => setVentaElegidaId(String(v.id))}
+                  >
+                    <span className="gastos-candidatos-venta__id">{v.identificadorVenta || "SIN-ID"}</span>
+                    <span className="gastos-candidatos-venta__nombre">{v.vendidoA}</span>
+                    {colab?.nombre ? (
+                      <span className="gastos-candidatos-venta__colab">{colab.nombre}</span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <div className="form-group">
-            <label>Monto gasto adicional</label>
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={montoGasto}
-              onChange={(e) => setMontoGasto(Math.max(0, Number(e.target.value) || 0))}
-            />
-          </div>
-        </div>
-        <button className="btn btn-primary" onClick={() => void guardarGasto()} disabled={!ventaSeleccionada || guardando}>
-          {guardando ? "Guardando..." : "Guardar gasto"}
-        </button>
-        {mensaje ? (
-          <div
-            style={{
-              marginTop: 10,
-              padding: "8px 10px",
-              borderRadius: 8,
-              border:
-                tipoMensaje === "ok"
-                  ? "1px solid #86efac"
-                  : tipoMensaje === "warn"
-                    ? "1px solid #fdba74"
-                    : "1px solid #fca5a5",
-              background:
-                tipoMensaje === "ok"
-                  ? "#f0fdf4"
-                  : tipoMensaje === "warn"
-                    ? "#fff7ed"
-                    : "#fef2f2",
-              color:
-                tipoMensaje === "ok"
-                  ? "#166534"
-                  : tipoMensaje === "warn"
-                    ? "#9a3412"
-                    : "#991b1b",
-              fontWeight: 600,
-            }}
-          >
-            {mensaje}
-          </div>
         ) : null}
+        {ventaSeleccionada ? (
+          <>
+            <div className="form-row">
+              <div className="form-group">
+                <label>
+                  {ventaSeleccionadaPorDias
+                    ? "Gastos del día:"
+                    : "Gastos del mes:"}
+                </label>
+                <div
+                  style={{
+                    border: "1px solid #dbe3ee",
+                    borderRadius: 12,
+                    padding: 12,
+                    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom: 10,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+                      Puedes seleccionar uno o varios periodos
+                    </span>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      style={{ borderRadius: 999, padding: "6px 10px", fontSize: 12 }}
+                      onClick={() => {
+                        const todos = opcionesPeriodo.map((o) => Number(o.value));
+                        setPeriodosGasto(todos.length > 0 ? todos : [1]);
+                        setMesGasto(todos[0] ?? 1);
+                      }}
+                    >
+                      Seleccionar todos
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      style={{ borderRadius: 999, padding: "6px 10px", fontSize: 12 }}
+                      onClick={() => {
+                        setPeriodosGasto([1]);
+                        setMesGasto(1);
+                      }}
+                    >
+                      Limpiar
+                    </button>
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))",
+                      gap: 10,
+                      maxHeight: 170,
+                      overflowY: "auto",
+                      paddingRight: 4,
+                    }}
+                  >
+                    {opcionesPeriodo.map((opt) => {
+                      const n = Number(opt.value);
+                      const checked = periodosGasto.includes(n);
+                      return (
+                        <label
+                          key={opt.value}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "10px 10px",
+                            border: checked ? "1px solid #93c5fd" : "1px solid #e2e8f0",
+                            borderRadius: 10,
+                            cursor: "pointer",
+                            background: checked ? "#eff6ff" : "#ffffff",
+                            boxShadow: checked ? "0 0 0 2px rgba(59,130,246,.12)" : "none",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? Array.from(new Set([...periodosGasto, n])).sort((a, b) => a - b)
+                                : periodosGasto.filter((x) => x !== n);
+                              const safe = next.length > 0 ? next : [1];
+                              setPeriodosGasto(safe);
+                              setMesGasto(safe[0] ?? 1);
+                            }}
+                            style={{ width: 16, height: 16 }}
+                          />
+                          <span style={{ fontWeight: checked ? 700 : 500, color: "#0f172a" }}>
+                            {opt.label}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Monto gasto adicional</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={montoGasto}
+                  onChange={(e) => setMontoGasto(Math.max(0, Number(e.target.value) || 0))}
+                />
+              </div>
+            </div>
+            <button className="btn btn-primary" onClick={() => void guardarGasto()} disabled={guardando}>
+              {guardando ? "Guardando..." : "Guardar gasto"}
+            </button>
+          </>
+        ) : (
+          <button className="btn btn-primary" type="button" disabled>
+            Guardar gasto
+          </button>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 12, marginTop: 18, alignItems: "stretch" }}>
@@ -565,7 +672,7 @@ export const GastosAdmin: React.FC<Props> = ({
           <div className="grafica-linea-wrap" style={{ height: 280 }}>
             <Bar
               options={{
-                ...chartOptions,
+                ...chartOptionsGastos,
                 onClick: (_evt: any, elements: any[]) => {
                   if (!elements?.length) return;
                   const idx = Number(elements[0]?.index ?? -1);
@@ -583,9 +690,11 @@ export const GastosAdmin: React.FC<Props> = ({
           <div className="grafica-linea-wrap" style={{ height: 280 }}>
             <Bar
               options={{
-                ...chartOptions,
+                indexAxis: "y" as const,
+                responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
-                  ...(chartOptions as any).plugins,
+                  legend: { position: "right" as const },
                   title: { display: true, text: "Comisiones por vendedor" },
                 },
               }}
@@ -650,46 +759,77 @@ export const GastosAdmin: React.FC<Props> = ({
                 <div
                   className="venta-item"
                   key={v.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setVentaModalId(String(v.id))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setVentaModalId(String(v.id));
-                    }
-                  }}
-                  style={{ cursor: "pointer" }}
-                  title="Ver detalle del gasto y de la venta"
+                  style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}
                 >
-                  <p>
-                    <strong>ID:</strong> {v.identificadorVenta || "SIN-ID"} ·{" "}
-                    <strong>Venta:</strong> {v.vendidoA}
-                  </p>
-                  <p>
-                    <strong>Colaborador:</strong> {colab?.nombre || "—"} ·{" "}
-                    <strong>Periodo gasto:</strong>{" "}
-                    {etiquetaPeriodoVenta(v)}
-                  </p>
-                  <p>
-                    <strong>Gasto adicional:</strong>{" "}
-                    {(Number(v.gastosAdicionales ?? 0) || 0).toLocaleString("es-MX", {
-                      style: "currency",
-                      currency: "MXN",
-                    })}
-                  </p>
-                  <p>
-                    <strong>Costos:</strong>{" "}
-                    {costosVenta.toLocaleString("es-MX", {
-                      style: "currency",
-                      currency: "MXN",
-                    })}{" "}
-                    · <strong>Utilidad neta:</strong>{" "}
-                    {utilidadNeta.toLocaleString("es-MX", {
-                      style: "currency",
-                      currency: "MXN",
-                    })}
-                  </p>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setVentaModalId(String(v.id))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setVentaModalId(String(v.id));
+                      }
+                    }}
+                    style={{ cursor: "pointer", flex: "1 1 220px", minWidth: 0 }}
+                    title="Ver detalle del gasto y de la venta"
+                  >
+                    <p>
+                      <strong>ID:</strong> {v.identificadorVenta || "SIN-ID"} ·{" "}
+                      <strong>Venta:</strong> {v.vendidoA}
+                    </p>
+                    <p>
+                      <strong>Colaborador:</strong> {colab?.nombre || "—"} ·{" "}
+                      <strong>Periodo gasto:</strong>{" "}
+                      {etiquetaPeriodoVenta(v)}
+                    </p>
+                    <p>
+                      <strong>Gasto adicional:</strong>{" "}
+                      {(Number(v.gastosAdicionales ?? 0) || 0).toLocaleString("es-MX", {
+                        style: "currency",
+                        currency: "MXN",
+                      })}
+                    </p>
+                    <p>
+                      <strong>Costos:</strong>{" "}
+                      {costosVenta.toLocaleString("es-MX", {
+                        style: "currency",
+                        currency: "MXN",
+                      })}{" "}
+                      · <strong>Utilidad neta:</strong>{" "}
+                      {utilidadNeta.toLocaleString("es-MX", {
+                        style: "currency",
+                        currency: "MXN",
+                      })}
+                    </p>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                      flex: "0 0 auto",
+                      paddingTop: 4,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      disabled={guardando}
+                      onClick={() => cargarVentaParaEdicionGasto(v)}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      disabled={guardando}
+                      onClick={() => void borrarGastoAdicional(v)}
+                    >
+                      Borrar
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -732,11 +872,29 @@ export const GastosAdmin: React.FC<Props> = ({
               const utilidadNeta = Math.round((precioVenta - comisionVenta) * 100) / 100;
               return (
                 <>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <h4 style={{ margin: 0 }}>Detalle de gasto adicional</h4>
-              <button type="button" className="btn btn-outline" onClick={() => setVentaModalId(null)}>
-                Cerrar
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled={guardando}
+                  onClick={() => ventaModal && cargarVentaParaEdicionGasto(ventaModal)}
+                >
+                  Editar en formulario
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  disabled={guardando}
+                  onClick={() => ventaModal && void borrarGastoAdicional(ventaModal)}
+                >
+                  Borrar gasto
+                </button>
+                <button type="button" className="btn btn-outline" onClick={() => setVentaModalId(null)}>
+                  Cerrar
+                </button>
+              </div>
             </div>
             <div
               style={{

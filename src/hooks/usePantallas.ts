@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { toast } from "react-toastify";
 import { Pantalla, AsignacionPantalla } from "../types";
 import { backendApi } from "../lib/backendApi";
 
@@ -44,7 +45,14 @@ export function usePantallas(profile: any, session: Session | null) {
           })),
         );
       } catch (e) {
-        console.error("Error cargando pantallas:", e);
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/fetch|Failed to fetch|NETWORK|refused|reset/i.test(msg)) {
+          console.warn(
+            "[pantallas] Sin conexión al API (¿backend en ejecución?).",
+          );
+        } else {
+          console.error("Error cargando pantallas:", e);
+        }
       }
     };
     cargar();
@@ -84,9 +92,13 @@ export function usePantallas(profile: any, session: Session | null) {
               ? Number(data.precio)
               : Number(pantalla.precio ?? 0),
         };
+        toast.success("Pantalla guardada correctamente.");
       }
     } catch (e) {
       console.error("Error guardando pantalla:", e);
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo guardar la pantalla.",
+      );
     }
 
     setPantallas((prev) => {
@@ -102,8 +114,12 @@ export function usePantallas(profile: any, session: Session | null) {
   const handleEliminarPantalla = async (pantallaId: string) => {
     try {
       await backendApi.del(`/api/pantallas/${pantallaId}`);
+      toast.success("Pantalla eliminada correctamente.");
     } catch (e) {
       console.error("Error eliminando pantalla:", e);
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo eliminar la pantalla.",
+      );
     }
     setPantallas((prev) => prev.filter((p) => p.id !== pantallaId));
     setAsignaciones((prev) => prev.filter((a) => a.pantallaId !== pantallaId));
@@ -133,6 +149,9 @@ export function usePantallas(profile: any, session: Session | null) {
       await backendApi.del(`/api/colaboradores/${colaboradorId}`);
     } catch (e) {
       console.error("Error eliminando colaborador:", e);
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo eliminar el colaborador.",
+      );
     }
 
     const pantallasAsignadas = asignaciones

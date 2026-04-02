@@ -62,6 +62,56 @@ const fmtMoney = (n: number) =>
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+function esVentaPorDiasModal(v: RegistroVenta): boolean {
+  const unidad = String((v as { duracionUnidad?: string }).duracionUnidad ?? "")
+    .toLowerCase()
+    .trim();
+  if (["dias", "días", "dia", "día"].includes(unidad)) return true;
+  const notas = String(v.notas ?? "").toLowerCase();
+  return (
+    notas.includes("gasto_dia") || notas.includes("al día") || notas.includes("al dia")
+  );
+}
+
+function costoVentaBrutoVenta(v: RegistroVenta): number {
+  return Math.max(0, Number(v.costoVenta ?? v.costos ?? 0) || 0);
+}
+
+/** Prorrateo mensual (contratos por meses); por días se muestra el total del período. */
+function costoVentaDesgloseParaOrden(v: RegistroVenta): {
+  total: number;
+  mensual: number;
+  etiquetaSufijo: string;
+} {
+  const total = costoVentaBrutoVenta(v);
+  if (total <= 0) {
+    return { total: 0, mensual: 0, etiquetaSufijo: "/mes" };
+  }
+  if (esVentaPorDiasModal(v)) {
+    return { total, mensual: total, etiquetaSufijo: " (período)" };
+  }
+  const meses = Math.max(1, Number(v.mesesRenta ?? 1) || 1);
+  return {
+    total,
+    mensual: round2(total / meses),
+    etiquetaSufijo: "/mes",
+  };
+}
+
+function colaboradorMuestraCostoVentaEnOrden(c: Colaborador | undefined): boolean {
+  if (!c) return false;
+  const t = String(c.tipoComision ?? "").toLowerCase();
+  if (t === "precio_fijo" || t === "consideracion") return true;
+  const nombreTp = String(
+    (c as Colaborador & { tipoPagoNombre?: string }).tipoPagoNombre ?? "",
+  ).toLowerCase();
+  return (
+    nombreTp.includes("consider") ||
+    nombreTp.includes("precio fijo") ||
+    nombreTp.includes("precio_fijo")
+  );
+}
+
 function idsProductosVenta(v: RegistroVenta): string[] {
   if (Array.isArray(v.productoIds) && v.productoIds.length > 0) {
     return v.productoIds.map((x) => String(x));
@@ -447,12 +497,20 @@ export const ModalCrearOrden: React.FC<Props> = ({
     () =>
       totalesDesdeLineas(detalleLineas, config.ivaPercentaje, {
         tipoComision: colaboradorSeleccionado?.tipoComision,
+        tipoPagoNombre: colaboradorSeleccionado?.tipoPagoNombre,
+        mesOrden0: mes,
+        añoOrden: año,
+        diaCorteOrdenes: Number(config.diaCorteOrdenes ?? 20) || 20,
         ventasPorId: ventasPorIdOrden,
       }),
     [
       detalleLineas,
       config.ivaPercentaje,
+      config.diaCorteOrdenes,
+      mes,
+      año,
       colaboradorSeleccionado?.tipoComision,
+      colaboradorSeleccionado?.tipoPagoNombre,
       ventasPorIdOrden,
     ],
   );
@@ -814,6 +872,43 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                   </div>
                                 </div>
                               ) : null}
+                              {colaboradorMuestraCostoVentaEnOrden(
+                                colaboradorSeleccionado,
+                              ) ? (() => {
+                                const { total, mensual, etiquetaSufijo } =
+                                  costoVentaDesgloseParaOrden(v);
+                                const porDias = esVentaPorDiasModal(v);
+                                const mesesContrato = Math.max(
+                                  1,
+                                  Number(v.mesesRenta ?? 1) || 1,
+                                );
+                                return (
+                                  <div className="modal-venta-section modal-venta-section--costo-venta">
+                                    <div
+                                      className="modal-venta-checklist"
+                                      role="group"
+                                      aria-label="Costo de la venta"
+                                    >
+                                      <div className="modal-venta-check-row modal-venta-costo-venta-row">
+                                        <span className="modal-venta-check-label">
+                                          Costo de la venta
+                                        </span>
+                                        <span className="modal-venta-check-precio">
+                                          $
+                                          {fmtMoney(porDias ? total : mensual)}
+                                          {porDias ? etiquetaSufijo : " por mes"}
+                                        </span>
+                                      </div>
+                                      {!porDias && mesesContrato > 1 ? (
+                                        <div className="modal-venta-costo-venta-total">
+                                          Total contrato:{" "}
+                                          <strong>${fmtMoney(total)}</strong>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })() : null}
                       {colaboradorSeleccionado?.tipoComision ===
                               "porcentaje" ? (
                                 <div className="modal-venta-section modal-venta-section--gastos-last">

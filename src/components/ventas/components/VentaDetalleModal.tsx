@@ -181,6 +181,9 @@ export const VentaDetalleModal: React.FC<Props> = ({
                     : 0;
 
                 const esPorcentaje = colaborador?.tipoComision === "porcentaje";
+                const esFijoOConsideracion =
+                  colaborador?.tipoComision === "consideracion" ||
+                  colaborador?.tipoComision === "precio_fijo";
                 let totalMontoSocio = 0;
                 if (esPorcentaje) {
                   // Si el importe guardado es menor que el bruto, es el monto socio real (líneas producto/pantalla).
@@ -210,12 +213,28 @@ export const VentaDetalleModal: React.FC<Props> = ({
                         )
                       : 0;
 
-                // Regla actual: costos se muestran por separado, no descuentan aquí.
-                const utilidad =
-                  totalBruto -
-                  totalComision -
-                  totalPagoCons -
-                  (esPorcentaje ? totalMontoSocio : 0);
+                // Porcentaje: utilidad = precio de venta (− monto socio). Fijo/consideración: utilidad = costo. Otros: margen.
+                const utilidad = esPorcentaje
+                  ? Math.max(
+                      0,
+                      Math.round((totalBruto - totalMontoSocio) * 100) / 100,
+                    )
+                  : esFijoOConsideracion
+                    ? Math.max(0, Number(totalCostos) || 0)
+                    : Math.max(
+                        0,
+                        Math.round(
+                          (totalBruto -
+                            totalComision -
+                            totalPagoCons -
+                            Number(totalCostos || 0)) *
+                            100,
+                        ) / 100,
+                      );
+                const utilidadPorMes =
+                  meses > 0
+                    ? Math.round((utilidad / meses) * 100) / 100
+                    : utilidad;
 
                 return (
                   <>
@@ -317,6 +336,12 @@ export const VentaDetalleModal: React.FC<Props> = ({
                       <span>Utilidad neta</span>
                       <span>{fmt(utilidad)}</span>
                     </div>
+                    {meses > 1 ? (
+                      <div className="resumen-fin-row resumen-fin-sub">
+                        <span>↳ Utilidad neta por mes</span>
+                        <span>{fmt(utilidadPorMes)}</span>
+                      </div>
+                    ) : null}
                   </>
                 );
               })()}

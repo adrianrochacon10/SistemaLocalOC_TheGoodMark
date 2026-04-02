@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { toast } from "react-toastify";
 import { ConfiguracionEmpresa, OrdenDeCompra } from "../types";
 import { backendApi } from "../lib/backendApi";
 import { mapOrdenFromApi } from "../utils/ordenApiMapper";
@@ -44,7 +45,14 @@ export function useConfiguracion(profile: any, session: Session | null) {
           });
         }
       } catch (e) {
-        console.error("Error cargando configuración:", e);
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/fetch|Failed to fetch|NETWORK|refused|reset/i.test(msg)) {
+          console.warn(
+            "[config] Sin conexión al API (¿backend en ejecución?).",
+          );
+        } else {
+          console.error("Error cargando configuración:", e);
+        }
       }
     };
     cargar();
@@ -85,7 +93,14 @@ export function useConfiguracion(profile: any, session: Session | null) {
       try {
         await refetchOrdenes();
       } catch (e) {
-        console.error("Error cargando órdenes:", e);
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/fetch|Failed to fetch|NETWORK|refused|reset/i.test(msg)) {
+          console.warn(
+            "[órdenes] Sin conexión al API (¿backend en ejecución?).",
+          );
+        } else {
+          console.error("Error cargando órdenes:", e);
+        }
       }
     })();
   }, [refetchOrdenes]);
@@ -103,11 +118,12 @@ export function useConfiguracion(profile: any, session: Session | null) {
         activo: config.activo,
       });
       if (data?.id) setConfig((prev) => ({ ...prev, id: data.id }));
+      toast.success("Configuración guardada correctamente.");
     } catch (e) {
       console.error("Error guardando configuración:", e);
-      alert(
+      toast.error(
         e instanceof Error
-          ? `Error: ${e.message}`
+          ? e.message
           : "Error al guardar configuración.",
       );
     }
@@ -119,32 +135,50 @@ export function useConfiguracion(profile: any, session: Session | null) {
   };
 
   const handleCrearOrdenManual = async (payload: CrearOrdenPayload) => {
-    const res = (await backendApi.post("/api/ordenes/crear-manual", {
-      colaborador_id: payload.colaboradorId,
-      mes: payload.mes + 1,
-      anio: payload.año,
-      ventas_ids: payload.ventasIds,
-      detalle_lineas: payload.detalleLineas,
-      subtotal: payload.subtotal,
-      iva: payload.iva,
-      total: payload.total,
-      iva_porcentaje: payload.ivaPercentaje,
-    })) as { orden?: any };
-    if (!res?.orden) throw new Error("Respuesta inválida del servidor");
-    const nuevaOrden = mapOrdenFromApi(res.orden);
-    setOrdenes((prev) => {
-      const sinDuplicado = prev.filter((o) => o.id !== nuevaOrden.id);
-      return [nuevaOrden, ...sinDuplicado];
-    });
+    try {
+      const res = (await backendApi.post("/api/ordenes/crear-manual", {
+        colaborador_id: payload.colaboradorId,
+        mes: payload.mes + 1,
+        anio: payload.año,
+        ventas_ids: payload.ventasIds,
+        detalle_lineas: payload.detalleLineas,
+        subtotal: payload.subtotal,
+        iva: payload.iva,
+        total: payload.total,
+        iva_porcentaje: payload.ivaPercentaje,
+      })) as { orden?: any };
+      if (!res?.orden) throw new Error("Respuesta inválida del servidor");
+      const nuevaOrden = mapOrdenFromApi(res.orden);
+      setOrdenes((prev) => {
+        const sinDuplicado = prev.filter((o) => o.id !== nuevaOrden.id);
+        return [nuevaOrden, ...sinDuplicado];
+      });
+      toast.success("Orden creada correctamente.");
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo crear la orden.",
+      );
+      throw e;
+    }
   };
 
   const handleEliminarOrden = async (ordenId: string) => {
-    await backendApi.del(`/api/ordenes/${ordenId}`);
-    setOrdenes((prev) => prev.filter((o) => o.id !== ordenId));
     try {
-      await refetchOrdenes();
+      await backendApi.del(`/api/ordenes/${ordenId}`);
+      setOrdenes((prev) => prev.filter((o) => o.id !== ordenId));
+      toast.success("Orden eliminada correctamente.");
+      try {
+        await refetchOrdenes();
+      } catch (e) {
+        console.warn("No se pudieron refrescar órdenes tras eliminar:", e);
+      }
     } catch (e) {
-      console.warn("No se pudieron refrescar órdenes tras eliminar:", e);
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : "No se pudo eliminar la orden.",
+      );
+      throw e;
     }
   };
 

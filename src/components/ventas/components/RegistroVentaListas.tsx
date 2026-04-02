@@ -41,7 +41,7 @@ const MESES = [
 export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   pantallas,
   asignaciones,
-  colaboradores,
+  colaboradores = [],
   usuarios = [],
   ventasRegistradas,
   onEliminarVenta,
@@ -207,7 +207,10 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
               : `Registros de ${MESES[filtroMes]} de ${filtroAnio}`}
       </h2>
 
-      <EstadisticasVentas ventasFiltradas={ventasFiltradas} />
+      <EstadisticasVentas
+        ventasFiltradas={ventasFiltradas}
+        colaboradores={colaboradores}
+      />
 
       <div className="ventas-list ventas-compacta">
         {ventasPagina.map((venta) => (

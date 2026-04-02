@@ -1,5 +1,8 @@
 import type { OrdenDeCompra, RegistroVenta } from "../types";
-import { utilidadNetaDesdeFilaApi } from "./utilidadVenta";
+import {
+  parseIndiceGastoAdicionalDesdeNotas,
+  utilidadNetaDesdeFilaApi,
+} from "./utilidadVenta";
 
 /** `pantallas_detalle` JSON puede venir en camelCase o snake_case (API/BD). */
 export function detallePantallaId(p: any): string {
@@ -50,6 +53,8 @@ export function mapVentaFromApi(row: any): RegistroVenta {
     precioMensual: detallePrecioMensual(p),
   }));
 
+  const gastoDesdeNotas = parseIndiceGastoAdicionalDesdeNotas(row.notas);
+
   return {
     id: row.id,
     pantallasIds,
@@ -99,6 +104,13 @@ export function mapVentaFromApi(row: any): RegistroVenta {
         ? Number(row.porcentaje_socio) || 0
         : undefined,
     gastosAdicionales: Number(row.gastos_adicionales ?? 0) || 0,
+    ...(gastoDesdeNotas
+      ? {
+          gastoAdicionalMesIndice: gastoDesdeNotas.indice,
+          gastoAdicionalEnDias: gastoDesdeNotas.enDias,
+        }
+      : {}),
+    identificadorVenta: row.identificador_venta ?? row.identificadorVenta ?? undefined,
     costos: row.costos ?? 0,
     costoVenta: row.costo_venta ?? row.costos ?? 0,
     comision: row.comisiones ?? row.comision ?? 0,
@@ -264,6 +276,10 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
             : undefined,
         precioTotalContrato:
           Number(ventaSrc?.precio_total ?? ventaSrc?.importe_total ?? 0) ||
+          undefined,
+        identificadorVenta:
+          ventaSrc?.identificador_venta ??
+          ventaSrc?.identificadorVenta ??
           undefined,
       };
     });

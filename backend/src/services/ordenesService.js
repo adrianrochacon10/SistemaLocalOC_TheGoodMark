@@ -165,25 +165,6 @@ function importeVentaEnMes(venta, inicioMes, finMes) {
   return round2((pt * diasOverlap) / diasTotal);
 }
 
-function costoVentaEnMes(venta, inicioMes, finMes) {
-  const cv = Number(venta.costo_venta ?? venta.costos ?? 0) || 0;
-  const s = String(venta.fecha_inicio).slice(0, 10);
-  const e = String(venta.fecha_fin).slice(0, 10);
-  if (!s || !e) return round2(cv);
-  if (!(cv > 0)) return 0;
-  const vi = new Date(`${s}T12:00:00`);
-  const vf = new Date(`${e}T12:00:00`);
-  const ms = new Date(`${inicioMes}T12:00:00`);
-  const me = new Date(`${finMes}T12:00:00`);
-  const start = vi > ms ? vi : ms;
-  const end = vf < me ? vf : me;
-  if (start > end) return 0;
-  const day = 86400000;
-  const diasTotal = Math.max(1, Math.round((vf - vi) / day) + 1);
-  const diasOverlap = Math.max(0, Math.round((end - start) / day) + 1);
-  return round2((cv * diasOverlap) / diasTotal);
-}
-
 function colaboradorUsaCostoEnOrden(row) {
   if (!row) return false;
   const tc = String(row.tipo_comision ?? "").toLowerCase();
@@ -219,15 +200,55 @@ function importeTrasPorcentajeSocio(venta, importeBruto, colabRow, aplicarPorcen
   return round2(bruto * (1 - Math.min(100, pct) / 100));
 }
 
-function costoProporcionalImporteVenta(venta, importeLinea) {
-  const cv = Number(venta?.costo_venta ?? venta?.costos ?? 0) || 0;
-  if (cv <= 0 || importeLinea <= 0) return 0;
-  const ref = Number(venta?.precio_total ?? 0) || 0;
-  if (!(ref > 0)) return round2(cv);
-  return round2((cv * importeLinea) / ref);
+/** Meses de contrato: `duracion_meses` en BD o diferencia inicio–fin. */
+function mesesContratoVenta(venta) {
+  const mr = Number(venta?.duracion_meses ?? venta?.meses_renta);
+  if (Number.isFinite(mr) && mr > 0) return Math.max(1, Math.floor(mr));
+  const s = String(venta?.fecha_inicio ?? "").slice(0, 10);
+  const e = String(venta?.fecha_fin ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(e)) return 1;
+  const vi = new Date(`${s}T12:00:00`);
+  const vf = new Date(`${e}T12:00:00`);
+  if (Number.isNaN(vi.getTime()) || Number.isNaN(vf.getTime())) return 1;
+  const n =
+    (vf.getFullYear() - vi.getFullYear()) * 12 +
+    (vf.getMonth() - vi.getMonth());
+  return Math.max(1, n);
 }
 
-async function subtotalGrupoOrden(colaboradorId, groupVentas, inicio, finStr) {
+/**
+ * Consideración / precio fijo: cuota mensual = costo total ÷ meses; línea parcial según
+ * importe línea vs importe de la venta en ese mes calendario.
+ */
+function costoLineaConsideracionPrecioFijo(
+  venta,
+  mes1a12,
+  anio,
+  importeLinea,
+  diaCorte,
+  inicioMes,
+  finMesStr,
+) {
+  const cv = Number(venta?.costo_venta ?? venta?.costos ?? 0) || 0;
+  if (!(cv > 0) || !(importeLinea > 0)) return 0;
+  if (!ventaIncluidaEnMesOrden(venta, mes1a12, anio, diaCorte)) return 0;
+  const meses = mesesContratoVenta(venta);
+  const cuota = round2(cv / meses);
+  const ventaMesFull = importeVentaEnMes(venta, inicioMes, finMesStr);
+  const EPS = 0.05;
+  if (!(ventaMesFull > 0.01)) return cuota;
+  if (Math.abs(importeLinea - ventaMesFull) < EPS) return cuota;
+  return round2((cuota * importeLinea) / ventaMesFull);
+}
+
+async function subtotalGrupoOrden(
+  colaboradorId,
+  groupVentas,
+  mes1a12,
+  anio,
+  diaCorte,
+) {
+  const { inicio, finStr } = boundsMesCalendario(anio, mes1a12);
   const { data: c } = await supabase
     .from("colaboradores")
     .select("tipo_comision, tipo_pago:tipo_pago(nombre)")
@@ -235,7 +256,13 @@ async function subtotalGrupoOrden(colaboradorId, groupVentas, inicio, finStr) {
     .maybeSingle();
   if (colaboradorUsaCostoEnOrden(c)) {
     return round2(
-      groupVentas.reduce((sum, v) => sum + costoVentaEnMes(v, inicio, finStr), 0),
+      groupVentas.reduce((sum, v) => {
+        if (!ventaIncluidaEnMesOrden(v, mes1a12, anio, diaCorte)) return sum;
+        const cv = Number(v.costo_venta ?? v.costos ?? 0) || 0;
+        if (!(cv > 0)) return sum;
+        const meses = mesesContratoVenta(v);
+        return sum + round2(cv / meses);
+      }, 0),
     );
   }
   return round2(
@@ -288,7 +315,7 @@ export async function generarOrden(mes, anio, userId) {
   let vq = supabase
     .from("ventas")
     .select(
-      "id,colaborador_id,precio_total,costo_venta,costos,fecha_inicio,fecha_fin,porcentaje_socio",
+      "id,colaborador_id,precio_total,costo_venta,costos,fecha_inicio,fecha_fin,porcentaje_socio,duracion_meses",
     );
   vq = queryVentasSolapanMes(vq, inicio, finStr);
   const { data: ventas, error: errVentas } = await vq;
@@ -315,8 +342,9 @@ export async function generarOrden(mes, anio, userId) {
     const subtotal = await subtotalGrupoOrden(
       colaboradorId,
       groupVentas,
-      inicio,
-      finStr,
+      m,
+      a,
+      diaCorte,
     );
     const iva = round2(subtotal * IVA_RATE);
     const total = round2(subtotal + iva);
@@ -389,7 +417,7 @@ export async function generarOrdenColaborador(mes, anio, colaborador_id, userId)
   let vq = supabase
     .from("ventas")
     .select(
-      "id,colaborador_id,precio_total,costo_venta,costos,fecha_inicio,fecha_fin,porcentaje_socio",
+      "id,colaborador_id,precio_total,costo_venta,costos,fecha_inicio,fecha_fin,porcentaje_socio,duracion_meses",
     )
     .eq("colaborador_id", cid);
   vq = queryVentasSolapanMes(vq, inicio, finStr);
@@ -416,8 +444,9 @@ export async function generarOrdenColaborador(mes, anio, colaborador_id, userId)
   const subtotal = await subtotalGrupoOrden(
     cid,
     groupVentasPeriodo,
-    inicio,
-    finStr,
+    m,
+    a,
+    diaCorte,
   );
   const iva = round2(subtotal * IVA_RATE);
   const total = round2(subtotal + iva);
@@ -480,6 +509,11 @@ export async function crearManual({
   if (!m || m < 1 || m > 12 || !a) return { error: "mes (1-12) y anio son obligatorios" };
 
   const genPor = await generadoPorSeguro(userId);
+  const diaCorteManual = await obtenerDiaCorteOrdenes();
+  const { inicio: inicioMesManual, finStr: finMesManual } = boundsMesCalendario(
+    a,
+    m,
+  );
 
   const ventasIds = Array.isArray(ventas_ids)
     ? ventas_ids.map((x) => String(x).trim()).filter(Boolean)
@@ -494,7 +528,7 @@ export async function crearManual({
   const { data: ventasRows, error: errV } = await supabase
     .from("ventas")
     .select(
-      "id,colaborador_id,estado_venta,precio_total,costo_venta,costos,porcentaje_socio",
+      "id,colaborador_id,estado_venta,precio_total,costo_venta,costos,porcentaje_socio,fecha_inicio,fecha_fin,duracion_meses",
     )
     .in("id", ventasIds);
   if (errV) throw new Error(errV.message);
@@ -525,7 +559,15 @@ export async function crearManual({
       const imp = Number(line.importe) || 0;
       const aplicarPct = line.aplicar_porcentaje_socio;
       sumB += usarCosto
-        ? costoProporcionalImporteVenta(ventaRow, imp)
+        ? costoLineaConsideracionPrecioFijo(
+            ventaRow,
+            m,
+            a,
+            imp,
+            diaCorteManual,
+            inicioMesManual,
+            finMesManual,
+          )
         : importeTrasPorcentajeSocio(ventaRow, imp, colabOrdenRow, aplicarPct);
     }
     subRecalc = round2(sumB);

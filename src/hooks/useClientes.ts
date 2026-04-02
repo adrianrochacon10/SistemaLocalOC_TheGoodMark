@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { toast } from "react-toastify";
 import { Colaborador } from "../types";
 import { backendApi } from "../lib/backendApi";
 
@@ -51,11 +52,35 @@ const mapBackendColaborador = (row: any): Colaborador & ExtrasColaborador => {
     productoId: row.producto_id ?? row.productoId ?? row.producto?.id ?? "",
     tipoPagoId: row.tipo_pago_id ?? row.tipoPagoId ?? row.tipo_pago?.id ?? undefined,
     tipoComision: (() => {
-      const raw = String(row.tipo_comision ?? row.tipoComision ?? "").trim().toLowerCase();
+      const raw = String(row.tipo_comision ?? row.tipoComision ?? "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
       if (raw === "porcentaje") return "porcentaje";
-      const nombreTp = String(row.tipo_pago?.nombre ?? "").trim().toLowerCase();
-      return nombreTp.includes("porcentaje") ? "porcentaje" : undefined;
+      if (raw === "consideracion") return "consideracion";
+      if (raw === "precio_fijo") return "precio_fijo";
+      if (raw === "ninguno") return "ninguno";
+      const nombreTp = String(row.tipo_pago?.nombre ?? "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+      if (nombreTp.includes("porcentaje")) return "porcentaje";
+      if (
+        nombreTp.includes("consideracion") ||
+        nombreTp.includes("consideración")
+      )
+        return "consideracion";
+      if (
+        nombreTp.includes("precio fijo") ||
+        nombreTp.includes("precio_fijo") ||
+        nombreTp.includes("pago fijo")
+      )
+        return "precio_fijo";
+      return undefined;
     })(),
+    tipoPagoNombre: String(row.tipo_pago?.nombre ?? "").trim() || undefined,
     porcentajeSocio: Number(
       row.porcentaje_socio ??
         row.porcentajeSocio ??
@@ -141,8 +166,13 @@ export function useClientes(profile: any, session: Session | null) {
           Array.isArray(porcentajes) ? porcentajes : [],
         );
         if (pct != null) {
-          c.tipoComision = "porcentaje";
           c.porcentajeSocio = pct;
+          if (
+            c.tipoComision !== "consideracion" &&
+            c.tipoComision !== "precio_fijo"
+          ) {
+            c.tipoComision = "porcentaje";
+          }
         }
         return c;
       }),
@@ -211,11 +241,14 @@ export function useClientes(profile: any, session: Session | null) {
             clienteParaEstado.id,
             (cliente as Colaborador & ExtrasColaborador).color,
           );
+          toast.success("Colaborador creado correctamente.");
         }
       } catch (e) {
         console.error("Error guardando cliente en backend:", e);
         throw e;
       }
+    } else {
+      toast.success("Colaborador agregado.");
     }
 
     setClientes((prev: Colaborador[]) => {
@@ -278,6 +311,7 @@ export function useClientes(profile: any, session: Session | null) {
       prev.map((c: Colaborador) => (c.id === actualizado.id ? actualizado : c)),
     );
 
+    toast.success("Colaborador actualizado correctamente.");
     return actualizado;
   };
 
@@ -286,6 +320,7 @@ export function useClientes(profile: any, session: Session | null) {
     setClientes((prev: Colaborador[]) =>
       prev.filter((c: Colaborador) => c.id !== colaboradorId),
     );
+    toast.success("Colaborador eliminado correctamente.");
   };
 
   return {

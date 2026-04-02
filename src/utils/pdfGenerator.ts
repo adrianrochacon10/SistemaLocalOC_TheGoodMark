@@ -16,7 +16,7 @@ import {
 import {
   importeLineaRespectoOrden,
   importeVentaEnMesOrden,
-  costoVentaProporcionalImporte,
+  costoLineaOrdenConsideracionPrecioFijo,
   colaboradorUsaCostoComoBaseOrden,
   importeLineaOrdenTrasPorcentajeSocio,
 } from "./ordenUtils";
@@ -38,6 +38,60 @@ function fmtMoney(n: number): string {
 
 function round2(n: number): number {
   return Math.round(Number(n) * 100) / 100;
+}
+
+/** Pantallas por registro de venta (misma lógica que el detalle del PDF). */
+function contarPantallasVentaResumenPdf(v: RegistroVenta): number {
+  const detalle = Array.isArray(v.pantallasDetalle)
+    ? v.pantallasDetalle.filter((p: any) => {
+        const pid = String(p?.pantallaId ?? p?.pantalla_id ?? "");
+        return (
+          pid &&
+          pid !== "__producto_total__" &&
+          !esLineaPrecioProductoEnDetalle(pid)
+        );
+      })
+    : [];
+  if (detalle.length > 0) return detalle.length;
+  return (v.pantallasIds ?? []).map(String).filter(Boolean).length;
+}
+
+function contarProductosVentaResumenPdf(v: RegistroVenta): number {
+  if (v.productoIncluidoEnOrden === false) return 0;
+  const detalle = Array.isArray(v.pantallasDetalle)
+    ? v.pantallasDetalle.filter((p: any) =>
+        esLineaPrecioProductoEnDetalle(
+          String(p?.pantallaId ?? p?.pantalla_id ?? ""),
+        ),
+      )
+    : [];
+  if (detalle.length > 0) return detalle.length;
+  if (Array.isArray(v.productoIds) && v.productoIds.length > 0) {
+    return v.productoIds.length;
+  }
+  if (v.productoId) return 1;
+  const nombre = String(v.productoNombre ?? "").trim();
+  if (!nombre) return 0;
+  return nombre
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean).length;
+}
+
+/** Suma de pantallas y productos en las ventas de las órdenes indicadas (una OC = solo sus registros). */
+function totalesPantallasProductosEnOrdenes(ordenes: OrdenDeCompra[]): {
+  pantallas: number;
+  productos: number;
+} {
+  let pantallas = 0;
+  let productos = 0;
+  for (const o of ordenes) {
+    for (const v of o.registrosVenta ?? []) {
+      pantallas += contarPantallasVentaResumenPdf(v);
+      productos += contarProductosVentaResumenPdf(v);
+    }
+  }
+  return { pantallas, productos };
 }
 
 /** Altura mínima de celda de descripción: debe coincidir con splitTextToSize en didDrawCell. */
@@ -302,6 +356,7 @@ export async function exportarPDFOrden(
   const colab = colaboradores.find(
     (c) => String(c.id) === String(orden.colaboradorId),
   );
+  const diaCortePdf = Number(config.diaCorteOrdenes ?? 20) || 20;
   const fechaDoc = new Date().toLocaleDateString("es-MX");
   const mesFormatoRaw = new Date(
     orden.año ?? 0,
@@ -309,67 +364,9 @@ export async function exportarPDFOrden(
   ).toLocaleDateString("es-MX", { month: "long", year: "numeric" });
   const mesFormato =
     mesFormatoRaw.charAt(0).toUpperCase() + mesFormatoRaw.slice(1);
-  const pantallasUnicas = new Set<string>();
-  const contarPantallasVenta = (v: RegistroVenta): number => {
-    const detalle = Array.isArray(v.pantallasDetalle)
-      ? v.pantallasDetalle.filter((p: any) => {
-          const pid = String(p?.pantallaId ?? p?.pantalla_id ?? "");
-          return (
-            pid &&
-            pid !== "__producto_total__" &&
-            !esLineaPrecioProductoEnDetalle(pid)
-          );
-        })
-      : [];
-    if (detalle.length > 0) return detalle.length;
-    return (v.pantallasIds ?? []).map(String).filter(Boolean).length;
-  };
-  for (const v of registros) {
-    const detalle = Array.isArray(v.pantallasDetalle)
-      ? v.pantallasDetalle.filter((p: any) => {
-          const pid = String(p?.pantallaId ?? p?.pantalla_id ?? "");
-          return (
-            pid &&
-            pid !== "__producto_total__" &&
-            !esLineaPrecioProductoEnDetalle(pid)
-          );
-        })
-      : [];
-    if (detalle.length > 0) {
-      for (const p of detalle) {
-        const pid = String(p?.pantallaId ?? p?.pantalla_id ?? "");
-        if (pid) pantallasUnicas.add(pid);
-      }
-      continue;
-    }
-    for (const pid of v.pantallasIds ?? []) pantallasUnicas.add(String(pid));
-  }
-  const numPantallas = pantallasUnicas.size;
-  const contarProductosVenta = (v: RegistroVenta): number => {
-    if (v.productoIncluidoEnOrden === false) return 0;
-    const detalle = Array.isArray(v.pantallasDetalle)
-      ? v.pantallasDetalle.filter((p: any) =>
-          esLineaPrecioProductoEnDetalle(
-            String(p?.pantallaId ?? p?.pantalla_id ?? ""),
-          ),
-        )
-      : [];
-    if (detalle.length > 0) return detalle.length;
-    if (Array.isArray(v.productoIds) && v.productoIds.length > 0) {
-      return v.productoIds.length;
-    }
-    if (v.productoId) return 1;
-    const nombre = String(v.productoNombre ?? "").trim();
-    if (!nombre) return 0;
-    return nombre
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean).length;
-  };
-  const numProductos = registros.reduce(
-    (sum, v) => sum + contarProductosVenta(v),
-    0,
-  );
+  /** Mismo alcance que las filas de la tabla: solo ventas de esta orden. */
+  const { pantallas: totPantallasResumen, productos: totProductosResumen } =
+    totalesPantallasProductosEnOrdenes([orden]);
 
   let inicioMin = new Date();
   let finMax = new Date(0);
@@ -435,16 +432,9 @@ export async function exportarPDFOrden(
     infoRows,
   );
 
-  const pantallasBeneficio =
-    numPantallas > 0
-      ? numPantallas
-      : registros.reduce((m, v) => Math.max(m, contarPantallasVenta(v)), 0);
-
-  const numProductosBeneficio = numProductos;
-
-  const h2 = drawInfoBox(doc, margin + boxW + gap, y, boxW, "BENEFICIOS", [
-    { label: "Pantallas", value: String(pantallasBeneficio) },
-    { label: "Producto", value: String(numProductosBeneficio) },
+  const h2 = drawInfoBox(doc, margin + boxW + gap, y, boxW, "PRODUCTOS", [
+    { label: "Pantallas", value: String(totPantallasResumen) },
+    { label: "Producto", value: String(totProductosResumen) },
   ]);
 
   y += Math.max(h1, h2) + 8;
@@ -452,13 +442,13 @@ export async function exportarPDFOrden(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
   doc.setTextColor(...COL_BLUE);
-  doc.text("DETALLE DE PRODUCTOS Y SERVICIOS", margin, y);
+  doc.text("Detalle de productos y servicios", margin, y);
   y += 4;
 
   type DescMeta = { title: string; details: string[] };
   const descByRow = new Map<number, DescMeta>();
-  /** Texto «Precio por mes» bajo columnas PAQUETE+PRECIO (índice fila body 0-based). */
-  const precioPorMesByRow = new Map<number, string>();
+  /** Texto auxiliar bajo columna PRECIO (índice fila body 0-based). */
+  const precioSublineaByRow = new Map<number, string>();
 
   let sumLineasPdf = 0;
   const numRegPdf = registros.length;
@@ -507,7 +497,9 @@ export async function exportarPDFOrden(
             const precioCat = Number(pMap.get(key)?.precio ?? 0) || 0;
             return { nombre, precio: precioCat };
           });
-    const titulo = "VENTA";
+    const titulo =
+      String(colab?.nombre ?? orden.colaboradorNombre ?? "").trim() ||
+      "Colaborador";
     const paqueteOriginal = paqueteDesdeVenta(venta);
     const paqueteEsPorDias = paqueteOriginal.toLowerCase().includes("dia");
     const paqueteTxt = paqueteEsPorDias ? paqueteOriginal : "1 Mes";
@@ -570,9 +562,20 @@ export async function exportarPDFOrden(
       }
       return pv;
     })();
-    const usarCostoPdf = colaboradorUsaCostoComoBaseOrden(colab?.tipoComision);
+    const usarCostoPdf = colaboradorUsaCostoComoBaseOrden(
+      colab?.tipoComision,
+      colab?.tipoPagoNombre,
+    );
     const precioColumna = usarCostoPdf
-      ? round2(costoVentaProporcionalImporte(venta, precioVentaLinea))
+      ? round2(
+          costoLineaOrdenConsideracionPrecioFijo(
+            venta,
+            orden.mes ?? 0,
+            orden.año ?? new Date().getFullYear(),
+            precioVentaLinea,
+            diaCortePdf,
+          ),
+        )
       : round2(
           importeLineaOrdenTrasPorcentajeSocio(
             precioVentaLinea,
@@ -580,13 +583,18 @@ export async function exportarPDFOrden(
             colab?.tipoComision,
           ),
         );
-    const lineaPrecioPorMes = null;
-    if (lineaPrecioPorMes) {
-      precioPorMesByRow.set(idx - 1, lineaPrecioPorMes);
+    const lineaPrecioSub = null;
+    if (lineaPrecioSub) {
+      precioSublineaByRow.set(idx - 1, lineaPrecioSub);
     }
     const porcentajeColaboradorFila = Math.max(
       0,
-      Number(venta.porcentajeSocio ?? 0) || 0,
+      Number(venta.porcentajeSocio ?? colab?.porcentajeSocio ?? 0) || 0,
+    );
+    const precioVentaTotal = round2(
+      Number(venta.precioTotalContrato ?? 0) > 0
+        ? Number(venta.precioTotalContrato)
+        : Number(venta.precioTotal ?? venta.importeTotal ?? 0) || 0,
     );
     const productosSoloNombres =
       prodIncluido && productosDetalle.length > 0
@@ -595,23 +603,41 @@ export async function exportarPDFOrden(
             ...productosDetalle.map((p) => `- ${p.nombre}`),
           ]
         : [];
-    const extraDesc: string[] = [];
-    if (colab?.tipoComision === "porcentaje" && porcentajeColaboradorFila > 0) {
-      extraDesc.push(
-        `Colaborador por porcentaje: ${porcentajeColaboradorFila.toFixed(2)}% sobre precio de venta del mes`,
+    const esColabPorcentajePdf =
+      String(colab?.tipoComision ?? "").toLowerCase() === "porcentaje";
+    const lineasTrasPantallasProd: string[] = [];
+    if (esColabPorcentajePdf) {
+      lineasTrasPantallasProd.push(
+        `Porcentaje de colaborador: ${porcentajeColaboradorFila.toFixed(2)}%`,
       );
+      if (
+        porcentajeColaboradorFila > 0 &&
+        venta.aplicarPorcentajeSocioEnOrden !== false &&
+        precioVentaLinea > 0
+      ) {
+        const montoDescontado = round2(precioVentaLinea - precioColumna);
+        if (montoDescontado > 0.005) {
+          lineasTrasPantallasProd.push(
+            `Monto descontado (${porcentajeColaboradorFila.toFixed(2)}%): ${fmtMoney(montoDescontado)}`,
+          );
+        }
+      }
     }
-    if (usarCostoPdf && precioVentaLinea > 0) {
-      extraDesc.push(`Precio de venta del mes: ${fmtMoney(precioVentaLinea)}`);
-    } else if (
-      !usarCostoPdf &&
-      colab?.tipoComision === "porcentaje" &&
-      porcentajeColaboradorFila > 0 &&
-      venta.aplicarPorcentajeSocioEnOrden !== false &&
-      precioVentaLinea > 0 &&
-      Math.abs(precioColumna - precioVentaLinea) > 0.005
-    ) {
-      extraDesc.push(`Precio de venta del mes: ${fmtMoney(precioVentaLinea)}`);
+    if (!usarCostoPdf) {
+      if (precioVentaTotal > 0) {
+        lineasTrasPantallasProd.push(
+          `Precio de la venta total: ${fmtMoney(precioVentaTotal)}`,
+        );
+      }
+      if (precioVentaLinea > 0) {
+        lineasTrasPantallasProd.push(
+          `Precio de venta: ${fmtMoney(precioVentaLinea)}`,
+        );
+      }
+    } else if (precioColumna > 0) {
+      lineasTrasPantallasProd.push(
+        `Costo de venta: ${fmtMoney(precioColumna)}`,
+      );
     }
     descByRow.set(idx - 1, {
       title: titulo,
@@ -620,7 +646,7 @@ export async function exportarPDFOrden(
         `Pantallas (${ids.length}):`,
         ...pantallasSoloEtiquetas,
         ...productosSoloNombres,
-        ...extraDesc,
+        ...lineasTrasPantallasProd,
         `Periodo: ${fi} - ${ff}`,
       ],
     });
@@ -650,7 +676,7 @@ export async function exportarPDFOrden(
 
   autoTable(doc, {
     startY: y,
-    head: [["#", "DESCRIPCION", "PAQUETE", "PRECIO/MES"]],
+    head: [["#", "DESCRIPCION", "PAQUETE", "PRECIO"]],
     body: tableBody,
     styles: {
       fontSize: 8,
@@ -687,7 +713,7 @@ export async function exportarPDFOrden(
       if (
         data.section === "body" &&
         (data.column.index === 2 || data.column.index === 3) &&
-        precioPorMesByRow.has(data.row.index)
+        precioSublineaByRow.has(data.row.index)
       ) {
         const prev = Number(data.cell.styles.minCellHeight) || 0;
         // Espacio para 2 líneas bajo el importe / paquete sin solapar el texto principal.
@@ -724,18 +750,18 @@ export async function exportarPDFOrden(
       // Solo columna PRECIO: autoTable recorta por celda; si dibujamos en PAQUETE, el texto
       // que invade PRECIO queda cortado. Aquí cabe el texto completo alineado a la derecha.
       if (data.section !== "body" || data.column.index !== 3) return;
-      const subMes = precioPorMesByRow.get(data.row.index);
-      if (!subMes) return;
+      const subPrecio = precioSublineaByRow.get(data.row.index);
+      if (!subPrecio) return;
       const docRef = data.doc;
       const padX = 2;
       const innerW = Math.max(8, data.cell.width - padX * 2);
       docRef.setFont("helvetica", "normal");
       docRef.setFontSize(7);
       docRef.setTextColor(55, 55, 55);
-      const m = subMes.match(/^(Precio por mes:\s*)(.+)$/i);
+      const m = subPrecio.match(/^(Precio:\s*)(.+)$/i);
       const lines: string[] = m
         ? [m[1]!.trim(), m[2]!.trim()]
-        : docRef.splitTextToSize(subMes, innerW);
+        : docRef.splitTextToSize(subPrecio, innerW);
       const lineGap = 3.3;
       let ly = data.cell.y + data.cell.height - 2;
       for (let i = lines.length - 1; i >= 0; i--) {

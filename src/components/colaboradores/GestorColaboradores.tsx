@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { toast } from "react-toastify";
 import {
   Pantalla,
   AsignacionPantalla,
@@ -416,6 +417,7 @@ export function useGestorColaboradores(props: Props) {
       resetFormulario();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "No se pudo guardar el colaborador";
+      toast.error(msg);
       if (
         msg.toLowerCase().includes("codigo") &&
         (msg.toLowerCase().includes("inval") ||
@@ -468,11 +470,13 @@ export function useGestorColaboradores(props: Props) {
         await onEliminarPantallasYAsignaciones(colaboradorId);
         resetFormulario();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "No se pudo eliminar colaborador");
+        toast.error(
+          e instanceof Error ? e.message : "No se pudo eliminar el colaborador.",
+        );
       }
     };
     if (profile?.rol !== "admin") {
-      alert("Solo administrador puede eliminar colaboradores");
+      toast.warning("Solo un administrador puede eliminar colaboradores.");
       return;
     }
     if (
