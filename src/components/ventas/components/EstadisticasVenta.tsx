@@ -22,7 +22,7 @@ export const EstadisticasVentas: React.FC<EstadisticasVentasProps> = ({
     <div className="estadisticas">
       <div className="stat-card">
         <span className="stat-number">{ventasFiltradas.length}</span>
-        <span className="stat-label">Ventas del mes</span>
+        <span className="stat-label">Ventas totales</span>
       </div>
       <div className="stat-card">
         <span className="stat-number">{formatearMoneda(precioVentaAceptadas)}</span>

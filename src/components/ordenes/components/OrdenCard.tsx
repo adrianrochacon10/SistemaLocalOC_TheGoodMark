@@ -135,6 +135,9 @@ export const OrdenCard: React.FC<Props> = ({
                 pv,
                 v,
                 colabOrden.tipoComision,
+                typeof colabOrden.porcentajeSocio === "number"
+                  ? colabOrden.porcentajeSocio
+                  : null,
               );
           return s + linea;
         }, 0) * 100,
@@ -280,8 +283,9 @@ export const OrdenCard: React.FC<Props> = ({
                 String(colabOrden?.tipoComision ?? "").toLowerCase() ===
                 "porcentaje";
               const porcentajeOrden =
-                Number(venta.porcentajeSocio ?? colabOrden?.porcentajeSocio ?? 0) ||
-                0;
+                Number(
+                  colabOrden?.porcentajeSocio ?? venta.porcentajeSocio ?? 0,
+                ) || 0;
               const numReg = (orden.registrosVenta ?? []).length;
               /** Cuota mensual de esta línea en la OC (bruto, sin quitar % del socio). */
               const precioVentaMesBruto = importeLineaRespectoOrden(
@@ -295,6 +299,9 @@ export const OrdenCard: React.FC<Props> = ({
                   precioVentaMesBruto,
                   venta,
                   colabOrden?.tipoComision,
+                  typeof colabOrden?.porcentajeSocio === "number"
+                    ? colabOrden.porcentajeSocio
+                    : null,
                 );
               /** Solo precio fijo / consideración: detalle y montos por costo de venta. Por % → siempre precio de venta. */
               const detalleBasadoEnCosto = colaboradorUsaCostoComoBaseOrden(

@@ -21,6 +21,18 @@ import {
   importeLineaOrdenTrasPorcentajeSocio,
 } from "./ordenUtils";
 
+function colaboradorEsTipoPorcentajePdf(
+  tipoComision?: string,
+  tipoPagoNombre?: string,
+): boolean {
+  if (String(tipoComision ?? "").toLowerCase() === "porcentaje") return true;
+  const nom = String(tipoPagoNombre ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return nom.includes("porcentaje");
+}
+
 const COL_BLUE: [number, number, number] = [23, 58, 95];
 const COL_GREY: [number, number, number] = [110, 110, 110];
 const COL_GREY_BG: [number, number, number] = [245, 245, 247];
@@ -449,6 +461,8 @@ export async function exportarPDFOrden(
   const descByRow = new Map<number, DescMeta>();
   /** Texto auxiliar bajo columna PRECIO (índice fila body 0-based). */
   const precioSublineaByRow = new Map<number, string>();
+  /** Filas cuya columna PRECIO lleva desglose mes / % / neto (colaborador porcentaje). */
+  const filasPrecioDesglosePct = new Set<number>();
 
   let sumLineasPdf = 0;
   const numRegPdf = registros.length;
@@ -566,6 +580,14 @@ export async function exportarPDFOrden(
       colab?.tipoComision,
       colab?.tipoPagoNombre,
     );
+    const porcentajeColaboradorFila = Math.max(
+      0,
+      Number(colab?.porcentajeSocio ?? venta.porcentajeSocio ?? 0) || 0,
+    );
+    const porcentajeColaboradorVivo =
+      typeof colab?.porcentajeSocio === "number"
+        ? colab.porcentajeSocio
+        : null;
     const precioColumna = usarCostoPdf
       ? round2(
           costoLineaOrdenConsideracionPrecioFijo(
@@ -581,21 +603,13 @@ export async function exportarPDFOrden(
             precioVentaLinea,
             venta,
             colab?.tipoComision,
+            porcentajeColaboradorVivo,
           ),
         );
     const lineaPrecioSub = null;
     if (lineaPrecioSub) {
       precioSublineaByRow.set(idx - 1, lineaPrecioSub);
     }
-    const porcentajeColaboradorFila = Math.max(
-      0,
-      Number(venta.porcentajeSocio ?? colab?.porcentajeSocio ?? 0) || 0,
-    );
-    const precioVentaTotal = round2(
-      Number(venta.precioTotalContrato ?? 0) > 0
-        ? Number(venta.precioTotalContrato)
-        : Number(venta.precioTotal ?? venta.importeTotal ?? 0) || 0,
-    );
     const productosSoloNombres =
       prodIncluido && productosDetalle.length > 0
         ? [
@@ -603,35 +617,17 @@ export async function exportarPDFOrden(
             ...productosDetalle.map((p) => `- ${p.nombre}`),
           ]
         : [];
-    const esColabPorcentajePdf =
-      String(colab?.tipoComision ?? "").toLowerCase() === "porcentaje";
+    const esColabPorcentajePdf = colaboradorEsTipoPorcentajePdf(
+      colab?.tipoComision,
+      colab?.tipoPagoNombre,
+    );
     const lineasTrasPantallasProd: string[] = [];
-    if (esColabPorcentajePdf) {
-      lineasTrasPantallasProd.push(
-        `Porcentaje de colaborador: ${porcentajeColaboradorFila.toFixed(2)}%`,
-      );
-      if (
-        porcentajeColaboradorFila > 0 &&
-        venta.aplicarPorcentajeSocioEnOrden !== false &&
-        precioVentaLinea > 0
-      ) {
-        const montoDescontado = round2(precioVentaLinea - precioColumna);
-        if (montoDescontado > 0.005) {
-          lineasTrasPantallasProd.push(
-            `Monto descontado (${porcentajeColaboradorFila.toFixed(2)}%): ${fmtMoney(montoDescontado)}`,
-          );
-        }
-      }
-    }
     if (!usarCostoPdf) {
-      if (precioVentaTotal > 0) {
+      if (!esColabPorcentajePdf && precioVentaLinea > 0) {
         lineasTrasPantallasProd.push(
-          `Precio de la venta total: ${fmtMoney(precioVentaTotal)}`,
-        );
-      }
-      if (precioVentaLinea > 0) {
-        lineasTrasPantallasProd.push(
-          `Precio de venta: ${fmtMoney(precioVentaLinea)}`,
+          paqueteEsPorDias
+            ? `Precio de venta (periodo): ${fmtMoney(precioVentaLinea)}`
+            : `Precio de venta del mes: ${fmtMoney(precioVentaLinea)}`,
         );
       }
     } else if (precioColumna > 0) {
@@ -651,12 +647,21 @@ export async function exportarPDFOrden(
       ],
     });
     sumLineasPdf = round2(sumLineasPdf + precioColumna);
-    tableBody.push([
-      String(idx),
-      " ",
-      paqueteTxt,
-      fmtMoney(precioColumna),
-    ]);
+    const lblPrecioBrutoPdf = paqueteEsPorDias
+      ? "Precio del periodo"
+      : "Precio del mes";
+    let celdaPrecioTabla: string;
+    if (esColabPorcentajePdf) {
+      filasPrecioDesglosePct.add(idx - 1);
+      celdaPrecioTabla = [
+        `${lblPrecioBrutoPdf}: ${fmtMoney(precioVentaLinea)}`,
+        `Porcentaje: ${porcentajeColaboradorFila.toFixed(2)}%`,
+        `Importe: ${fmtMoney(precioColumna)}`,
+      ].join("\n");
+    } else {
+      celdaPrecioTabla = fmtMoney(precioColumna);
+    }
+    tableBody.push([String(idx), " ", paqueteTxt, celdaPrecioTabla]);
   }
 
   if (tableBody.length === 0) {
@@ -672,7 +677,8 @@ export async function exportarPDFOrden(
   const ivaPdf = round2(subtotalPdf * (pctIva / 100));
   const totalPdf = round2(subtotalPdf + ivaPdf);
 
-  const colDescW = pageW - 2 * margin - 10 - 28 - 32;
+  const colPrecioW = 44;
+  const colDescW = pageW - 2 * margin - 10 - 28 - colPrecioW;
 
   autoTable(doc, {
     startY: y,
@@ -695,7 +701,12 @@ export async function exportarPDFOrden(
       0: { cellWidth: 10, halign: "center" },
       1: { cellWidth: colDescW },
       2: { cellWidth: 28, halign: "center", valign: "top" },
-      3: { cellWidth: 32, halign: "right", fontStyle: "bold", valign: "top" },
+      3: {
+        cellWidth: colPrecioW,
+        halign: "right",
+        fontStyle: "bold",
+        valign: "top",
+      },
     },
     margin: { left: margin, right: margin },
     didParseCell: (data) => {
@@ -718,6 +729,16 @@ export async function exportarPDFOrden(
         const prev = Number(data.cell.styles.minCellHeight) || 0;
         // Espacio para 2 líneas bajo el importe / paquete sin solapar el texto principal.
         data.cell.styles.minCellHeight = Math.max(prev, 26);
+      }
+      if (
+        data.section === "body" &&
+        data.column.index === 3 &&
+        filasPrecioDesglosePct.has(data.row.index)
+      ) {
+        const prev = Number(data.cell.styles.minCellHeight) || 0;
+        data.cell.styles.minCellHeight = Math.max(prev, 30);
+        data.cell.styles.fontStyle = "normal";
+        data.cell.styles.fontSize = 7;
       }
     },
     didDrawCell: (data) => {

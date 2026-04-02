@@ -498,6 +498,10 @@ export const ModalCrearOrden: React.FC<Props> = ({
       totalesDesdeLineas(detalleLineas, config.ivaPercentaje, {
         tipoComision: colaboradorSeleccionado?.tipoComision,
         tipoPagoNombre: colaboradorSeleccionado?.tipoPagoNombre,
+        porcentajeColaboradorActual:
+          typeof colaboradorSeleccionado?.porcentajeSocio === "number"
+            ? colaboradorSeleccionado.porcentajeSocio
+            : null,
         mesOrden0: mes,
         añoOrden: año,
         diaCorteOrdenes: Number(config.diaCorteOrdenes ?? 20) || 20,
@@ -511,6 +515,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
       año,
       colaboradorSeleccionado?.tipoComision,
       colaboradorSeleccionado?.tipoPagoNombre,
+      colaboradorSeleccionado?.porcentajeSocio,
       ventasPorIdOrden,
     ],
   );

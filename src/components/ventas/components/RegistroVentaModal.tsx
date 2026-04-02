@@ -25,7 +25,7 @@ import { InputField } from "../../ui/InputField";
 import { ResumenVenta } from "./ResumenVenta";
 import { BotonAccion } from "../../ui/BotonAccion";
 
-/** Costo tal como lo debe ver el usuario: si en BD quedó neto de consideración, se reconstruye el bruto. */
+/** Costo total bruto en BD (o reconstruido si quedó neto de consideración). */
 function costoBrutoParaFormulario(venta: RegistroVenta | null): number {
   if (!venta) return 0;
   const neto = Number(venta.costoVenta ?? venta.costos ?? 0) || 0;
@@ -50,6 +50,16 @@ function inferirDuracionUnidad(venta: RegistroVenta | null): "meses" | "dias" {
   const tarifasDias = [1, 3, 7, 15];
   if (tarifasDias.includes(mr) && dias === mr) return "dias";
   return "meses";
+}
+
+/** Costo por mes en el formulario: el total en BD se reparte entre la duración en meses. */
+function costoPorMesParaFormulario(venta: RegistroVenta | null): number {
+  if (!venta) return 0;
+  const brutoTotal = costoBrutoParaFormulario(venta);
+  const u = inferirDuracionUnidad(venta);
+  const mr = Math.max(1, Number(venta.mesesRenta) || 1);
+  if (u === "dias") return Math.round(brutoTotal * 100) / 100;
+  return Math.round((brutoTotal / mr) * 100) / 100;
 }
 
 function limpiarLineaGastoEnNotas(s: string): string {
@@ -181,7 +191,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const mesesIniciales = ventaInicial?.mesesRenta ?? 1;
 
   const [costos, setCostos] = useState<number>(() =>
-    costoBrutoParaFormulario(ventaInicial),
+    costoPorMesParaFormulario(ventaInicial),
   );
   const [precioMensualManual, setPrecioMensualManual] = useState<number | null>(null);
   const [precioTotalManual, setPrecioTotalManual] = useState<number | null>(null);
@@ -237,7 +247,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
 
   useEffect(() => {
     if (!ventaInicial?.id) return;
-    setCostos(costoBrutoParaFormulario(ventaInicial));
+    setCostos(costoPorMesParaFormulario(ventaInicial));
   }, [ventaInicial?.id]);
 
   useEffect(() => {
@@ -526,6 +536,10 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   // Gastos adicionales son informativos/aparte: NO se integran al total de venta.
   const precioTotalCalculado = Math.round(precioBasePorDuracion * 100) / 100;
   const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
+  /** Colaborador con comisión por %: no aplica costo de venta en el formulario ni en BD. */
+  const esColaboradorPorcentaje =
+    clienteActual?.tipoComision === "porcentaje" ||
+    String(tipoPagoNombreCliente ?? "").toLowerCase().includes("porcentaje");
   const tieneConsideracion =
     clienteActual?.tipoComision === "consideracion" ||
     clienteActual?.tipoComision === "precio_fijo" ||
@@ -534,8 +548,13 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const totalVenta = precioTotalCalculado;
   const totalComision =
     Math.round((totalVenta * (Number(comision || 0) / 100)) * 100) / 100;
-  const costosTotales = Number(costos || 0);
+  const costoPorMesCapturado = Math.max(0, Number(costos || 0));
   const factorDuracion = duracionUnidad === "dias" ? 1 : Math.max(1, mesesRenta);
+  /** Total de costo de venta del contrato (captura mensual × meses; en días = monto único). */
+  const costosBrutoTotales =
+    duracionUnidad === "dias"
+      ? Math.round(costoPorMesCapturado * 100) / 100
+      : Math.round(costoPorMesCapturado * factorDuracion * 100) / 100;
   /** Regla solicitada: porcentaje se calcula sobre precio de venta. */
   const basePorcentajeSocio = Math.max(0, totalVenta);
   const montoSocio = Math.round(
@@ -549,7 +568,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const costoVentaFinal = Math.round(
     Math.max(
       0,
-      costosTotales - (tieneConsideracion ? consideracionTotal : 0),
+      costosBrutoTotales - (tieneConsideracion ? consideracionTotal : 0),
     ) * 100,
   ) / 100;
 
@@ -742,7 +761,10 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       setError("El costo de la venta no puede ser negativo");
       return;
     }
-    if (!Number.isFinite(costosTotales) || costosTotales <= 0) {
+    if (
+      !esColaboradorPorcentaje &&
+      (!Number.isFinite(costoPorMesCapturado) || costoPorMesCapturado <= 0)
+    ) {
       setError("Sin costo de la venta no se puede registrar");
       return;
     }
@@ -819,8 +841,8 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
           ? vendedorSeleccionadoId || usuarioActual.id
           : usuarioActual.id,
       // Bruto capturado: el backend aplica el % del socio sobre precio_total (si porcentaje_socio > 0).
-      costos: costosTotales,
-      costoVenta: costosTotales,
+      costos: esColaboradorPorcentaje ? 0 : costosBrutoTotales,
+      costoVenta: esColaboradorPorcentaje ? 0 : costosBrutoTotales,
       comision: totalComision,
       comisionPorcentaje: Number(comision || 0),
       porcentajeSocio:
@@ -1198,21 +1220,14 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 min={0}
                 step={0.01}
               />
-              {!tieneConsideracion ? (
-                <InputField
-                  label="Costo de la venta"
-                  value={costos}
-                  onChange={(v: any) => setCostos((prev) => toNumberSafe(v, prev))}
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  placeholder="0.00"
-                />
-              ) : null}
-              {tieneConsideracion ? (
-                <div className="form-row">
+              {!esColaboradorPorcentaje ? (
+                <>
                   <InputField
-                    label="Costo de la venta (total)"
+                    label={
+                      duracionUnidad === "dias"
+                        ? "Costo de la venta (total)"
+                        : "Costo de la venta (por mes)"
+                    }
                     value={costos}
                     onChange={(v: any) => {
                       const n = Math.max(0, toNumberSafe(v, Number(costos || 0)));
@@ -1223,39 +1238,27 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                     step={0.01}
                     placeholder="0.00"
                   />
-                  <InputField
-                    label={
-                      duracionUnidad === "dias"
-                        ? "Costo por duración (días)"
-                        : "Costo de la venta (por mes)"
-                    }
-                    value={
-                      duracionUnidad === "dias"
-                        ? Number(costos || 0)
-                        : Math.round((Number(costos || 0) / Math.max(1, mesesRenta)) * 100) / 100
-                    }
-                    onChange={(v: any) => {
-                      const n = Math.max(
-                        0,
-                        toNumberSafe(
-                          v,
-                          duracionUnidad === "dias"
-                            ? Number(costos || 0)
-                            : Number(costos || 0) / Math.max(1, mesesRenta),
-                        ),
-                      );
-                      if (duracionUnidad === "dias") {
-                        setCostos(n);
-                      } else {
-                        setCostos(Math.round(n * Math.max(1, mesesRenta) * 100) / 100);
-                      }
-                    }}
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    placeholder="0.00"
-                  />
-                </div>
+                  {duracionUnidad === "meses" &&
+                  mesesRenta > 1 &&
+                  costoPorMesCapturado > 0 ? (
+                    <div
+                      className="registro-venta-costo-total-box"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <span className="registro-venta-costo-total-box-label">
+                        Costo total del contrato
+                      </span>
+                      <span className="registro-venta-costo-total-box-valor">
+                        $
+                        {costosBrutoTotales.toLocaleString("es-MX", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  ) : null}
+                </>
               ) : null}
               {tieneConsideracion && consideracionTotal > 0 && (
                 <div className="hint-text">

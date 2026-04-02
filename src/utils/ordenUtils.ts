@@ -399,6 +399,7 @@ export function colaboradorUsaCostoComoBaseOrden(
 /**
  * Colaborador por %: el subtotal de la OC es el importe de venta **menos** ese % (lo que no es comisión del socio).
  * Si `aplicarPorcentajeSocioEnOrden === false`, no se resta.
+ * `porcentajeColaboradorActual`: % vigente del colaborador (prioridad sobre `venta.porcentajeSocio`).
  */
 export function importeLineaOrdenTrasPorcentajeSocio(
   importeBruto: number,
@@ -407,6 +408,7 @@ export function importeLineaOrdenTrasPorcentajeSocio(
     "porcentajeSocio" | "aplicarPorcentajeSocioEnOrden"
   > | undefined,
   tipoComisionColaborador?: string,
+  porcentajeColaboradorActual?: number | null,
 ): number {
   const bruto = round2Orden(Number(importeBruto) || 0);
   if (bruto <= 0) return bruto;
@@ -414,10 +416,15 @@ export function importeLineaOrdenTrasPorcentajeSocio(
   const tc = String(tipoComisionColaborador ?? "").toLowerCase();
   if (tc !== "porcentaje") return bruto;
   if (venta?.aplicarPorcentajeSocioEnOrden === false) return bruto;
-  const pct = Math.max(
-    0,
-    Math.min(100, Number(venta?.porcentajeSocio ?? 0) || 0),
-  );
+  let pct: number;
+  if (
+    porcentajeColaboradorActual != null &&
+    Number.isFinite(Number(porcentajeColaboradorActual))
+  ) {
+    pct = Math.max(0, Math.min(100, Number(porcentajeColaboradorActual)));
+  } else {
+    pct = Math.max(0, Math.min(100, Number(venta?.porcentajeSocio ?? 0) || 0));
+  }
   if (pct <= 0) return bruto;
   return round2Orden(bruto * (1 - pct / 100));
 }

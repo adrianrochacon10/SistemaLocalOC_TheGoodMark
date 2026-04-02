@@ -199,7 +199,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
       <h2>
         📅{" "}
         {filtroMes < 0 && filtroAnio < 0
-          ? "Todas las ventas guardadas"
+          ? "Todas las ventas"
           : filtroMes < 0
             ? `Ventas de ${filtroAnio}`
             : filtroAnio < 0

@@ -353,6 +353,8 @@ export function totalesDesdeLineas(
   opts?: {
     tipoComision?: string;
     tipoPagoNombre?: string;
+    /** % del socio vigente del colaborador (tabla porcentajes / estado clientes). */
+    porcentajeColaboradorActual?: number | null;
     /** Mes de la orden 0–11 (requerido con año y corte para costo consideración/precio fijo). */
     mesOrden0?: number;
     añoOrden?: number;
@@ -390,7 +392,12 @@ export function totalesDesdeLineas(
         return s + costoVentaProporcionalImporte(v, imp);
       }
       const facturable = v
-        ? importeLineaOrdenTrasPorcentajeSocio(imp, v, opts?.tipoComision)
+        ? importeLineaOrdenTrasPorcentajeSocio(
+            imp,
+            v,
+            opts?.tipoComision,
+            opts?.porcentajeColaboradorActual,
+          )
         : imp;
       return s + facturable;
     }, 0),

@@ -201,8 +201,13 @@ export function useVentas(profile: any, session: Session | null) {
       gastos_adicionales: venta.gastosAdicionales ?? 0,
       precio_pantallas_mensual: venta.precioPantallasMensual ?? 0,
       pantallas_detalle: venta.pantallasDetalle ?? [],
-      costos_mes: venta.costos ?? 0,
-      costos_total: (venta.costos ?? 0) * venta.mesesRenta,
+      costos_mes:
+        Math.round(
+          ((venta.costoVenta ?? venta.costos ?? 0) /
+            Math.max(1, venta.mesesRenta ?? 1)) *
+            100,
+        ) / 100,
+      costos_total: venta.costoVenta ?? venta.costos ?? 0,
       comision_mes: venta.comision ?? 0,
       comision_total: (venta.comision ?? 0) * venta.mesesRenta,
       pantallas_ids: venta.pantallasIds, // ✅ array completo

@@ -186,18 +186,60 @@ function colaboradorEsTipoPorcentaje(row) {
 }
 
 /**
- * Importe de línea o mes en OC: colaborador por % descuenta `porcentaje_socio` del bruto.
+ * Porcentaje vigente del colaborador (tabla `porcentajes`, misma regla que el front).
+ * Si no hay fila, se usa el guardado en la venta.
+ */
+async function porcentajeSocioVivoColaborador(colaboradorId) {
+  if (!colaboradorId) return null;
+  const { data: tp, error: e1 } = await supabase
+    .from("tipo_pago")
+    .select("id")
+    .eq("nombre", "porcentaje")
+    .maybeSingle();
+  if (e1 || !tp?.id) return null;
+  const idStr = String(colaboradorId).trim();
+  const { data: rows, error: e2 } = await supabase
+    .from("porcentajes")
+    .select("valor")
+    .eq("tipo_pago_id", tp.id)
+    .ilike("descripcion", `%${idStr}%`)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (e2 || !rows?.length) return null;
+  const v = Number(rows[0].valor);
+  if (!Number.isFinite(v) || v < 0 || v > 100) return null;
+  return v;
+}
+
+/**
+ * Importe de línea o mes en OC: colaborador por % descuenta el % del bruto.
+ * Prioriza `porcentajeColaboradorVivo` (tabla porcentajes); si no hay, `venta.porcentaje_socio`.
  * `aplicarPorcentajeEnLinea === false` (detalle_lineas) no aplica el descuento.
  */
-function importeTrasPorcentajeSocio(venta, importeBruto, colabRow, aplicarPorcentajeEnLinea) {
+function importeTrasPorcentajeSocio(
+  venta,
+  importeBruto,
+  colabRow,
+  aplicarPorcentajeEnLinea,
+  porcentajeColaboradorVivo,
+) {
   const bruto = round2(Number(importeBruto) || 0);
   if (!(bruto > 0)) return bruto;
   if (colaboradorUsaCostoEnOrden(colabRow)) return bruto;
   if (!colaboradorEsTipoPorcentaje(colabRow)) return bruto;
   if (aplicarPorcentajeEnLinea === false) return bruto;
-  const pct = Number(venta?.porcentaje_socio ?? 0) || 0;
+  let pct = 0;
+  if (
+    porcentajeColaboradorVivo != null &&
+    Number.isFinite(Number(porcentajeColaboradorVivo))
+  ) {
+    pct = Math.min(100, Math.max(0, Number(porcentajeColaboradorVivo)));
+  } else {
+    pct = Number(venta?.porcentaje_socio ?? 0) || 0;
+    pct = Math.min(100, Math.max(0, pct));
+  }
   if (!(pct > 0)) return bruto;
-  return round2(bruto * (1 - Math.min(100, pct) / 100));
+  return round2(bruto * (1 - pct / 100));
 }
 
 /** Meses de contrato: `duracion_meses` en BD o diferencia inicio–fin. */
@@ -254,6 +296,7 @@ async function subtotalGrupoOrden(
     .select("tipo_comision, tipo_pago:tipo_pago(nombre)")
     .eq("id", colaboradorId)
     .maybeSingle();
+  const pctVivo = await porcentajeSocioVivoColaborador(colaboradorId);
   if (colaboradorUsaCostoEnOrden(c)) {
     return round2(
       groupVentas.reduce((sum, v) => {
@@ -268,7 +311,7 @@ async function subtotalGrupoOrden(
   return round2(
     groupVentas.reduce((sum, v) => {
       const im = importeVentaEnMes(v, inicio, finStr);
-      return sum + importeTrasPorcentajeSocio(v, im, c, undefined);
+      return sum + importeTrasPorcentajeSocio(v, im, c, undefined, pctVivo);
     }, 0),
   );
 }
@@ -548,6 +591,7 @@ export async function crearManual({
     .select("tipo_comision, tipo_pago:tipo_pago(nombre)")
     .eq("id", cid)
     .maybeSingle();
+  const pctVivoCrear = await porcentajeSocioVivoColaborador(cid);
 
   let subRecalc = round2(subtotal);
   if (Array.isArray(detalle_lineas) && detalle_lineas.length > 0) {
@@ -568,7 +612,13 @@ export async function crearManual({
             inicioMesManual,
             finMesManual,
           )
-        : importeTrasPorcentajeSocio(ventaRow, imp, colabOrdenRow, aplicarPct);
+        : importeTrasPorcentajeSocio(
+            ventaRow,
+            imp,
+            colabOrdenRow,
+            aplicarPct,
+            pctVivoCrear,
+          );
     }
     subRecalc = round2(sumB);
   }
