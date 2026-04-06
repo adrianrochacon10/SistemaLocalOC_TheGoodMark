@@ -6,6 +6,7 @@ import { OrdenesMensualesNuevo } from "../ordenes/OrdenesMensualesNuevo";
 import { AdminUsuarios } from "../admin/AdminUsuarios";
 import { EmpresaForm } from "../empresa/EmpresaForm";
 import { GastosAdmin } from "../gastos/GastosAdmin";
+import { CostosAdministrativos } from "../costos/CostosAdministrativos";
 import "./Dashboard.css";
 import { useDashboardData } from "../../hooks/useDashboardData";
 
@@ -19,7 +20,14 @@ export const Dashboard: React.FC = () => {
   } = useDashboardData();
 
   const [vistaActual, setVistaActual] = useState<
-    "gestor" | "catalogo" | "ventas" | "ordenes" | "config" | "admin" | "gastos"
+    | "gestor"
+    | "catalogo"
+    | "ventas"
+    | "ordenes"
+    | "config"
+    | "admin"
+    | "gastos"
+    | "costosAdministrativos"
   >("ordenes");
   if (loading) {
     return <div className="cargando-perfil">Cargando perfil...</div>;
@@ -95,6 +103,15 @@ export const Dashboard: React.FC = () => {
             onClick={() => setVistaActual("gastos")}
           >
             💸 Gastos
+          </button>
+        )}
+        {esAdmin && (
+          <button
+            type="button"
+            className={`nav-btn-nuevo ${vistaActual === "costosAdministrativos" ? "active" : ""}`}
+            onClick={() => setVistaActual("costosAdministrativos")}
+          >
+            📊 Costos administrativos
           </button>
         )}
         {esAdmin && (
@@ -180,6 +197,7 @@ export const Dashboard: React.FC = () => {
             onActualizarVenta={acciones.handleActualizarVentaConSupabase}
           />
         )}
+        {vistaActual === "costosAdministrativos" && esAdmin && <CostosAdministrativos />}
       </main>
     </div>
   );

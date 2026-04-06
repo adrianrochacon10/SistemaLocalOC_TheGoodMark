@@ -169,6 +169,10 @@ export interface OrdenDeCompra {
   /** Colaborador dueño de la orden (órdenes por socio en BD) */
   colaboradorId?: string;
   colaboradorNombre?: string;
+  /** Respaldo desde GET /ordenes (`colaborador` embebido) si la lista de clientes no trae aún el socio. */
+  colaboradorTipoComision?: Colaborador["tipoComision"];
+  colaboradorTipoPagoNombre?: string;
+  colaboradorPorcentajeSocio?: number;
 
   // Modelo nuevo (OrdenesMensualesNuevo)
   mes?: number;

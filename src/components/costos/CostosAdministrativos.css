@@ -1,0 +1,91 @@
+.costos-administrativos__graficas {
+  margin-top: 0.5rem;
+}
+
+.costos-administrativos__charts-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.4fr);
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .costos-administrativos__charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.costos-administrativos__chart-box {
+  position: relative;
+  min-height: 260px;
+  padding: 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.costos-administrativos__chart-box--wide {
+  min-height: 280px;
+}
+
+.costos-administrativos__filtros-listado {
+  margin-top: 0.5rem;
+}
+
+.costos-administrativos__filtros-row {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.costos-administrativos__filtro-categoria {
+  flex: 1 1 180px;
+  min-width: 160px;
+}
+
+.costos-administrativos__hint-filtro {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.costos-administrativos__vacio {
+  color: #64748b;
+  font-style: italic;
+}
+
+.costos-administrativos__tabla-wrap {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.costos-administrativos__tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.costos-administrativos__tabla th,
+.costos-administrativos__tabla td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.costos-administrativos__tabla th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #334155;
+}
+
+.costos-administrativos__tabla tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.costos-administrativos__nota {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

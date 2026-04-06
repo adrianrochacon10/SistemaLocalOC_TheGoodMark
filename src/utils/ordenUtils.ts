@@ -1,6 +1,5 @@
 // src/utils/ordenUtils.ts
-import { RegistroVenta } from "../types";
-import { OrdenDeCompra } from "../types";
+import { Colaborador, OrdenDeCompra, RegistroVenta } from "../types";
 
 /** Inicio del día en horario local (evita desfaces por UTC). */
 function inicioDiaLocal(d: Date): Date {
@@ -396,10 +395,123 @@ export function colaboradorUsaCostoComoBaseOrden(
   return false;
 }
 
+function normalizarTextoComision(s: unknown): string {
+  return String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 /**
- * Colaborador por %: el subtotal de la OC es el importe de venta **menos** ese % (lo que no es comisión del socio).
- * Si `aplicarPorcentajeSocioEnOrden === false`, no se resta.
- * `porcentajeColaboradorActual`: % vigente del colaborador (prioridad sobre `venta.porcentajeSocio`).
+ * La línea de OC guardó % de socio (p. ej. `porcentaje_socio_aplicado` en detalle_lineas).
+ * Sirve para totales/PDF aunque falle la lista de colaboradores o el tipo de pago en memoria.
+ */
+export function ventaTienePorcentajeSocioSnapshot(
+  venta: Pick<
+    RegistroVenta,
+    "porcentajeSocio" | "aplicarPorcentajeSocioEnOrden"
+  >,
+): boolean {
+  if (venta.aplicarPorcentajeSocioEnOrden === false) return false;
+  const ps = venta.porcentajeSocio;
+  return ps != null && Number.isFinite(Number(ps)) && Number(ps) > 0;
+}
+
+/** Lista de clientes o datos embebidos en la orden (GET /api/ordenes). */
+export function colaboradorEfectivoParaOrden(
+  orden: Pick<
+    OrdenDeCompra,
+    | "colaboradorId"
+    | "colaboradorNombre"
+    | "colaboradorTipoComision"
+    | "colaboradorTipoPagoNombre"
+    | "colaboradorPorcentajeSocio"
+  >,
+  lista: Colaborador[] | undefined,
+): Colaborador | undefined {
+  const cid = orden.colaboradorId;
+  if (!cid) return undefined;
+  const fromList = lista?.find((c) => String(c.id) === String(cid));
+  if (fromList) return fromList;
+  if (
+    orden.colaboradorTipoComision != null ||
+    orden.colaboradorTipoPagoNombre != null ||
+    orden.colaboradorPorcentajeSocio != null
+  ) {
+    return {
+      id: cid,
+      nombre: orden.colaboradorNombre ?? "",
+      tipoComision: orden.colaboradorTipoComision,
+      tipoPagoNombre: orden.colaboradorTipoPagoNombre,
+      porcentajeSocio: orden.colaboradorPorcentajeSocio,
+    } as Colaborador;
+  }
+  return undefined;
+}
+
+/** Colaborador cobra % sobre precio de venta (`tipoComision` o nombre de `tipo_pago`). */
+export function colaboradorEsTipoPorcentajeOrden(
+  tipoComision?: string,
+  tipoPagoNombre?: string,
+): boolean {
+  if (normalizarTextoComision(tipoComision) === "porcentaje") return true;
+  const nom = normalizarTextoComision(tipoPagoNombre);
+  return nom.includes("porcentaje");
+}
+
+/**
+ * Base para colaborador por %: **precio total del contrato** (precio de la venta), no la cuota mensual.
+ * Si no hay total, reconstruye mes × meses o cae al importe de línea en la orden.
+ */
+export function precioVentaTotalContratoBrutoColaboradorPorcentaje(
+  venta: RegistroVenta,
+  orden: OrdenDeCompra,
+  numRegistrosEnOrden: number,
+): number {
+  const T = Math.max(
+    0,
+    Number(
+      venta.precioTotalContrato ??
+        venta.precioTotal ??
+        venta.importeTotal ??
+        0,
+    ) || 0,
+  );
+  if (T > 0) return round2Orden(T);
+  const mensual = Math.max(0, Number(venta.precioGeneral ?? 0) || 0);
+  const mr = Math.max(1, Number(venta.mesesRenta ?? 1) || 1);
+  if (mensual > 0) return round2Orden(mensual * mr);
+  return round2Orden(
+    importeLineaRespectoOrden(venta, orden, numRegistrosEnOrden),
+  );
+}
+
+/**
+ * % aplicado en OC/PDF: el guardado en la venta (`porcentajeSocio`) tiene prioridad;
+ * si no viene, se usa el % vigente del colaborador (tabla / estado clientes).
+ */
+export function porcentajeSocioEfectivoVentaEnOrden(
+  venta: Pick<RegistroVenta, "porcentajeSocio"> | undefined,
+  porcentajeColaboradorFallback?: number | null,
+): number {
+  const vPct = venta?.porcentajeSocio;
+  if (vPct != null && vPct !== "" && Number.isFinite(Number(vPct))) {
+    return Math.max(0, Math.min(100, Number(vPct)));
+  }
+  if (
+    porcentajeColaboradorFallback != null &&
+    Number.isFinite(Number(porcentajeColaboradorFallback))
+  ) {
+    return Math.max(0, Math.min(100, Number(porcentajeColaboradorFallback)));
+  }
+  return 0;
+}
+
+/**
+ * Colaborador por %: el subtotal de la OC es el % aplicado al importe de venta.
+ * Si `aplicarPorcentajeSocioEnOrden === false`, no se aplica el %.
+ * `porcentajeColaboradorActual`: % del colaborador si la venta no trae `porcentajeSocio`.
  */
 export function importeLineaOrdenTrasPorcentajeSocio(
   importeBruto: number,
@@ -409,24 +521,27 @@ export function importeLineaOrdenTrasPorcentajeSocio(
   > | undefined,
   tipoComisionColaborador?: string,
   porcentajeColaboradorActual?: number | null,
+  tipoPagoNombreColaborador?: string,
 ): number {
   const bruto = round2Orden(Number(importeBruto) || 0);
   if (bruto <= 0) return bruto;
-  if (colaboradorUsaCostoComoBaseOrden(tipoComisionColaborador)) return bruto;
-  const tc = String(tipoComisionColaborador ?? "").toLowerCase();
-  if (tc !== "porcentaje") return bruto;
-  if (venta?.aplicarPorcentajeSocioEnOrden === false) return bruto;
-  let pct: number;
   if (
-    porcentajeColaboradorActual != null &&
-    Number.isFinite(Number(porcentajeColaboradorActual))
-  ) {
-    pct = Math.max(0, Math.min(100, Number(porcentajeColaboradorActual)));
-  } else {
-    pct = Math.max(0, Math.min(100, Number(venta?.porcentajeSocio ?? 0) || 0));
-  }
+    colaboradorUsaCostoComoBaseOrden(
+      tipoComisionColaborador,
+      tipoPagoNombreColaborador,
+    )
+  )
+    return bruto;
+  if (venta?.aplicarPorcentajeSocioEnOrden === false) return bruto;
+  const colabEsPct = colaboradorEsTipoPorcentajeOrden(
+    tipoComisionColaborador,
+    tipoPagoNombreColaborador,
+  );
+  const ventaSnap = venta != null && ventaTienePorcentajeSocioSnapshot(venta);
+  if (!colabEsPct && !ventaSnap) return bruto;
+  const pct = porcentajeSocioEfectivoVentaEnOrden(venta, porcentajeColaboradorActual);
   if (pct <= 0) return bruto;
-  return round2Orden(bruto * (1 - pct / 100));
+  return round2Orden(bruto * (pct / 100));
 }
 
 /** Costo de venta proporcional al importe de la línea (vs total del contrato en BD). */

@@ -88,8 +88,5 @@ export const SelectorPantallas: React.FC<SelectorPantallasProps> = ({
       })}
     </div>
 
-    {pantallasSeleccionadas.length === 0 && (
-      <div className="hint-text">Opcional: puedes guardar solo con productos</div>
-    )}
   </div>
 );

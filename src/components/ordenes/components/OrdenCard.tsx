@@ -18,7 +18,12 @@ import {
   importeLineaRespectoOrden,
   costoLineaOrdenConsideracionPrecioFijo,
   colaboradorUsaCostoComoBaseOrden,
+  colaboradorEsTipoPorcentajeOrden,
+  precioVentaTotalContratoBrutoColaboradorPorcentaje,
   importeLineaOrdenTrasPorcentajeSocio,
+  porcentajeSocioEfectivoVentaEnOrden,
+  colaboradorEfectivoParaOrden,
+  ventaTienePorcentajeSocioSnapshot,
 } from "../../../utils/ordenUtils";
 
 interface Props {
@@ -92,20 +97,41 @@ export const OrdenCard: React.FC<Props> = ({
     })();
   };
 
-  const colabOrden = useMemo(
-    () =>
-      orden.colaboradorId
-        ? clientes.find((c) => String(c.id) === String(orden.colaboradorId))
-        : undefined,
-    [clientes, orden.colaboradorId],
+  const colabEfectivo = useMemo(
+    () => colaboradorEfectivoParaOrden(orden, clientes),
+    [orden, clientes],
   );
 
-  const nombreColaborador = colabOrden?.nombre;
+  const nombreColaborador =
+    orden.colaboradorNombre?.trim() || colabEfectivo?.nombre;
 
   const totalesOrdenVista = useMemo(() => {
     const regs = orden.registrosVenta ?? [];
     const n = regs.length;
-    if (!colabOrden || n === 0) {
+    const lineaConSnap = regs.some((v) => ventaTienePorcentajeSocioSnapshot(v));
+    const esColabPct =
+      !!colabEfectivo &&
+      colaboradorEsTipoPorcentajeOrden(
+        colabEfectivo.tipoComision,
+        colabEfectivo.tipoPagoNombre,
+      );
+    const subGuardado = Number(orden.subtotal ?? 0);
+    const ivaGuardado = Number(orden.ivaTotal ?? 0);
+    const totalGuardado = Number(orden.total ?? 0);
+    // Colaborador por % o línea con % guardado: subtotal = Σ(precio contrato × %); no confiar en
+    // totales persistidos si quedaron con IVA sobre el bruto.
+    if (
+      (!esColabPct || n === 0) &&
+      !lineaConSnap &&
+      Number.isFinite(subGuardado) &&
+      Number.isFinite(ivaGuardado) &&
+      Number.isFinite(totalGuardado) &&
+      (subGuardado > 0 || ivaGuardado > 0 || totalGuardado > 0)
+    ) {
+      return { sub: subGuardado, iva: ivaGuardado, total: totalGuardado };
+    }
+
+    if ((!colabEfectivo && !lineaConSnap) || n === 0) {
       return {
         sub: Number(orden.subtotal ?? 0),
         iva: Number(orden.ivaTotal ?? 0),
@@ -113,8 +139,8 @@ export const OrdenCard: React.FC<Props> = ({
       };
     }
     const usarCosto = colaboradorUsaCostoComoBaseOrden(
-      colabOrden.tipoComision,
-      colabOrden.tipoPagoNombre,
+      colabEfectivo?.tipoComision,
+      colabEfectivo?.tipoPagoNombre,
     );
     const diaCorte = Number(config.diaCorteOrdenes ?? 20) || 20;
     const mes0 = orden.mes ?? 0;
@@ -122,7 +148,11 @@ export const OrdenCard: React.FC<Props> = ({
     const sub =
       Math.round(
         regs.reduce((s, v) => {
-          const pv = importeLineaRespectoOrden(v, orden, n);
+          const baseContratoParaPct =
+            esColabPct || ventaTienePorcentajeSocioSnapshot(v);
+          const pv = baseContratoParaPct
+            ? precioVentaTotalContratoBrutoColaboradorPorcentaje(v, orden, n)
+            : importeLineaRespectoOrden(v, orden, n);
           const linea = usarCosto
             ? costoLineaOrdenConsideracionPrecioFijo(
                 v,
@@ -134,10 +164,11 @@ export const OrdenCard: React.FC<Props> = ({
             : importeLineaOrdenTrasPorcentajeSocio(
                 pv,
                 v,
-                colabOrden.tipoComision,
-                typeof colabOrden.porcentajeSocio === "number"
-                  ? colabOrden.porcentajeSocio
+                colabEfectivo?.tipoComision,
+                typeof colabEfectivo?.porcentajeSocio === "number"
+                  ? colabEfectivo.porcentajeSocio
                   : null,
+                colabEfectivo?.tipoPagoNombre,
               );
           return s + linea;
         }, 0) * 100,
@@ -149,7 +180,7 @@ export const OrdenCard: React.FC<Props> = ({
       iva,
       total: Math.round((sub + iva) * 100) / 100,
     };
-  }, [colabOrden, orden, config.diaCorteOrdenes]);
+  }, [colabEfectivo, orden, config.diaCorteOrdenes]);
 
   const esAdmin = usuarioActual.rol === "admin";
 
@@ -206,7 +237,8 @@ export const OrdenCard: React.FC<Props> = ({
             {(orden.registrosVenta ?? []).map((venta) => {
               const socio = clientes.find(
                 (c) =>
-                  c.id === (venta.colaboradorId || orden.colaboradorId),
+                  String(c.id) ===
+                  String(venta.colaboradorId || orden.colaboradorId),
               );
               const pantallasDetalle = (
                 Array.isArray(venta.pantallasDetalle) ? venta.pantallasDetalle : []
@@ -280,33 +312,48 @@ export const OrdenCard: React.FC<Props> = ({
                   : Number(venta.precioTotal ?? venta.importeTotal ?? 0) || 0,
               );
               const esColabPorcentaje =
-                String(colabOrden?.tipoComision ?? "").toLowerCase() ===
-                "porcentaje";
-              const porcentajeOrden =
-                Number(
-                  colabOrden?.porcentajeSocio ?? venta.porcentajeSocio ?? 0,
-                ) || 0;
-              const numReg = (orden.registrosVenta ?? []).length;
-              /** Cuota mensual de esta línea en la OC (bruto, sin quitar % del socio). */
-              const precioVentaMesBruto = importeLineaRespectoOrden(
+                colaboradorEsTipoPorcentajeOrden(
+                  colabEfectivo?.tipoComision,
+                  colabEfectivo?.tipoPagoNombre,
+                ) || ventaTienePorcentajeSocioSnapshot(venta);
+              const porcentajeOrden = porcentajeSocioEfectivoVentaEnOrden(
                 venta,
-                orden,
-                numReg,
+                typeof colabEfectivo?.porcentajeSocio === "number"
+                  ? colabEfectivo.porcentajeSocio
+                  : null,
               );
-              /** Mismo mes, importe que queda al descontar el % del colaborador (base de facturación). */
+              const numReg = (orden.registrosVenta ?? []).length;
+              const mesesContratoUi = Math.max(
+                1,
+                Number(venta.mesesRenta ?? 1) || 1,
+              );
+              /** Cuota mensual informativa (contrato total ÷ meses). */
+              const precioVentaMesBruto = esColabPorcentaje
+                ? precioVentaContrato > 0
+                  ? Math.round((precioVentaContrato / mesesContratoUi) * 100) / 100
+                  : Math.max(0, Number(venta.precioGeneral ?? 0) || 0)
+                : importeLineaRespectoOrden(venta, orden, numReg);
+              const brutoTotalParaPct =
+                precioVentaTotalContratoBrutoColaboradorPorcentaje(
+                  venta,
+                  orden,
+                  numReg,
+                );
+              /** Importe de la OC: % sobre precio total del contrato. */
               const precioVentaMesNetoTrasPct =
                 importeLineaOrdenTrasPorcentajeSocio(
-                  precioVentaMesBruto,
+                  brutoTotalParaPct,
                   venta,
-                  colabOrden?.tipoComision,
-                  typeof colabOrden?.porcentajeSocio === "number"
-                    ? colabOrden.porcentajeSocio
+                  colabEfectivo?.tipoComision,
+                  typeof colabEfectivo?.porcentajeSocio === "number"
+                    ? colabEfectivo.porcentajeSocio
                     : null,
+                  colabEfectivo?.tipoPagoNombre,
                 );
               /** Solo precio fijo / consideración: detalle y montos por costo de venta. Por % → siempre precio de venta. */
               const detalleBasadoEnCosto = colaboradorUsaCostoComoBaseOrden(
-                colabOrden?.tipoComision,
-                colabOrden?.tipoPagoNombre,
+                colabEfectivo?.tipoComision,
+                colabEfectivo?.tipoPagoNombre,
               );
               const mes0Ord = orden.mes ?? 0;
               const añoOrd = orden.año ?? new Date().getFullYear();
@@ -327,7 +374,9 @@ export const OrdenCard: React.FC<Props> = ({
                     diaCorteOrd,
                   )
                 : precioVentaMesBruto;
-              const montoMesNetoDetalle = precioVentaMesNetoTrasPct;
+              const montoMesNetoDetalle = esColabPorcentaje
+                ? precioVentaMesNetoTrasPct
+                : precioVentaMesBruto;
               const fmtMonto = (n: number) =>
                 n > 0 ? `$${n.toFixed(2)}` : "—";
               return (

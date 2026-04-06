@@ -16,9 +16,15 @@ async function generadoPorSeguro(userId) {
   return data.id;
 }
 
-const SELECT_ORDENES = "*, colaborador:colaboradores(id,nombre)";
+/**
+ * Sin `tipo_comision` (no existe en todas las BD). FK explícita evita un 2.º join `colaboradores_*`
+ * que en algunos esquemas PostgREST resolvía mal.
+ */
+/** Sin `productos(*)`: el * anidado puede disparar más joins (p. ej. otro `colaboradores_*`) y romper en BD sin tipo_comision. */
+const SELECT_ORDENES =
+  "*, colaborador:colaboradores!colaborador_id(id,nombre,tipo_pago:tipo_pago(nombre))";
 const SELECT_VENTAS =
-  "*, colaborador:colaboradores(id,nombre,pantalla:pantallas(id,nombre),producto:productos(*))";
+  "*, colaborador:colaboradores!colaborador_id(id,nombre,pantalla:pantallas(id,nombre),producto:productos(id,nombre,precio))";
 
 async function cargarVentasDeOrden(orden) {
   let ids = orden.ventas_ids;
@@ -165,6 +171,16 @@ function importeVentaEnMes(venta, inicioMes, finMes) {
   return round2((pt * diasOverlap) / diasTotal);
 }
 
+/** Para colaboradores por %: precio total del contrato (no la cuota mensual). */
+function importeTotalContratoVentaParaPct(venta) {
+  const total = Number(venta?.precio_total ?? venta?.importe_total ?? 0) || 0;
+  if (total > 0) return round2(total);
+  const meses = Math.max(1, Math.floor(Number(venta?.duracion_meses ?? venta?.meses_renta ?? 1) || 1));
+  const pm = Number(venta?.precio_por_mes ?? 0) || 0;
+  if (pm > 0) return round2(pm * meses);
+  return 0;
+}
+
 function colaboradorUsaCostoEnOrden(row) {
   if (!row) return false;
   const tc = String(row.tipo_comision ?? "").toLowerCase();
@@ -212,9 +228,9 @@ async function porcentajeSocioVivoColaborador(colaboradorId) {
 }
 
 /**
- * Importe de línea o mes en OC: colaborador por % descuenta el % del bruto.
- * Prioriza `porcentajeColaboradorVivo` (tabla porcentajes); si no hay, `venta.porcentaje_socio`.
- * `aplicarPorcentajeEnLinea === false` (detalle_lineas) no aplica el descuento.
+ * Importe de línea o mes en OC: colaborador por % aplica ese % sobre el bruto.
+ * Prioriza `venta.porcentaje_socio` si viene en la venta; si no, `porcentajeColaboradorVivo` (tabla porcentajes).
+ * `aplicarPorcentajeEnLinea === false` (detalle_lineas) no aplica el %.
  */
 function importeTrasPorcentajeSocio(
   venta,
@@ -228,18 +244,20 @@ function importeTrasPorcentajeSocio(
   if (colaboradorUsaCostoEnOrden(colabRow)) return bruto;
   if (!colaboradorEsTipoPorcentaje(colabRow)) return bruto;
   if (aplicarPorcentajeEnLinea === false) return bruto;
+  const ps = venta?.porcentaje_socio;
+  const ventaDefinePct =
+    ps != null && ps !== "" && Number.isFinite(Number(ps));
   let pct = 0;
-  if (
+  if (ventaDefinePct) {
+    pct = Math.min(100, Math.max(0, Number(ps)));
+  } else if (
     porcentajeColaboradorVivo != null &&
     Number.isFinite(Number(porcentajeColaboradorVivo))
   ) {
     pct = Math.min(100, Math.max(0, Number(porcentajeColaboradorVivo)));
-  } else {
-    pct = Number(venta?.porcentaje_socio ?? 0) || 0;
-    pct = Math.min(100, Math.max(0, pct));
   }
   if (!(pct > 0)) return bruto;
-  return round2(bruto * (1 - pct / 100));
+  return round2(bruto * (pct / 100));
 }
 
 /** Meses de contrato: `duracion_meses` en BD o diferencia inicio–fin. */
@@ -293,7 +311,7 @@ async function subtotalGrupoOrden(
   const { inicio, finStr } = boundsMesCalendario(anio, mes1a12);
   const { data: c } = await supabase
     .from("colaboradores")
-    .select("tipo_comision, tipo_pago:tipo_pago(nombre)")
+    .select("tipo_pago:tipo_pago(nombre)")
     .eq("id", colaboradorId)
     .maybeSingle();
   const pctVivo = await porcentajeSocioVivoColaborador(colaboradorId);
@@ -310,7 +328,7 @@ async function subtotalGrupoOrden(
   }
   return round2(
     groupVentas.reduce((sum, v) => {
-      const im = importeVentaEnMes(v, inicio, finStr);
+      const im = importeTotalContratoVentaParaPct(v);
       return sum + importeTrasPorcentajeSocio(v, im, c, undefined, pctVivo);
     }, 0),
   );
@@ -571,7 +589,7 @@ export async function crearManual({
   const { data: ventasRows, error: errV } = await supabase
     .from("ventas")
     .select(
-      "id,colaborador_id,estado_venta,precio_total,costo_venta,costos,porcentaje_socio,fecha_inicio,fecha_fin,duracion_meses",
+      "id,colaborador_id,estado_venta,precio_total,costo_venta,costos,porcentaje_socio,fecha_inicio,fecha_fin,duracion_meses,precio_por_mes",
     )
     .in("id", ventasIds);
   if (errV) throw new Error(errV.message);
@@ -588,7 +606,7 @@ export async function crearManual({
 
   const { data: colabOrdenRow } = await supabase
     .from("colaboradores")
-    .select("tipo_comision, tipo_pago:tipo_pago(nombre)")
+    .select("tipo_pago:tipo_pago(nombre)")
     .eq("id", cid)
     .maybeSingle();
   const pctVivoCrear = await porcentajeSocioVivoColaborador(cid);
@@ -602,6 +620,23 @@ export async function crearManual({
       const ventaRow = list.find((x) => String(x.id) === wid);
       const imp = Number(line.importe) || 0;
       const aplicarPct = line.aplicar_porcentaje_socio;
+      const brutoContrato =
+        ventaRow != null ? importeTotalContratoVentaParaPct(ventaRow) : 0;
+      const basePct =
+        !usarCosto &&
+        colaboradorEsTipoPorcentaje(colabOrdenRow) &&
+        brutoContrato > 0
+          ? brutoContrato
+          : imp;
+      const psLinea =
+        line.porcentaje_socio_aplicado ?? line.porcentajeSocioAplicado;
+      const ventaParaPct =
+        ventaRow &&
+        psLinea != null &&
+        psLinea !== "" &&
+        Number.isFinite(Number(psLinea))
+          ? { ...ventaRow, porcentaje_socio: Number(psLinea) }
+          : ventaRow;
       sumB += usarCosto
         ? costoLineaConsideracionPrecioFijo(
             ventaRow,
@@ -613,8 +648,8 @@ export async function crearManual({
             finMesManual,
           )
         : importeTrasPorcentajeSocio(
-            ventaRow,
-            imp,
+            ventaParaPct,
+            basePct,
             colabOrdenRow,
             aplicarPct,
             pctVivoCrear,

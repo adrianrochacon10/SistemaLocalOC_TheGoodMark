@@ -6,11 +6,15 @@ import {
 } from "./ordenApiMapper";
 import {
   colaboradorUsaCostoComoBaseOrden,
+  colaboradorEsTipoPorcentajeOrden,
   costoLineaOrdenConsideracionPrecioFijo,
   costoVentaProporcionalImporte,
   importeLineaOrdenTrasPorcentajeSocio,
   importeVentaEnMesOrden,
+  porcentajeSocioEfectivoVentaEnOrden,
+  precioVentaTotalContratoBrutoColaboradorPorcentaje,
 } from "./ordenUtils";
+import type { OrdenDeCompra } from "../types";
 
 /** Nombre legible para una pantalla: snapshot de la venta primero, luego catálogo. */
 export function nombrePantallaDesdeVentaYCatalogo(
@@ -75,6 +79,8 @@ export type DetalleLineaOrden = {
   fecha_fin: string;
   /** Duración en meses (contrato); se persiste para PDF y vistas. */
   meses_renta?: number;
+  /** % aplicado al crear la orden (congela si luego cambia la venta o el colaborador). */
+  porcentaje_socio_aplicado?: number;
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -276,9 +282,17 @@ export function construirDetalleLineas(
   pantallas: Pantalla[],
   mesOrden0: number,
   añoOrden: number,
+  opts?: {
+    /** Si true, prorratea el importe seleccionado al tramo del mes; si false usa base mensual. */
+    prorratearEnMes?: boolean;
+    tipoComision?: string;
+    tipoPagoNombre?: string;
+    porcentajeColaboradorActual?: number | null;
+  },
 ): DetalleLineaOrden[] {
   const precios = preciosPantallasMap(pantallas);
   const lineas: DetalleLineaOrden[] = [];
+  const prorratearEnMes = opts?.prorratearEnMes !== false;
 
   for (const v of ventas) {
     const sel = seleccion.get(String(v.id)) ?? [];
@@ -288,7 +302,7 @@ export function construirDetalleLineas(
     const partes = partesImporteOrdenVenta(v, sel, precios);
     const T = round2(Math.max(0, partes.totalContrato));
     let imp = Math.max(0, partes.importe);
-    if (T > 0) {
+    if (T > 0 && prorratearEnMes) {
       const mesCompleto = importeVentaEnMesOrden(v, mesOrden0, añoOrden, T);
       imp = round2((imp / T) * mesCompleto);
     } else {
@@ -323,6 +337,16 @@ export function construirDetalleLineas(
         precio_mensual: precio,
       };
     });
+    const pctSnap =
+      colaboradorEsTipoPorcentajeOrden(
+        opts?.tipoComision,
+        opts?.tipoPagoNombre,
+      )
+        ? porcentajeSocioEfectivoVentaEnOrden(
+            v,
+            opts?.porcentajeColaboradorActual ?? null,
+          )
+        : undefined;
     lineas.push({
       venta_id: v.id,
       pantallas_seleccionadas: sel.filter((id) =>
@@ -335,6 +359,9 @@ export function construirDetalleLineas(
       producto_incluido: productoIncluido,
       ...(typeof v.aplicarPorcentajeSocioEnOrden === "boolean"
         ? { aplicar_porcentaje_socio: v.aplicarPorcentajeSocioEnOrden }
+        : {}),
+      ...(pctSnap != null && Number.isFinite(pctSnap)
+        ? { porcentaje_socio_aplicado: pctSnap }
         : {}),
       precio_base_mensual: baseMensual,
       importe: imp,
@@ -366,10 +393,24 @@ export function totalesDesdeLineas(
     opts?.tipoComision,
     opts?.tipoPagoNombre,
   );
+  const esPct = colaboradorEsTipoPorcentajeOrden(
+    opts?.tipoComision,
+    opts?.tipoPagoNombre,
+  );
   const map = opts?.ventasPorId;
   const mes0 = opts?.mesOrden0;
   const añoOrd = opts?.añoOrden;
   const diaCorte = Number(opts?.diaCorteOrdenes ?? 20) || 20;
+  const ordenBrutoStub = {
+    id: "",
+    numeroOrden: "",
+    fecha: new Date(),
+    estado: "generada" as const,
+    mes: mes0 ?? 0,
+    año: añoOrd ?? new Date().getFullYear(),
+    subtotal: 0,
+  } as OrdenDeCompra;
+  const nLineas = lineas.length;
   const subtotal = round2(
     lineas.reduce((s, l) => {
       const imp = Number(l.importe) || 0;
@@ -391,12 +432,21 @@ export function totalesDesdeLineas(
         }
         return s + costoVentaProporcionalImporte(v, imp);
       }
+      const bruto =
+        esPct && v
+          ? precioVentaTotalContratoBrutoColaboradorPorcentaje(
+              v,
+              ordenBrutoStub,
+              nLineas,
+            )
+          : imp;
       const facturable = v
         ? importeLineaOrdenTrasPorcentajeSocio(
-            imp,
+            bruto,
             v,
             opts?.tipoComision,
             opts?.porcentajeColaboradorActual,
+            opts?.tipoPagoNombre,
           )
         : imp;
       return s + facturable;

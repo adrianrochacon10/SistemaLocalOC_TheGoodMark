@@ -18,20 +18,13 @@ import {
   importeVentaEnMesOrden,
   costoLineaOrdenConsideracionPrecioFijo,
   colaboradorUsaCostoComoBaseOrden,
+  colaboradorEsTipoPorcentajeOrden,
+  precioVentaTotalContratoBrutoColaboradorPorcentaje,
+  porcentajeSocioEfectivoVentaEnOrden,
   importeLineaOrdenTrasPorcentajeSocio,
+  colaboradorEfectivoParaOrden,
+  ventaTienePorcentajeSocioSnapshot,
 } from "./ordenUtils";
-
-function colaboradorEsTipoPorcentajePdf(
-  tipoComision?: string,
-  tipoPagoNombre?: string,
-): boolean {
-  if (String(tipoComision ?? "").toLowerCase() === "porcentaje") return true;
-  const nom = String(tipoPagoNombre ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-  return nom.includes("porcentaje");
-}
 
 const COL_BLUE: [number, number, number] = [23, 58, 95];
 const COL_GREY: [number, number, number] = [110, 110, 110];
@@ -365,9 +358,7 @@ export async function exportarPDFOrden(
 ): Promise<void> {
   const pMap = pantallaMap(pantallas);
   const registros = orden.registrosVenta ?? [];
-  const colab = colaboradores.find(
-    (c) => String(c.id) === String(orden.colaboradorId),
-  );
+  const colab = colaboradorEfectivoParaOrden(orden, colaboradores);
   const diaCortePdf = Number(config.diaCorteOrdenes ?? 20) || 20;
   const fechaDoc = new Date().toLocaleDateString("es-MX");
   const mesFormatoRaw = new Date(
@@ -555,7 +546,17 @@ export async function exportarPDFOrden(
       venta.productoIncluidoEnOrden === true ||
       (venta.productoIncluidoEnOrden !== false &&
         (precioProd > 0 || productosDetalle.length > 0));
+    const esColabPorcentajePdf =
+      colaboradorEsTipoPorcentajeOrden(
+        colab?.tipoComision,
+        colab?.tipoPagoNombre,
+      ) || ventaTienePorcentajeSocioSnapshot(venta);
     const precioVentaLinea = (() => {
+      if (esColabPorcentajePdf) {
+        return round2(
+          precioVentaTotalContratoBrutoColaboradorPorcentaje(venta, orden, numRegPdf),
+        );
+      }
       let pv = round2(importeLineaRespectoOrden(venta, orden, numRegPdf));
       if (!(pv > 0)) {
         const contrato =
@@ -580,9 +581,9 @@ export async function exportarPDFOrden(
       colab?.tipoComision,
       colab?.tipoPagoNombre,
     );
-    const porcentajeColaboradorFila = Math.max(
-      0,
-      Number(colab?.porcentajeSocio ?? venta.porcentajeSocio ?? 0) || 0,
+    const porcentajeColaboradorFila = porcentajeSocioEfectivoVentaEnOrden(
+      venta,
+      typeof colab?.porcentajeSocio === "number" ? colab.porcentajeSocio : null,
     );
     const porcentajeColaboradorVivo =
       typeof colab?.porcentajeSocio === "number"
@@ -604,6 +605,7 @@ export async function exportarPDFOrden(
             venta,
             colab?.tipoComision,
             porcentajeColaboradorVivo,
+            colab?.tipoPagoNombre,
           ),
         );
     const lineaPrecioSub = null;
@@ -617,10 +619,6 @@ export async function exportarPDFOrden(
             ...productosDetalle.map((p) => `- ${p.nombre}`),
           ]
         : [];
-    const esColabPorcentajePdf = colaboradorEsTipoPorcentajePdf(
-      colab?.tipoComision,
-      colab?.tipoPagoNombre,
-    );
     const lineasTrasPantallasProd: string[] = [];
     if (!usarCostoPdf) {
       if (!esColabPorcentajePdf && precioVentaLinea > 0) {

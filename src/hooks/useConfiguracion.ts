@@ -83,9 +83,20 @@ export function useConfiguracion(profile: any, session: Session | null) {
 
   const refetchOrdenes = useCallback(async () => {
     const data = await backendApi.get("/api/ordenes");
-    if (Array.isArray(data)) {
-      setOrdenes(data.map(mapOrdenFromApi));
+    if (!Array.isArray(data)) {
+      console.warn("[órdenes] Respuesta inesperada del API (no es un arreglo).");
+      setOrdenes([]);
+      return;
     }
+    const mapped: OrdenDeCompra[] = [];
+    for (const row of data) {
+      try {
+        mapped.push(mapOrdenFromApi(row));
+      } catch (e) {
+        console.error("[órdenes] Fila ignorada al mapear:", e, row);
+      }
+    }
+    setOrdenes(mapped);
   }, [profile?.id, session?.access_token]);
 
   useEffect(() => {

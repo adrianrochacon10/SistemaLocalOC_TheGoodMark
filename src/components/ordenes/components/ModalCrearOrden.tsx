@@ -11,6 +11,7 @@ import {
   Pantalla,
   Producto,
   ConfiguracionEmpresa,
+  OrdenDeCompra,
 } from "../../../types";
 import { backendApi } from "../../../lib/backendApi";
 import {
@@ -19,7 +20,12 @@ import {
   detallePrecioMensual,
   PREFIJO_LINEA_PRODUCTO,
 } from "../../../utils/ordenApiMapper";
-import { ventaIncluidaEnMesOrdenConCorte } from "../../../utils/ordenUtils";
+import {
+  ventaIncluidaEnMesOrdenConCorte,
+  porcentajeSocioEfectivoVentaEnOrden,
+  precioVentaTotalContratoBrutoColaboradorPorcentaje,
+  importeLineaOrdenTrasPorcentajeSocio,
+} from "../../../utils/ordenUtils";
 import {
   construirDetalleLineas,
   totalesDesdeLineas,
@@ -193,6 +199,26 @@ export const ModalCrearOrden: React.FC<Props> = ({
   const pasoActual = colaboradorId ? 2 : 1;
   const años = Array.from({ length: 4 }, (_, i) => hoy.getFullYear() - 2 + i);
   const colaboradorSeleccionado = clientes.find((c) => c.id === colaboradorId);
+  const esColaboradorPorcentaje = useMemo(() => {
+    const tc = String(colaboradorSeleccionado?.tipoComision ?? "").toLowerCase();
+    if (tc === "porcentaje") return true;
+    const tpn = String(colaboradorSeleccionado?.tipoPagoNombre ?? "").toLowerCase();
+    return tpn.includes("porcentaje");
+  }, [colaboradorSeleccionado?.tipoComision, colaboradorSeleccionado?.tipoPagoNombre]);
+
+  const ordenStubModal = useMemo(
+    () =>
+      ({
+        id: "",
+        numeroOrden: "",
+        fecha: new Date(),
+        estado: "generada",
+        mes,
+        año,
+        subtotal: 0,
+      }) as OrdenDeCompra,
+    [mes, año],
+  );
 
   const ventaIdsKey = useMemo(
     () => ventasDelMes.map((v) => String(v.id)).sort().join("|"),
@@ -483,8 +509,27 @@ export const ModalCrearOrden: React.FC<Props> = ({
         pantallas,
         mes,
         año,
+        {
+          prorratearEnMes: !esColaboradorPorcentaje,
+          tipoComision: colaboradorSeleccionado?.tipoComision,
+          tipoPagoNombre: colaboradorSeleccionado?.tipoPagoNombre,
+          porcentajeColaboradorActual:
+            typeof colaboradorSeleccionado?.porcentajeSocio === "number"
+              ? colaboradorSeleccionado.porcentajeSocio
+              : null,
+        },
       ),
-    [ventasAjustadasParaOrden, seleccionArrays, pantallas, mes, año],
+    [
+      ventasAjustadasParaOrden,
+      seleccionArrays,
+      pantallas,
+      mes,
+      año,
+      esColaboradorPorcentaje,
+      colaboradorSeleccionado?.tipoComision,
+      colaboradorSeleccionado?.tipoPagoNombre,
+      colaboradorSeleccionado?.porcentajeSocio,
+    ],
   );
 
   const ventasPorIdOrden = useMemo(() => {
@@ -732,9 +777,28 @@ export const ModalCrearOrden: React.FC<Props> = ({
                       const id = String(v.id);
                       const checked = ventasSeleccionadas.has(id);
                       const pids = [...new Set(v.pantallasIds ?? [])];
-                      const importeLinea = detalleLineas
-                        .filter((l) => String(l.venta_id) === id)
-                        .reduce((s, l) => s + l.importe, 0);
+                      const va =
+                        ventasAjustadasParaOrden.find((x) => String(x.id) === id) ??
+                        v;
+                      const nDet = Math.max(1, detalleLineas.length);
+                      const importeLinea = esColaboradorPorcentaje
+                        ? importeLineaOrdenTrasPorcentajeSocio(
+                            precioVentaTotalContratoBrutoColaboradorPorcentaje(
+                              va,
+                              ordenStubModal,
+                              nDet,
+                            ),
+                            va,
+                            colaboradorSeleccionado?.tipoComision,
+                            typeof colaboradorSeleccionado?.porcentajeSocio ===
+                              "number"
+                              ? colaboradorSeleccionado.porcentajeSocio
+                              : null,
+                            colaboradorSeleccionado?.tipoPagoNombre,
+                          )
+                        : detalleLineas
+                            .filter((l) => String(l.venta_id) === id)
+                            .reduce((s, l) => s + l.importe, 0);
                       const productoTxt = (v.productoNombre ?? "").trim();
                       const productoIdsVenta = idsProductosVenta(v);
                       const tieneProducto =
@@ -749,8 +813,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
                       const pantallasDeVenta = [...new Set(v.pantallasIds ?? [])];
                       const pantallasSeleccionadasLocal =
                         pantallasSeleccionadasPorVenta[id] ?? [];
-                      const incluirPctPdf =
-                        colaboradorSeleccionado?.tipoComision === "porcentaje";
+                      const incluirPctPdf = esColaboradorPorcentaje;
                       const resumenSeleccion = `${pantallasSeleccionadasLocal.length} pantalla${pantallasSeleccionadasLocal.length !== 1 ? "s" : ""}${
                         nProdSel > 0
                           ? ` + ${nProdSel} producto${nProdSel !== 1 ? "s" : ""}`
@@ -914,23 +977,25 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                   </div>
                                 );
                               })() : null}
-                      {colaboradorSeleccionado?.tipoComision ===
-                              "porcentaje" ? (
+                      {esColaboradorPorcentaje ? (
                                 <div className="modal-venta-section modal-venta-section--gastos-last">
                                   <div className="modal-venta-section-title">
-                                    Porcentaje del socio (PDF)
+                                    Porcentaje del socio en esta venta
                                   </div>
                                   <div className="modal-venta-gastos-estado">
                                     <span className="modal-venta-gastos-estado-txt">
                                       Aplicado en la orden:{" "}
                                       <strong>
-                                        {Number(
-                                          colaboradorSeleccionado.porcentajeSocio ??
-                                            0,
-                                        ) || 0}
+                                        {porcentajeSocioEfectivoVentaEnOrden(
+                                          v,
+                                          typeof colaboradorSeleccionado?.porcentajeSocio ===
+                                            "number"
+                                            ? colaboradorSeleccionado.porcentajeSocio
+                                            : null,
+                                        )}
                                         %
-                                      </strong>{" "}
-                                      sobre pantallas al generar el PDF.
+                                      </strong>
+                                      .
                                     </span>
                                   </div>
                                 </div>

@@ -270,10 +270,20 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
         costos: Number(ventaSrc?.costos ?? 0) || 0,
         costoVenta:
           Number(ventaSrc?.costo_venta ?? ventaSrc?.costos ?? 0) || 0,
-        porcentajeSocio:
-          ventaSrc?.porcentaje_socio != null && ventaSrc?.porcentaje_socio !== ""
-            ? Number(ventaSrc.porcentaje_socio) || 0
-            : undefined,
+        porcentajeSocio: (() => {
+          const raw =
+            line.porcentaje_socio_aplicado ?? line.porcentajeSocioAplicado;
+          if (raw != null && raw !== "" && Number.isFinite(Number(raw))) {
+            return Number(raw);
+          }
+          if (
+            ventaSrc?.porcentaje_socio != null &&
+            ventaSrc?.porcentaje_socio !== ""
+          ) {
+            return Number(ventaSrc.porcentaje_socio) || 0;
+          }
+          return undefined;
+        })(),
         precioTotalContrato:
           Number(ventaSrc?.precio_total ?? ventaSrc?.importe_total ?? 0) ||
           undefined,
@@ -294,6 +304,42 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
   const total = Number(row.total) ?? 0;
   const idStr = String(row.id ?? "");
 
+  const emb = row.colaborador;
+  const colaboradorTipoComision = (() => {
+    const raw = String(emb?.tipo_comision ?? emb?.tipoComision ?? "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (raw === "porcentaje") return "porcentaje" as const;
+    if (raw === "consideracion") return "consideracion" as const;
+    if (raw === "precio_fijo") return "precio_fijo" as const;
+    if (raw === "ninguno") return "ninguno" as const;
+    const nombreTp = String(emb?.tipo_pago?.nombre ?? "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (nombreTp.includes("porcentaje")) return "porcentaje" as const;
+    if (
+      nombreTp.includes("consideracion") ||
+      nombreTp.includes("consideración")
+    )
+      return "consideracion" as const;
+    if (
+      nombreTp.includes("precio fijo") ||
+      nombreTp.includes("precio_fijo") ||
+      nombreTp.includes("pago fijo")
+    )
+      return "precio_fijo" as const;
+    return undefined;
+  })();
+  const colaboradorTipoPagoNombre = emb?.tipo_pago?.nombre
+    ? String(emb.tipo_pago.nombre).trim() || undefined
+    : emb?.tipoPago?.nombre
+      ? String(emb.tipoPago.nombre).trim() || undefined
+      : undefined;
+
   return {
     id: idStr,
     numeroOrden: `OC-${row.anio}-${String(row.mes).padStart(2, "0")}-${idStr.slice(0, 8)}`,
@@ -308,5 +354,7 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
     total,
     colaboradorId,
     colaboradorNombre,
+    colaboradorTipoComision,
+    colaboradorTipoPagoNombre,
   };
 }
