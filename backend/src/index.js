@@ -17,6 +17,7 @@ import diagnosticoRoutes from "./routes/diagnostico.js";
 import configuracionRoutes from "./routes/configuracion.js";
 import asignacionesRoutes from "./routes/asignaciones.js";
 import costosAdministrativosRoutes from "./routes/costosAdministrativos.js";
+import costosCategoriasRoutes from "./routes/costosCategorias.js";
 
 const PORT = Number(process.env.PORT) || 4000;
 const app = express();
@@ -44,6 +45,7 @@ app.use("/api/diagnostico", diagnosticoRoutes);
 app.use("/api/configuracion", configuracionRoutes);
 app.use("/api/asignaciones", asignacionesRoutes);
 app.use("/api/costos-administrativos", costosAdministrativosRoutes);
+app.use("/api/costos-categorias", costosCategoriasRoutes);
 
 const server = app.listen(PORT, () => {
   console.log("The Good Mark (BACKEND) en http://localhost:" + PORT);

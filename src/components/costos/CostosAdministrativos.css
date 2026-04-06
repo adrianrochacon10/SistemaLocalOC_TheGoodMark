@@ -1,5 +1,32 @@
 .costos-administrativos__graficas {
   margin-top: 0.5rem;
+  /* Altura mínima estable: evita salto entre mensaje vacío y gráficas */
+  min-height: 300px;
+}
+
+.costos-administrativos__resumen-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.costos-administrativos__resumen-header h4 {
+  margin: 0;
+}
+
+.costos-administrativos__select-anio {
+  min-width: 140px;
+}
+
+.costos-administrativos__select-anio select {
+  min-width: 8.5rem;
+}
+
+.costos-administrativos__listado {
+  min-height: 8rem;
 }
 
 .costos-administrativos__charts-grid {
@@ -54,10 +81,27 @@
 }
 
 .costos-administrativos__tabla-wrap {
+  position: relative;
   overflow-x: auto;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   background: #fff;
+}
+
+.costos-administrativos__tabla-wrap--actualizando {
+  opacity: 0.88;
+  transition: opacity 0.15s ease;
+}
+
+.costos-administrativos__refrescando {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 1;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: #64748b;
+  pointer-events: none;
 }
 
 .costos-administrativos__tabla {
@@ -88,4 +132,175 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.costos-administrativos__bloque-colapsable {
+  margin-bottom: 1rem;
+}
+
+.costos-administrativos__toggle-seccion {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.costos-administrativos__toggle-seccion:hover {
+  background: #e2e8f0;
+}
+
+.costos-administrativos__subtitulo-form {
+  margin: 0.5rem 0 0.75rem;
+  font-size: 1rem;
+}
+
+.costos-administrativos__cargando-cats {
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.costos-administrativos__categorias-panel {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.costos-administrativos__categorias-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.costos-administrativos__categorias-toolbar h4 {
+  margin: 0;
+}
+
+.costos-administrativos__nueva-categoria {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.costos-administrativos__textarea-asociados {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.costos-administrativos__lista-categorias {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.costos-administrativos__categoria-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 0.5rem;
+  background: #fff;
+  overflow: hidden;
+}
+
+.costos-administrativos__categoria-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.costos-administrativos__categoria-toggle {
+  flex: 1 1 200px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e293b;
+  padding: 0.25rem 0;
+}
+
+.costos-administrativos__categoria-count {
+  font-weight: 400;
+  color: #64748b;
+  font-size: 0.85rem;
+  margin-left: 0.35rem;
+}
+
+.costos-administrativos__categoria-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.costos-administrativos__asociados-bloque {
+  padding: 0 0.75rem 0.75rem 1.5rem;
+  border-top: 1px solid #f1f5f9;
+  background: #fafbfc;
+}
+
+.costos-administrativos__lista-asociados {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+}
+
+.costos-administrativos__lista-asociados li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.9rem;
+}
+
+.costos-administrativos__lista-asociados li:last-child {
+  border-bottom: none;
+}
+
+.costos-administrativos__asociado-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.costos-administrativos__agregar-asociado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.costos-administrativos__agregar-asociado input[type="text"] {
+  flex: 1 1 160px;
+  min-width: 120px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.9rem;
 }

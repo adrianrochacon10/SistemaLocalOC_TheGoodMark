@@ -24,6 +24,11 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Evita que el layout salte cuando aparece/desaparece la barra de desplazamiento vertical */
+  scrollbar-gutter: stable;
+}
+
 html,
 body {
   width: 100%;

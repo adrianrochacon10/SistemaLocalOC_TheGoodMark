@@ -127,6 +127,8 @@
   flex: 1;
   padding: 2rem;
   overflow-y: auto;
+  /* Misma idea que en html: el área de scroll no cambia de ancho al cargar más/menos contenido */
+  scrollbar-gutter: stable;
 }
 
 /* PANEL DE CONFIGURACIÓN */
