@@ -48,6 +48,8 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     null,
   );
   const [modalVentaKey, setModalVentaKey] = useState(0);
+  const [ventasParaGraficas, setVentasParaGraficas] =
+    useState<RegistroVenta[]>(ventasRegistradas);
 
   const handleNuevaVenta = () => {
     setVentaEditando(null);
@@ -70,6 +72,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
         colaboradores={clientes}
         usuarios={usuarios}
         ventasRegistradas={ventasRegistradas}
+        onVentasFiltradasChange={setVentasParaGraficas}
         onEliminarVenta={onEliminarVenta}
         onNuevaVenta={handleNuevaVenta}
         onEditarVenta={(venta) => {
@@ -80,7 +83,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
 
       {usuarioActual?.rol === "admin" ? (
         <VentasGraficas
-          ventasRegistradas={ventasRegistradas}
+          ventasRegistradas={ventasParaGraficas}
           colaboradores={clientes}
         />
       ) : null}

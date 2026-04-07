@@ -647,7 +647,7 @@ export const CostosAdministrativos: React.FC = () => {
                     type="number"
                     min={0}
                     step={0.01}
-                    value={importe}
+                    value={importe === 0 ? "" : importe}
                     onChange={(e) => setImporte(Math.max(0, Number(e.target.value) || 0))}
                   />
                 </div>
@@ -860,7 +860,7 @@ export const CostosAdministrativos: React.FC = () => {
                             type="number"
                             min={0}
                             step={0.01}
-                            value={edImporte}
+                            value={edImporte === 0 ? "" : edImporte}
                             onChange={(e) => setEdImporte(Math.max(0, Number(e.target.value) || 0))}
                           />
                         </label>

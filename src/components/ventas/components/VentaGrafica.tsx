@@ -1,6 +1,7 @@
 // src/components/ventas/components/VentasGraficas.tsx
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Colaborador, RegistroVenta } from "../../../types";
+import { backendApi } from "../../../lib/backendApi";
 import {
   precioVentaTotalContratoParaKpi,
   prorratearMontoPorMesesContrato,
@@ -60,6 +61,27 @@ export const VentasGraficas: React.FC<Props> = ({
   ventasRegistradas,
   colaboradores,
 }) => {
+  const [gastosAdministrativosTotal, setGastosAdministrativosTotal] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    void (async () => {
+      try {
+        const data = await backendApi.get("/api/costos-administrativos");
+        const rows = Array.isArray(data) ? data : [];
+        const total = rows.reduce((s: number, r: any) => {
+          return s + (Number(r?.importe ?? 0) || 0);
+        }, 0);
+        if (!cancelado) setGastosAdministrativosTotal(total);
+      } catch {
+        if (!cancelado) setGastosAdministrativosTotal(0);
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
   const esVentaPorDias = (v: RegistroVenta): boolean => {
     const unidad = String((v as { duracionUnidad?: string }).duracionUnidad ?? "")
       .toLowerCase()
@@ -461,6 +483,13 @@ export const VentasGraficas: React.FC<Props> = ({
           <div>
             <p className="kpi-label">Comisiones</p>
             <p className="kpi-valor">{fmt(totales.comision)}</p>
+          </div>
+        </div>
+        <div className="kpi-card kpi-gastos-admin">
+          <span className="kpi-icon">🏢</span>
+          <div>
+            <p className="kpi-label">Gastos administrativos</p>
+            <p className="kpi-valor">{fmt(gastosAdministrativosTotal)}</p>
           </div>
         </div>
       </div>

@@ -12,9 +12,7 @@ import {
   importeLineaOrdenTrasPorcentajeSocio,
   importeVentaEnMesOrden,
   porcentajeSocioEfectivoVentaEnOrden,
-  precioVentaTotalContratoBrutoColaboradorPorcentaje,
 } from "./ordenUtils";
-import type { OrdenDeCompra } from "../types";
 
 /** Nombre legible para una pantalla: snapshot de la venta primero, luego catálogo. */
 export function nombrePantallaDesdeVentaYCatalogo(
@@ -413,24 +411,10 @@ export function totalesDesdeLineas(
     opts?.tipoComision,
     opts?.tipoPagoNombre,
   );
-  const esPct = colaboradorEsTipoPorcentajeOrden(
-    opts?.tipoComision,
-    opts?.tipoPagoNombre,
-  );
   const map = opts?.ventasPorId;
   const mes0 = opts?.mesOrden0;
   const añoOrd = opts?.añoOrden;
   const diaCorte = Number(opts?.diaCorteOrdenes ?? 20) || 20;
-  const ordenBrutoStub = {
-    id: "",
-    numeroOrden: "",
-    fecha: new Date(),
-    estado: "generada" as const,
-    mes: mes0 ?? 0,
-    año: añoOrd ?? new Date().getFullYear(),
-    subtotal: 0,
-  } as OrdenDeCompra;
-  const nLineas = lineas.length;
   const subtotalRaw = lineas.reduce((s, l) => {
       const imp = Number(l.importe) || 0;
       if (!map) return s + imp;
@@ -455,14 +439,7 @@ export function totalesDesdeLineas(
         }
         return s + costoVentaProporcionalImporte(v, imp);
       }
-      const bruto =
-        esPct && v
-          ? precioVentaTotalContratoBrutoColaboradorPorcentaje(
-              v,
-              ordenBrutoStub,
-              nLineas,
-            )
-          : imp;
+      const bruto = imp;
       const facturable = v
         ? importeLineaOrdenTrasPorcentajeSocio(
             bruto,
@@ -497,14 +474,7 @@ export function totalesDesdeLineas(
         }
         return s + costoVentaProporcionalImporte(v, imp);
       }
-      const bruto =
-        esPct && v
-          ? precioVentaTotalContratoBrutoColaboradorPorcentaje(
-              v,
-              ordenBrutoStub,
-              nLineas,
-            )
-          : imp;
+      const bruto = imp;
       const facturable = v
         ? importeLineaOrdenTrasPorcentajeSocio(
             bruto,

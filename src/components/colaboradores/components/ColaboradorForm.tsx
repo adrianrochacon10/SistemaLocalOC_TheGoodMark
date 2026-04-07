@@ -120,7 +120,7 @@ export const ColaboradorForm: React.FC<Props> = ({
               type="number"
               min="0"
               max="100"
-              value={porcentaje}
+              value={porcentaje === 0 ? "" : porcentaje}
               onChange={(e) =>
                 setPorcentaje(
                   e.target.value === ""

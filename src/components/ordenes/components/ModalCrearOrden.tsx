@@ -11,7 +11,6 @@ import {
   Pantalla,
   Producto,
   ConfiguracionEmpresa,
-  OrdenDeCompra,
 } from "../../../types";
 import { backendApi } from "../../../lib/backendApi";
 import {
@@ -23,7 +22,6 @@ import {
 import {
   ventaIncluidaEnMesOrdenConCorte,
   porcentajeSocioEfectivoVentaEnOrden,
-  precioVentaTotalContratoBrutoColaboradorPorcentaje,
   importeLineaOrdenTrasPorcentajeSocio,
 } from "../../../utils/ordenUtils";
 import {
@@ -216,20 +214,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
     const tpn = String(colaboradorSeleccionado?.tipoPagoNombre ?? "").toLowerCase();
     return tpn.includes("porcentaje");
   }, [colaboradorSeleccionado?.tipoComision, colaboradorSeleccionado?.tipoPagoNombre]);
-
-  const ordenStubModal = useMemo(
-    () =>
-      ({
-        id: "",
-        numeroOrden: "",
-        fecha: new Date(),
-        estado: "generada",
-        mes,
-        año,
-        subtotal: 0,
-      }) as OrdenDeCompra,
-    [mes, año],
-  );
 
   const ventaIdsKey = useMemo(
     () => ventasDelMes.map((v) => String(v.id)).sort().join("|"),
@@ -521,7 +505,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
         mes,
         año,
         {
-          prorratearEnMes: !esColaboradorPorcentaje,
+          prorratearEnMes: true,
           tipoComision: colaboradorSeleccionado?.tipoComision,
           tipoPagoNombre: colaboradorSeleccionado?.tipoPagoNombre,
           porcentajeColaboradorActual:
@@ -792,25 +776,20 @@ export const ModalCrearOrden: React.FC<Props> = ({
                       const va =
                         ventasAjustadasParaOrden.find((x) => String(x.id) === id) ??
                         v;
-                      const nDet = Math.max(1, detalleLineas.length);
+                      const importeLineaBruto = detalleLineas
+                        .filter((l) => String(l.venta_id) === id)
+                        .reduce((s, l) => s + l.importe, 0);
                       const importeLinea = esColaboradorPorcentaje
                         ? importeLineaOrdenTrasPorcentajeSocio(
-                            precioVentaTotalContratoBrutoColaboradorPorcentaje(
-                              va,
-                              ordenStubModal,
-                              nDet,
-                            ),
+                            importeLineaBruto,
                             va,
                             colaboradorSeleccionado?.tipoComision,
-                            typeof colaboradorSeleccionado?.porcentajeSocio ===
-                              "number"
+                            typeof colaboradorSeleccionado?.porcentajeSocio === "number"
                               ? colaboradorSeleccionado.porcentajeSocio
                               : null,
                             colaboradorSeleccionado?.tipoPagoNombre,
                           )
-                        : detalleLineas
-                            .filter((l) => String(l.venta_id) === id)
-                            .reduce((s, l) => s + l.importe, 0);
+                        : importeLineaBruto;
                       const productoTxt = (v.productoNombre ?? "").trim();
                       const productoIdsVenta = idsProductosVenta(v);
                       const tieneProducto =

@@ -277,7 +277,7 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
                         type="number"
                         id="iva_percentaje"
                         name="iva_percentaje"
-                        value={formData.iva_percentaje}
+                        value={formData.iva_percentaje === 0 ? "" : formData.iva_percentaje}
                         onChange={handleChange}
                         min={0}
                         max={100}
@@ -308,7 +308,7 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
                       type="number"
                       id="dia_corte_ordenes"
                       name="dia_corte_ordenes"
-                      value={formData.dia_corte_ordenes}
+                      value={formData.dia_corte_ordenes === 0 ? "" : formData.dia_corte_ordenes}
                       onChange={handleChange}
                       min={1}
                       max={31}

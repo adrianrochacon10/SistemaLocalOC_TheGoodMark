@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { registroSolapaMesCalendario } from "../../../utils/ordenUtils";
 import {
   RegistroVenta,
@@ -18,6 +18,7 @@ interface RegistroVentasListaProps {
   colaboradores: Colaborador[];
   usuarios: Usuario[];
   ventasRegistradas: RegistroVenta[];
+  onVentasFiltradasChange?: (ventas: RegistroVenta[]) => void;
   onEliminarVenta: (ventaId: string) => void;
   onNuevaVenta: () => void;
   onEditarVenta: (venta: RegistroVenta) => void;
@@ -44,6 +45,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   colaboradores = [],
   usuarios = [],
   ventasRegistradas,
+  onVentasFiltradasChange,
   onEliminarVenta,
   onNuevaVenta,
   onEditarVenta,
@@ -155,6 +157,10 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   );
 
   const resetPagina = () => setPaginaActual(1);
+
+  useEffect(() => {
+    onVentasFiltradasChange?.(ventasFiltradas);
+  }, [ventasFiltradas, onVentasFiltradasChange]);
 
   return (
     <>

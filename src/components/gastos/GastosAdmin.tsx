@@ -651,7 +651,7 @@ export const GastosAdmin: React.FC<Props> = ({
                   type="number"
                   min={0}
                   step={0.01}
-                  value={montoGasto}
+                  value={montoGasto === 0 ? "" : montoGasto}
                   onChange={(e) => setMontoGasto(Math.max(0, Number(e.target.value) || 0))}
                 />
               </div>

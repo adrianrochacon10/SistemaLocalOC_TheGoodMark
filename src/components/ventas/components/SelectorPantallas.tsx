@@ -62,11 +62,14 @@ export const SelectorPantallas: React.FC<SelectorPantallasProps> = ({
                   type="number"
                   min={0}
                   step={0.01}
-                  value={Number(
-                    precioPantallaMap[String(asignacion.pantallaId)] ??
-                      pantalla?.precio ??
-                      0,
-                  )}
+                  value={(() => {
+                    const v = Number(
+                      precioPantallaMap[String(asignacion.pantallaId)] ??
+                        pantalla?.precio ??
+                        0,
+                    );
+                    return v === 0 ? "" : v;
+                  })()}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) =>
                     onCambiarPrecioPantalla(

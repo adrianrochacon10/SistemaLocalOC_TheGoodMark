@@ -205,22 +205,24 @@ function round2Orden(n: number): number {
 const DIA_CORTE_ORDEN = 20;
 const EPS_IMP_ORDEN = 0.05;
 
-function ymdVenta(d: Date): string {
-  const x = d instanceof Date ? d : new Date(d);
-  if (Number.isNaN(x.getTime())) return "";
-  const y = x.getFullYear();
-  const m = String(x.getMonth() + 1).padStart(2, "0");
-  const day = String(x.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function esVentaPorDiasOrden(v: RegistroVenta): boolean {
+  const unidad = String((v as { duracionUnidad?: string }).duracionUnidad ?? "")
+    .toLowerCase()
+    .trim();
+  if (["dias", "días", "dia", "día"].includes(unidad)) return true;
+  if ((v as { gastoAdicionalEnDias?: boolean }).gastoAdicionalEnDias === true) return true;
+  return false;
 }
 
 /**
- * Importe del contrato que corresponde al mes de la orden (misma lógica que backend `importeVentaEnMes`).
+ * Importe mensual de la venta para la OC:
+ * - Ventas por días: usa el total del periodo.
+ * - Ventas por meses: cuota mensual fija (total contrato / meses), sin prorrateo diario.
  */
 export function importeVentaEnMesOrden(
   v: RegistroVenta,
-  mes0: number,
-  año: number,
+  _mes0: number,
+  _año: number,
   precioContrato?: number,
 ): number {
   const pt = round2Orden(
@@ -229,30 +231,10 @@ export function importeVentaEnMesOrden(
       : Number(v.precioTotalContrato ?? v.precioTotal ?? v.importeTotal ?? 0) ||
           0,
   );
-  const s = ymdVenta(v.fechaInicio);
-  const e = ymdVenta(v.fechaFin);
-  if (!s || !e || pt <= 0) return pt;
-  const mesDb = mes0 + 1;
-  const inicio = `${año}-${String(mesDb).padStart(2, "0")}-01`;
-  const ultimo = new Date(año, mesDb, 0);
-  const finStr = ultimo.toISOString().slice(0, 10);
-  const vi = new Date(`${s}T12:00:00`);
-  const vf = new Date(`${e}T12:00:00`);
-  const ms = new Date(`${inicio}T12:00:00`);
-  const me = new Date(`${finStr}T12:00:00`);
-  const start = vi > ms ? vi : ms;
-  const end = vf < me ? vf : me;
-  if (start > end) return 0;
-  const dayMs = 86400000;
-  const diasTotal = Math.max(
-    1,
-    Math.round((vf.getTime() - vi.getTime()) / dayMs) + 1,
-  );
-  const diasOverlap = Math.max(
-    0,
-    Math.round((end.getTime() - start.getTime()) / dayMs) + 1,
-  );
-  return round2Orden((pt * diasOverlap) / diasTotal);
+  if (!(pt > 0)) return 0;
+  if (esVentaPorDiasOrden(v)) return pt;
+  const meses = mesesContratoVentaOrden(v);
+  return round2Orden(pt / Math.max(1, meses));
 }
 
 /** Meses de duración del contrato (`mesesRenta` o diferencia inicio–fin). */
@@ -461,30 +443,15 @@ export function colaboradorEsTipoPorcentajeOrden(
 }
 
 /**
- * Base para colaborador por %: **precio total del contrato** (precio de la venta), no la cuota mensual.
- * Si no hay total, reconstruye mes × meses o cae al importe de línea en la orden.
+ * Base para colaborador por %: **precio de venta del mes de la orden**.
+ * Si la línea trae un importe específico menor (subselección), se respeta.
  */
 export function precioVentaTotalContratoBrutoColaboradorPorcentaje(
   venta: RegistroVenta,
   orden: OrdenDeCompra,
   numRegistrosEnOrden: number,
 ): number {
-  const T = Math.max(
-    0,
-    Number(
-      venta.precioTotalContrato ??
-        venta.precioTotal ??
-        venta.importeTotal ??
-        0,
-    ) || 0,
-  );
-  if (T > 0) return round2Orden(T);
-  const mensual = Math.max(0, Number(venta.precioGeneral ?? 0) || 0);
-  const mr = Math.max(1, Number(venta.mesesRenta ?? 1) || 1);
-  if (mensual > 0) return round2Orden(mensual * mr);
-  return round2Orden(
-    importeLineaRespectoOrden(venta, orden, numRegistrosEnOrden),
-  );
+  return round2Orden(importeLineaRespectoOrden(venta, orden, numRegistrosEnOrden));
 }
 
 /**
@@ -541,6 +508,8 @@ export function importeLineaOrdenTrasPorcentajeSocio(
   if (!colabEsPct && !ventaSnap) return bruto;
   const pct = porcentajeSocioEfectivoVentaEnOrden(venta, porcentajeColaboradorActual);
   if (pct <= 0) return bruto;
+  // Regla negocio: en colaborador por porcentaje, el subtotal es
+  // "precio de la venta por mes x porcentaje".
   return round2Orden(bruto * (pct / 100));
 }
 

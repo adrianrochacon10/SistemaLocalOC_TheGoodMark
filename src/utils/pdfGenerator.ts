@@ -19,7 +19,6 @@ import {
   costoLineaOrdenConsideracionPrecioFijo,
   colaboradorUsaCostoComoBaseOrden,
   colaboradorEsTipoPorcentajeOrden,
-  precioVentaTotalContratoBrutoColaboradorPorcentaje,
   porcentajeSocioEfectivoVentaEnOrden,
   importeLineaOrdenTrasPorcentajeSocio,
   colaboradorEfectivoParaOrden,
@@ -571,11 +570,6 @@ export async function exportarPDFOrden(
         colab?.tipoPagoNombre,
       ) || ventaTienePorcentajeSocioSnapshot(venta);
     const precioVentaLinea = (() => {
-      if (esColabPorcentajePdf) {
-        return round2(
-          precioVentaTotalContratoBrutoColaboradorPorcentaje(venta, orden, numRegPdf),
-        );
-      }
       let pv = round2(importeLineaRespectoOrden(venta, orden, numRegPdf));
       if (!(pv > 0)) {
         const contrato =
@@ -703,11 +697,7 @@ export async function exportarPDFOrden(
           colab?.tipoComision,
           colab?.tipoPagoNombre,
         ) || ventaTienePorcentajeSocioSnapshot(venta);
-      const pv = esColabPorcentajePdf
-        ? round2(
-            precioVentaTotalContratoBrutoColaboradorPorcentaje(venta, orden, numRegPdf),
-          )
-        : round2(importeLineaRespectoOrden(venta, orden, numRegPdf));
+      const pv = round2(importeLineaRespectoOrden(venta, orden, numRegPdf));
       const usarCostoPdf = colaboradorUsaCostoComoBaseOrden(
         colab?.tipoComision,
         colab?.tipoPagoNombre,

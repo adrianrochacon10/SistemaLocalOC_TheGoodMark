@@ -1023,7 +1023,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                               min={0}
                               step={0.01}
                               disabled={duracionUnidad === "dias"}
-                              value={Number(precioVentaProductoMap[String(p.id)] ?? p.precio ?? 0)}
+                              value={(() => {
+                                const v = Number(
+                                  precioVentaProductoMap[String(p.id)] ?? p.precio ?? 0,
+                                );
+                                return v === 0 ? "" : v;
+                              })()}
                               onClick={(e) => e.stopPropagation()}
                               onChange={(e) =>
                                 setPrecioProductoVenta(
@@ -1178,7 +1183,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
               </div>
               <InputField
                 label="Precio de la venta (total)"
-                value={precioTotalCalculado}
+                value={Number(precioTotalCalculado) === 0 ? "" : precioTotalCalculado}
                 onChange={(v: any) => {
                   if (String(v).trim() === "") {
                     setPrecioTotalManual(null);
@@ -1210,8 +1215,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 }
                 value={
                   duracionUnidad === "dias"
-                    ? Number(precioPorDiaFinal || 0)
-                    : precioMensualFinal
+                    ? (Number(precioPorDiaFinal || 0) === 0
+                      ? ""
+                      : Number(precioPorDiaFinal || 0))
+                    : (Number(precioMensualFinal || 0) === 0
+                      ? ""
+                      : precioMensualFinal)
                 }
                 onChange={(v: any) => {
                   if (String(v).trim() === "") {
@@ -1243,7 +1252,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                         ? "Costo de la venta (por día)"
                         : "Costo de la venta (por mes)"
                     }
-                    value={costos}
+                    value={costos === 0 ? "" : costos}
                     onChange={(v: any) => {
                       const n = Math.max(0, toNumberSafe(v, Number(costos || 0)));
                       setCostos(n);
@@ -1287,7 +1296,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
               <div className="form-row">
                 <InputField
                   label="Gastos adicionales"
-                  value={gastosAdicionales}
+                  value={gastosAdicionales === 0 ? "" : gastosAdicionales}
                   onChange={(v: any) =>
                     setGastosAdicionales((prev) => toNumberSafe(v, prev))
                   }
