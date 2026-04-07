@@ -85,6 +85,26 @@ export type DetalleLineaOrden = {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+function esVentaPorDiasOrden(v: RegistroVenta): boolean {
+  const unidad = String((v as { duracionUnidad?: string }).duracionUnidad ?? "")
+    .toLowerCase()
+    .trim();
+  if (["dias", "días", "dia", "día"].includes(unidad)) return true;
+  if ((v as { gastoAdicionalEnDias?: boolean }).gastoAdicionalEnDias === true) return true;
+  const notas = String(v.notas ?? "").toLowerCase();
+  if (notas.includes("gasto_dia") || notas.includes("al día") || notas.includes("al dia")) {
+    return true;
+  }
+  const mr = Math.max(1, Number(v.mesesRenta ?? 1) || 1);
+  const fi = new Date(v.fechaInicio);
+  const ff = new Date(v.fechaFin);
+  if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return false;
+  const dias = Math.max(1, Math.round((ff.getTime() - fi.getTime()) / 86400000) + 1);
+  if ([1, 3, 7, 15].includes(mr) && dias <= 31) return true;
+  if (mr === dias || Math.abs(dias - mr) <= 1) return true;
+  return false;
+}
+
 /** Meses de renta desde la venta o, si falta, diferencia de meses entre inicio y fin. */
 export function mesesRentaDesdeVenta(v: RegistroVenta): number {
   const mr = Number(v.mesesRenta);
@@ -302,7 +322,7 @@ export function construirDetalleLineas(
     const partes = partesImporteOrdenVenta(v, sel, precios);
     const T = round2(Math.max(0, partes.totalContrato));
     let imp = Math.max(0, partes.importe);
-    if (T > 0 && prorratearEnMes) {
+    if (T > 0 && prorratearEnMes && !esVentaPorDiasOrden(v)) {
       const mesCompleto = importeVentaEnMesOrden(v, mesOrden0, añoOrden, T);
       imp = round2((imp / T) * mesCompleto);
     } else {
@@ -411,11 +431,56 @@ export function totalesDesdeLineas(
     subtotal: 0,
   } as OrdenDeCompra;
   const nLineas = lineas.length;
-  const subtotal = round2(
-    lineas.reduce((s, l) => {
+  const subtotalRaw = lineas.reduce((s, l) => {
       const imp = Number(l.importe) || 0;
       if (!map) return s + imp;
       const v = map.get(String(l.venta_id));
+      if (usarCosto) {
+        if (!v) return s + imp;
+        if (esVentaPorDiasOrden(v)) {
+          // Regla negocio: venta por días usa costo fijo completo (sin prorrateo/división).
+          return s + Math.max(0, Number(v.costoVenta ?? v.costos ?? 0) || 0);
+        }
+        if (mes0 != null && añoOrd != null) {
+          return (
+            s +
+            costoLineaOrdenConsideracionPrecioFijo(
+              v,
+              mes0,
+              añoOrd,
+              imp,
+              diaCorte,
+            )
+          );
+        }
+        return s + costoVentaProporcionalImporte(v, imp);
+      }
+      const bruto =
+        esPct && v
+          ? precioVentaTotalContratoBrutoColaboradorPorcentaje(
+              v,
+              ordenBrutoStub,
+              nLineas,
+            )
+          : imp;
+      const facturable = v
+        ? importeLineaOrdenTrasPorcentajeSocio(
+            bruto,
+            v,
+            opts?.tipoComision,
+            opts?.porcentajeColaboradorActual,
+            opts?.tipoPagoNombre,
+          )
+        : imp;
+      return s + facturable;
+    }, 0);
+  const subtotal = round2(subtotalRaw);
+  const baseIva = round2(
+    lineas.reduce((s, l) => {
+      if (!map) return s + (Number(l.importe) || 0);
+      const v = map.get(String(l.venta_id));
+      if (v && esVentaPorDiasOrden(v)) return s;
+      const imp = Number(l.importe) || 0;
       if (usarCosto) {
         if (!v) return s + imp;
         if (mes0 != null && añoOrd != null) {
@@ -452,7 +517,7 @@ export function totalesDesdeLineas(
       return s + facturable;
     }, 0),
   );
-  const iva = round2(subtotal * (ivaPercentaje / 100));
+  const iva = round2(baseIva * (ivaPercentaje / 100));
   return { subtotal, iva, total: round2(subtotal + iva) };
 }
 

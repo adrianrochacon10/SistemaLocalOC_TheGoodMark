@@ -35,7 +35,10 @@ export async function actualizar(req, res) {
 export async function eliminar(req, res) {
   try {
     const result = await costosCategoriasService.eliminarCategoria(req.params?.id);
-    if (result.error) return res.status(400).json({ error: result.error });
+    if (result.error) {
+      if (result.error === "Categoría no encontrada") return res.status(404).json({ error: result.error });
+      return res.status(400).json({ error: result.error });
+    }
     res.status(204).send();
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });

@@ -2,6 +2,7 @@ import { colorPorEstado } from "../../../utils/colores";
 import { diasEntreFechasInicioFin, formatearFecha } from "../../../utils/formateoFecha";
 import { formatearMoneda } from "../../../utils/formateoMoneda";
 import { Colaborador, Pantalla, RegistroVenta } from "../../../types";
+import { utilidadNetaContratoParaKpi } from "../../../utils/utilidadVenta";
 
 interface VentaCardProps {
   venta: RegistroVenta;
@@ -21,6 +22,22 @@ export const VentaCard: React.FC<VentaCardProps> = ({
   onClick,
 }) => {
   const colaborador = colaboradores.find((c) => c.id === venta.colaboradorId);
+
+  const esVentaPorDias = (v: RegistroVenta): boolean => {
+    const unidad = String((v as { duracionUnidad?: string }).duracionUnidad ?? "")
+      .toLowerCase()
+      .trim();
+    if (["dias", "días", "dia", "día"].includes(unidad)) return true;
+    if ((v as { gastoAdicionalEnDias?: boolean }).gastoAdicionalEnDias === true) return true;
+    const mr = Math.max(1, Number(v.mesesRenta ?? 1) || 1);
+    const fi = v.fechaInicio instanceof Date ? v.fechaInicio : new Date(v.fechaInicio);
+    const ff = v.fechaFin instanceof Date ? v.fechaFin : new Date(v.fechaFin);
+    if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return false;
+    const dias = Math.max(1, Math.round((ff.getTime() - fi.getTime()) / 86400000) + 1);
+    if ([1, 3, 7, 15].includes(mr) && dias <= 31) return true;
+    if (mr === dias || Math.abs(dias - mr) <= 1) return true;
+    return false;
+  };
 
   // ✅ Pantallas con recorte
   const todasLasPantallas = venta.pantallasIds
@@ -53,8 +70,8 @@ export const VentaCard: React.FC<VentaCardProps> = ({
       : new Date(venta.fechaFin);
   const diasEnContrato = diasEntreFechasInicioFin(fi, ff);
   const unidadEsDia =
-    meses > 0 &&
-    (meses === diasEnContrato || Math.abs(diasEnContrato - meses) <= 1);
+    esVentaPorDias(venta) ||
+    (meses > 0 && (meses === diasEnContrato || Math.abs(diasEnContrato - meses) <= 1));
 
   const precioPorPeriodo =
     precioMes > 0
@@ -62,6 +79,12 @@ export const VentaCard: React.FC<VentaCardProps> = ({
       : meses > 0
         ? precioTotalContrato / meses
         : 0;
+  const utilidadNetaCard = unidadEsDia
+    ? Math.max(0, Number(venta.costoVenta ?? venta.costos ?? 0) || 0)
+    : Math.max(
+        0,
+        utilidadNetaContratoParaKpi(venta, colaboradores) - (Number(venta.gastosAdicionales ?? 0) || 0),
+      );
 
   return (
     <div
@@ -180,7 +203,7 @@ export const VentaCard: React.FC<VentaCardProps> = ({
         )}
       </div>
 
-      {/* Importe + estado */}
+      {/* Utilidad neta + estado */}
       <div
         style={{
           display: "flex",
@@ -199,14 +222,15 @@ export const VentaCard: React.FC<VentaCardProps> = ({
             fontSize: "1em",
           }}
         >
-          {formatearMoneda(precioTotalContrato)}
+          {formatearMoneda(utilidadNetaCard)}
         </span>
 
         <span
           style={{ color: "#64748b", fontSize: "0.82em", fontWeight: 500 }}
         >
-          Precio por periodo ({unidadEsDia ? "por día" : "por mes"}):{" "}
-          {formatearMoneda(precioPorPeriodo)}
+          {unidadEsDia
+            ? `Costo fijo por día: ${formatearMoneda(precioPorPeriodo)}`
+            : `Utilidad por periodo (por mes): ${formatearMoneda(precioPorPeriodo)}`}
         </span>
 
         {venta.importeTotal !== venta.precioTotal && venta.precioTotal && (

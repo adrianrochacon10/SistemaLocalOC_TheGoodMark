@@ -15,6 +15,7 @@ import {
 } from "chart.js";
 import { Line, Pie } from "react-chartjs-2";
 import { backendApi } from "../../lib/backendApi";
+import { confirmWithToast } from "../../lib/confirmWithToast";
 import "../ventas/RegistroVentasNuevo.css";
 import "./CostosAdministrativos.css";
 
@@ -266,9 +267,21 @@ export const CostosAdministrativos: React.FC = () => {
   });
   const [categoriaId, setCategoriaId] = useState("");
   const [asociadoId, setAsociadoId] = useState("");
+  const maInicial = mesAnioDesdeFechaISO(fecha);
+  const [mesNuevoCosto, setMesNuevoCosto] = useState<number>(maInicial?.mes ?? 1);
+  const [anioNuevoCosto, setAnioNuevoCosto] = useState<number>(maInicial?.anio ?? new Date().getFullYear());
   const [importe, setImporte] = useState<number>(0);
   const [nota, setNota] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [edFecha, setEdFecha] = useState("");
+  const [edMes, setEdMes] = useState<number>(1);
+  const [edAnio, setEdAnio] = useState<number>(new Date().getFullYear());
+  const [edCategoriaId, setEdCategoriaId] = useState("");
+  const [edAsociadoId, setEdAsociadoId] = useState("");
+  const [edImporte, setEdImporte] = useState<number>(0);
+  const [edNota, setEdNota] = useState("");
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
 
   type FiltrosCarga = {
     mes: string;
@@ -342,6 +355,13 @@ export const CostosAdministrativos: React.FC = () => {
     void cargar();
   }, [cargar]);
 
+  useEffect(() => {
+    const ma = mesAnioDesdeFechaISO(fecha);
+    if (!ma) return;
+    setMesNuevoCosto(ma.mes);
+    setAnioNuevoCosto(ma.anio);
+  }, [fecha]);
+
   const asociadosDeCategoria = useMemo(() => {
     const c = categorias.find((x) => x.id === categoriaId);
     return c?.asociados ?? [];
@@ -351,6 +371,10 @@ export const CostosAdministrativos: React.FC = () => {
     const c = categorias.find((x) => x.id === filtroListadoCategoriaId);
     return c?.asociados ?? [];
   }, [categorias, filtroListadoCategoriaId]);
+  const asociadosDeCategoriaEdicion = useMemo(() => {
+    const c = categorias.find((x) => x.id === edCategoriaId);
+    return c?.asociados ?? [];
+  }, [categorias, edCategoriaId]);
 
   const dataPie = useMemo(() => datosPiePorCategoria(filas), [filas]);
   const dataLinea = useMemo(() => datosLineaPorMes(filas), [filas]);
@@ -385,13 +409,24 @@ export const CostosAdministrativos: React.FC = () => {
   );
 
   const handleCrear = async () => {
-    const ma = mesAnioDesdeFechaISO(fecha);
-    if (!ma) {
+    if (!mesAnioDesdeFechaISO(fecha)) {
       toast.warning("Fecha no válida.");
       return;
     }
     if (!categoriaId.trim()) {
       toast.warning("Elige una categoría.");
+      return;
+    }
+    if (!asociadoId.trim()) {
+      toast.warning("La subcategoría es obligatoria.");
+      return;
+    }
+    if (!Number.isFinite(mesNuevoCosto) || mesNuevoCosto < 1 || mesNuevoCosto > 12) {
+      toast.warning("El mes debe estar entre 1 y 12.");
+      return;
+    }
+    if (!Number.isFinite(anioNuevoCosto) || anioNuevoCosto < 2000 || anioNuevoCosto > 3000) {
+      toast.warning("El año está fuera de rango.");
       return;
     }
     if (!Number.isFinite(importe) || importe < 0) {
@@ -402,11 +437,11 @@ export const CostosAdministrativos: React.FC = () => {
     try {
       await backendApi.post("/api/costos-administrativos", {
         fecha,
-        mes: ma.mes,
-        anio: ma.anio,
+        mes: mesNuevoCosto,
+        anio: anioNuevoCosto,
         importe,
         categoria_id: categoriaId.trim(),
-        asociado_id: asociadoId.trim() || null,
+        asociado_id: asociadoId.trim(),
         nota: nota.trim() || null,
       });
       toast.success("Costo registrado.");
@@ -414,7 +449,7 @@ export const CostosAdministrativos: React.FC = () => {
       setAsociadoId("");
       setImporte(0);
       setNota("");
-      const anioStr = String(ma.anio);
+      const anioStr = String(anioNuevoCosto);
       setFiltroListadoCategoriaId("");
       setFiltroListadoAsociado("");
       setFiltroMes("");
@@ -428,7 +463,8 @@ export const CostosAdministrativos: React.FC = () => {
   };
 
   const handleEliminar = async (id: string) => {
-    if (!window.confirm("¿Eliminar este registro?")) return;
+    const ok = await confirmWithToast("¿Eliminar este registro?");
+    if (!ok) return;
     try {
       await backendApi.del(`/api/costos-administrativos/${encodeURIComponent(id)}`);
       toast.success("Eliminado.");
@@ -438,13 +474,61 @@ export const CostosAdministrativos: React.FC = () => {
     }
   };
 
+  const iniciarEdicion = async (r: CostoAdministrativoRow) => {
+    await cargarCategorias(false);
+    setEditandoId(r.id);
+    setEdFecha(r.fecha);
+    setEdMes(Math.trunc(Number(r.mes)) || 1);
+    setEdAnio(Math.trunc(Number(r.anio)) || new Date().getFullYear());
+    setEdCategoriaId(r.categoria_id ?? "");
+    setEdAsociadoId(r.asociado_id ?? "");
+    setEdImporte(Number(r.importe) || 0);
+    setEdNota(r.nota ?? "");
+  };
+
+  const cancelarEdicion = () => {
+    setEditandoId(null);
+    setEdAsociadoId("");
+    setEdCategoriaId("");
+  };
+
+  const guardarEdicion = async () => {
+    if (!editandoId) return;
+    if (!edFecha.trim()) return toast.warning("La fecha es obligatoria.");
+    if (!edCategoriaId.trim()) return toast.warning("Elige una categoría.");
+    if (!edAsociadoId.trim()) return toast.warning("Elige una subcategoría.");
+    if (!Number.isFinite(edMes) || edMes < 1 || edMes > 12) return toast.warning("Mes inválido.");
+    if (!Number.isFinite(edAnio) || edAnio < 2000 || edAnio > 3000) return toast.warning("Año inválido.");
+    if (!Number.isFinite(edImporte) || edImporte < 0) return toast.warning("Importe inválido.");
+
+    setGuardandoEdicion(true);
+    try {
+      await backendApi.patch(`/api/costos-administrativos/${encodeURIComponent(editandoId)}`, {
+        fecha: edFecha,
+        mes: edMes,
+        anio: edAnio,
+        categoria_id: edCategoriaId,
+        asociado_id: edAsociadoId,
+        importe: edImporte,
+        nota: edNota.trim() || null,
+      });
+      toast.success("Costo actualizado.");
+      setEditandoId(null);
+      await cargar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo actualizar");
+    } finally {
+      setGuardandoEdicion(false);
+    }
+  };
+
   const fmtMoney = (n: number) =>
     Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
 
   return (
     <div className="registro-ventas-nuevo costos-administrativos">
       <div className="formulario-section">
-        <h3>Costos administrativos</h3>
+        <h3>Gastos administrativos</h3>
 
         <div className="costos-administrativos__bloque-colapsable">
           <button
@@ -457,12 +541,12 @@ export const CostosAdministrativos: React.FC = () => {
                 : abrirGestionCategorias()
             }
           >
-            {panelGestionCategoriasAbierto ? "▼" : "▸"} Gestionar categorías y asociados
+            {panelGestionCategoriasAbierto ? "▼" : "▸"} Gestionar categorías y subcategorías
           </button>
           {panelGestionCategoriasAbierto ? (
             <>
               {cargandoCategorias && categorias.length === 0 ? (
-                <p className="costos-administrativos__cargando-cats">Cargando categorías y asociados…</p>
+                <p className="costos-administrativos__cargando-cats">Cargando categorías y subcategorías…</p>
               ) : null}
               <CostosCategoriasPanel
                 categorias={categorias}
@@ -486,13 +570,41 @@ export const CostosAdministrativos: React.FC = () => {
           {panelNuevoCostoAbierto ? (
             <>
               {cargandoCategorias && categorias.length === 0 ? (
-                <p className="costos-administrativos__cargando-cats">Cargando categorías y asociados…</p>
+                <p className="costos-administrativos__cargando-cats">Cargando categorías y subcategorías…</p>
               ) : null}
               <h4 className="costos-administrativos__subtitulo-form">Nuevo costo</h4>
-              <div className="form-row">
+              <div className="form-row costos-administrativos__nuevo-costo-grid">
                 <div className="form-group">
                   <label>Fecha</label>
                   <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label>Mes</label>
+                  <select
+                    value={String(mesNuevoCosto)}
+                    onChange={(e) => setMesNuevoCosto(Number(e.target.value))}
+                    aria-label="Mes del costo"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <option key={i + 1} value={String(i + 1)}>
+                        {MESES_CORTOS[i]} ({i + 1})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Año</label>
+                  <select
+                    value={String(anioNuevoCosto)}
+                    onChange={(e) => setAnioNuevoCosto(Number(e.target.value))}
+                    aria-label="Año del costo"
+                  >
+                    {aniosParaFiltro().map((y) => (
+                      <option key={y} value={String(y)}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="form-group">
                   <label>Categoría (tipo)</label>
@@ -514,14 +626,14 @@ export const CostosAdministrativos: React.FC = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Asociado (opcional)</label>
+                  <label>Subcategoría (obligatoria)</label>
                   <select
                     value={asociadoId}
                     onChange={(e) => setAsociadoId(e.target.value)}
-                    aria-label="Asociado a la categoría"
-                    disabled={!categoriaId}
+                    aria-label="Subcategoría de la categoría"
+                    disabled={!categoriaId || asociadosDeCategoria.length === 0}
                   >
-                    <option value="">Ninguno</option>
+                    <option value="">Elige…</option>
                     {asociadosDeCategoria.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.nombre}
@@ -575,7 +687,7 @@ export const CostosAdministrativos: React.FC = () => {
         {!hayDatosGraficas && !cargando ? (
           <p className="costos-administrativos__vacio">
             Sin datos para graficar con el año (y demás filtros) elegidos. Prueba otro año arriba,
-            registra un costo o ajusta mes / categoría / asociado en &quot;Filtrar listado&quot;.
+            registra un costo o ajusta mes / categoría / subcategoría en &quot;Filtrar listado&quot;.
           </p>
         ) : (
           <div className="costos-administrativos__charts-grid">
@@ -643,15 +755,15 @@ export const CostosAdministrativos: React.FC = () => {
             </select>
           </div>
           <div className="form-group">
-            <label>Asociado</label>
+            <label>Subcategoría</label>
             <select
               value={filtroListadoAsociado}
               onChange={(e) => setFiltroListadoAsociado(e.target.value)}
-              aria-label="Filtrar listado por asociado dentro de la categoría"
+              aria-label="Filtrar listado por subcategoría dentro de la categoría"
               disabled={!filtroListadoCategoriaId}
             >
               <option value="">Todos (en esa categoría)</option>
-              <option value="__sin__">Solo sin asociado</option>
+              <option value="__sin__">Solo sin subcategoría</option>
               {asociadosFiltroListado.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.nombre}
@@ -660,11 +772,7 @@ export const CostosAdministrativos: React.FC = () => {
             </select>
           </div>
         </div>
-        <p className="costos-administrativos__hint-filtro">
-          Por defecto se cargan todos los años en el listado. Las categorías y asociados se cargan al abrir
-          «Registrar nuevo costo» o «Gestionar categorías»; al enfocar el filtro de categoría también se
-          cargan si aún no lo estaban. Elige categoría y luego asociado para acotar listado y gráficas.
-        </p>
+        
       </div>
 
       <div className="registro-section costos-administrativos__listado">
@@ -674,51 +782,147 @@ export const CostosAdministrativos: React.FC = () => {
         ) : filas.length === 0 ? (
           <p className="costos-administrativos__vacio">No hay registros para este filtro.</p>
         ) : (
-          <div
-            className={`costos-administrativos__tabla-wrap${cargando ? " costos-administrativos__tabla-wrap--actualizando" : ""}`}
-          >
+          <div className={`costos-administrativos__cards-wrap${cargando ? " costos-administrativos__tabla-wrap--actualizando" : ""}`}>
             {cargando ? (
               <span className="costos-administrativos__refrescando" aria-live="polite">
                 Actualizando…
               </span>
             ) : null}
-            <table className="costos-administrativos__tabla">
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Mes / Año</th>
-                  <th>Categoría</th>
-                  <th>Asociado</th>
-                  <th>Importe</th>
-                  <th>Nota</th>
-                  <th aria-label="Acciones" />
-                </tr>
-              </thead>
-              <tbody>
-                {filas.map((r) => (
-                  <tr key={r.id}>
-                    <td>{r.fecha}</td>
-                    <td>
-                      {r.mes} / {r.anio}
-                    </td>
-                    <td>{r.categoria_tipo ?? "—"}</td>
-                    <td>{r.asociado_nombre?.trim() ? r.asociado_nombre : "—"}</td>
-                    <td>{fmtMoney(Number(r.importe) || 0)}</td>
-                    <td className="costos-administrativos__nota">{r.nota ?? "—"}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn-danger btn-sm"
-                        disabled={cargando}
-                        onClick={() => void handleEliminar(r.id)}
-                      >
-                        Eliminar
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="costos-administrativos__cards-grid">
+              {filas.map((r) => (
+                <article key={r.id} className="costos-administrativos__card">
+                  {editandoId === r.id ? (
+                    <>
+                      <header className="costos-administrativos__card-header">
+                        <strong>Editar</strong>
+                        <span>{r.id.slice(0, 8)}</span>
+                      </header>
+                      <div className="costos-administrativos__card-edit-grid">
+                        <label>
+                          Fecha
+                          <input type="date" value={edFecha} onChange={(e) => setEdFecha(e.target.value)} />
+                        </label>
+                        <label>
+                          Mes
+                          <select value={String(edMes)} onChange={(e) => setEdMes(Number(e.target.value))}>
+                            {Array.from({ length: 12 }, (_, i) => (
+                              <option key={i + 1} value={String(i + 1)}>
+                                {MESES_CORTOS[i]} ({i + 1})
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Año
+                          <select value={String(edAnio)} onChange={(e) => setEdAnio(Number(e.target.value))}>
+                            {aniosParaFiltro().map((y) => (
+                              <option key={y} value={String(y)}>
+                                {y}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Categoría
+                          <select
+                            value={edCategoriaId}
+                            onChange={(e) => {
+                              setEdCategoriaId(e.target.value);
+                              setEdAsociadoId("");
+                            }}
+                          >
+                            <option value="">Elige…</option>
+                            {categorias.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.tipo}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Subcategoría
+                          <select
+                            value={edAsociadoId}
+                            onChange={(e) => setEdAsociadoId(e.target.value)}
+                            disabled={!edCategoriaId || asociadosDeCategoriaEdicion.length === 0}
+                          >
+                            <option value="">Elige…</option>
+                            {asociadosDeCategoriaEdicion.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.nombre}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Importe
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={edImporte}
+                            onChange={(e) => setEdImporte(Math.max(0, Number(e.target.value) || 0))}
+                          />
+                        </label>
+                        <label className="costos-administrativos__card-edit-nota">
+                          Nota
+                          <input type="text" value={edNota} onChange={(e) => setEdNota(e.target.value)} />
+                        </label>
+                      </div>
+                      <footer className="costos-administrativos__card-footer">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={cancelarEdicion}
+                          disabled={guardandoEdicion}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => void guardarEdicion()}
+                          disabled={guardandoEdicion}
+                        >
+                          {guardandoEdicion ? "Guardando…" : "Guardar"}
+                        </button>
+                      </footer>
+                    </>
+                  ) : (
+                    <>
+                      <header className="costos-administrativos__card-header">
+                        <strong>{fmtMoney(Number(r.importe) || 0)}</strong>
+                        <span>{r.fecha}</span>
+                      </header>
+                      <div className="costos-administrativos__card-body">
+                        <p><b>Mes/Año:</b> {r.mes} / {r.anio}</p>
+                        <p><b>Categoría:</b> {r.categoria_tipo ?? "—"}</p>
+                        <p><b>Subcategoría:</b> {r.asociado_nombre?.trim() ? r.asociado_nombre : "—"}</p>
+                        <p><b>Nota:</b> {r.nota?.trim() ? r.nota : "—"}</p>
+                      </div>
+                      <footer className="costos-administrativos__card-footer">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          disabled={cargando}
+                          onClick={() => void iniciarEdicion(r)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-sm"
+                          disabled={cargando}
+                          onClick={() => void handleEliminar(r.id)}
+                        >
+                          Eliminar
+                        </button>
+                      </footer>
+                    </>
+                  )}
+                </article>
+              ))}
+            </div>
           </div>
         )}
       </div>

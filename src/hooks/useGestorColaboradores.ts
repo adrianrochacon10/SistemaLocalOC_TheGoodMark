@@ -8,6 +8,7 @@ import {
   AsignacionProductoExtra,
 } from "../types";
 import { useFilasFormulario } from "./useFormulario";
+import { confirmWithToast } from "../lib/confirmWithToast";
 
 export type TipoComision =
   | "porcentaje"
@@ -322,14 +323,14 @@ export function useGestorColaboradores(props: Props) {
 
   // ─── ELIMINAR COLABORADOR ────────────────────────────────────────────
   const handleEliminar = (colaboradorId: string) => {
-    if (
-      confirm(
+    void (async () => {
+      const ok = await confirmWithToast(
         "¿Está seguro de que desea eliminar este colaborador y todas sus pantallas asociadas?",
-      )
-    ) {
+      );
+      if (!ok) return;
       onEliminarPantallasYAsignaciones(colaboradorId);
       resetFormulario();
-    }
+    })();
   };
 
   // ─── DATOS DEL FORM EXPUESTOS ────────────────────────────────────────

@@ -6,6 +6,7 @@ import {
   prorratearMontoPorMesesContrato,
   bucketCalendarioGastoAdicional,
   costoVentaTotalAgregados,
+  utilidadNetaContratoParaKpi,
 } from "../../../utils/utilidadVenta";
 import {
   Chart as ChartJS,
@@ -57,8 +58,24 @@ const MESES = [
 
 export const VentasGraficas: React.FC<Props> = ({
   ventasRegistradas,
-  colaboradores: _colaboradores,
+  colaboradores,
 }) => {
+  const esVentaPorDias = (v: RegistroVenta): boolean => {
+    const unidad = String((v as { duracionUnidad?: string }).duracionUnidad ?? "")
+      .toLowerCase()
+      .trim();
+    if (["dias", "días", "dia", "día"].includes(unidad)) return true;
+    if ((v as { gastoAdicionalEnDias?: boolean }).gastoAdicionalEnDias === true) return true;
+    const mr = Math.max(1, Number(v.mesesRenta ?? 1) || 1);
+    const fi = new Date(v.fechaInicio as Date | string);
+    const ff = new Date(v.fechaFin as Date | string);
+    if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return false;
+    const dias = Math.max(1, Math.round((ff.getTime() - fi.getTime()) / 86400000) + 1);
+    if ([1, 3, 7, 15].includes(mr) && dias <= 31) return true;
+    if (mr === dias || Math.abs(dias - mr) <= 1) return true;
+    return false;
+  };
+
   const esAceptada = (v: RegistroVenta) =>
     String(v.estadoVenta ?? "").toLowerCase() === "aceptado";
 
@@ -66,6 +83,10 @@ export const VentasGraficas: React.FC<Props> = ({
     Number(v.gastosAdicionales ?? 0) || 0;
 
   const comisionVenta = (v: RegistroVenta) => Number(v.comision ?? 0) || 0;
+  const utilidadBaseVenta = (v: RegistroVenta) =>
+    esVentaPorDias(v)
+      ? Math.max(0, Number(v.costoVenta ?? v.costos ?? 0) || 0)
+      : utilidadNetaContratoParaKpi(v, colaboradores);
 
   // ── Por mes natural del contrato (prorrateo por días): precio de venta, costos, gastos y comisión por mes que cubre cada venta aceptada ──
   const datos = useMemo(() => {
@@ -133,7 +154,8 @@ export const VentasGraficas: React.FC<Props> = ({
 
     for (const v of ventasRegistradas) {
       if (!esAceptada(v)) continue;
-      addProrrateo(v, precioVentaTotalContratoParaKpi(v), "precioVentaTotal");
+      const utilidadNetaVenta = utilidadBaseVenta(v) - gastoAdicionalVenta(v);
+      addProrrateo(v, utilidadNetaVenta, "precioVentaTotal");
       addProrrateo(v, costoVentaTotalAgregados(v), "costos");
       addGastoEnMesElegido(v, gastoAdicionalVenta(v));
       addProrrateo(v, comisionVenta(v), "comision");
@@ -165,27 +187,29 @@ export const VentasGraficas: React.FC<Props> = ({
   // Solo meses con datos reales (sin rellenar meses vacíos: evita que una venta de un mes parezca “todo el año”).
   const datosTendencia = datos;
 
-  // ── KPI: totales del contrato por cada venta aceptada (precio bruto, costos, gastos, comisiones) ──
+  // ── KPI: utilidad neta (aceptadas) = utilidad base − gastos adicionales ──
   const totales = useMemo(() => {
     const aceptadas = ventasRegistradas.filter(esAceptada);
-    let precioVentaTotal = 0;
+    let utilidadBase = 0;
     let costos = 0;
     let gastos = 0;
     let comision = 0;
     for (const v of aceptadas) {
-      precioVentaTotal += precioVentaTotalContratoParaKpi(v);
+      utilidadBase += utilidadBaseVenta(v);
       costos += costoVentaTotalAgregados(v);
       gastos += gastoAdicionalVenta(v);
       comision += comisionVenta(v);
     }
+    const utilidadNeta = utilidadBase - gastos;
     return {
-      precioVentaTotal,
+      utilidadNeta,
+      utilidadBase,
       costos,
       gastos,
       comision,
       ventasAceptadas: aceptadas.length,
     };
-  }, [ventasRegistradas]);
+  }, [ventasRegistradas, colaboradores]);
 
   const fmt = (n: number) =>
     n.toLocaleString("es-MX", {
@@ -261,7 +285,7 @@ export const VentasGraficas: React.FC<Props> = ({
       labels: datosTendencia.map((d) => d.label),
       datasets: [
         {
-          label: "Precio de venta total",
+          label: "Utilidad neta",
           data: datosTendencia.map((d) => d.precioVentaTotal),
           borderColor: "#10b981",
           backgroundColor: "rgba(16,185,129,0.10)",
@@ -318,7 +342,7 @@ export const VentasGraficas: React.FC<Props> = ({
   const dataPie = useMemo(
     () => ({
       labels: [
-        "Precio de venta total",
+        "Utilidad neta",
         "Costos de la venta",
         "Gastos adicionales",
         "Comisiones",
@@ -326,7 +350,7 @@ export const VentasGraficas: React.FC<Props> = ({
       datasets: [
         {
           data: [
-            totales.precioVentaTotal,
+            totales.utilidadNeta,
             totales.costos,
             totales.gastos,
             totales.comision,
@@ -360,7 +384,7 @@ export const VentasGraficas: React.FC<Props> = ({
         legend: { position: "right" as const },
         title: {
           display: true,
-          text: "Precio de venta vs gastos adicionales",
+          text: "Utilidad neta vs gastos adicionales",
         },
         tooltip: {
           callbacks: {
@@ -391,7 +415,7 @@ export const VentasGraficas: React.FC<Props> = ({
       labels: datos.map((d) => d.label),
       datasets: [
         {
-          label: "Precio de venta total",
+          label: "Utilidad neta",
           data: datos.map((d) => d.precioVentaTotal),
           borderColor: "rgb(16, 185, 129)",
           backgroundColor: "rgba(16, 185, 129, 0.45)",
@@ -414,8 +438,8 @@ export const VentasGraficas: React.FC<Props> = ({
         <div className="kpi-card kpi-utilidad">
           <span className="kpi-icon">💰</span>
           <div>
-            <p className="kpi-label">Precio de venta total</p>
-            <p className="kpi-valor">{fmt(totales.precioVentaTotal)}</p>
+            <p className="kpi-label">Utilidad neta (aceptadas)</p>
+            <p className="kpi-valor">{fmt(totales.utilidadNeta)}</p>
           </div>
         </div>
         <div className="kpi-card kpi-costo-venta">
@@ -457,7 +481,7 @@ export const VentasGraficas: React.FC<Props> = ({
 
       {/* ── Gráfica de línea: tendencia (Chart.js multi-axis) ── */}
       <div className="grafica-card grafica-card-tendencia">
-        <h4>📉 Tendencia — Precio de venta vs gastos adicionales (multi-eje)</h4>
+        <h4>📉 Tendencia — Utilidad neta vs gastos adicionales (multi-eje)</h4>
         <div className="grafica-linea-wrap grafica-linea-chartjs" style={{ height: 260 }}>
           <Line options={opcionesTendencia} data={dataTendencia} />
         </div>

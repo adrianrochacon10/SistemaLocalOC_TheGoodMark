@@ -28,6 +28,25 @@ const ESTADO_COLOR: Record<string, string> = {
   Prospecto: "badge-prospecto",
 };
 
+function inferirDuracionUnidad(venta: RegistroVenta): "meses" | "dias" {
+  const unidadGuardada = String((venta as any).duracionUnidad ?? "").toLowerCase().trim();
+  if (unidadGuardada === "dias" || unidadGuardada === "meses") {
+    return unidadGuardada as "dias" | "meses";
+  }
+  if ((venta as any).gastoAdicionalEnDias === true) return "dias";
+  if (!venta?.fechaInicio || !venta?.fechaFin) return "meses";
+  const fi = new Date(venta.fechaInicio);
+  const ff = new Date(venta.fechaFin);
+  if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return "meses";
+  const dias = Math.max(1, Math.round((ff.getTime() - fi.getTime()) / 86400000) + 1);
+  const mr = Math.max(1, Number(venta.mesesRenta) || 1);
+  // Ventas por días históricas pueden venir con fecha fin desfasada;
+  // si usa duraciones típicas de días y contrato corto, tratarlo como días.
+  if ([1, 3, 7, 15].includes(mr) && dias <= 31) return "dias";
+  if (mr === dias || Math.abs(dias - mr) <= 1) return "dias";
+  return "meses";
+}
+
 export const VentaDetalleModal: React.FC<Props> = ({
   venta,
   colaboradores,
@@ -38,6 +57,9 @@ export const VentaDetalleModal: React.FC<Props> = ({
 }) => {
   const colaborador = colaboradores.find((c) => c.id === venta.colaboradorId);
   const vendedor = usuarios.find((u) => u.id === venta.vendedorId);
+  const duracionUnidad = inferirDuracionUnidad(venta);
+  const etiquetaUnidad = duracionUnidad === "dias" ? "día" : "mes";
+  const etiquetaUnidadPlural = duracionUnidad === "dias" ? "días" : "meses";
 
   const pantallasVenta = (venta.pantallasIds ?? [])
     .map((id) => pantallas.find((p) => p.id === id))
@@ -130,7 +152,7 @@ export const VentaDetalleModal: React.FC<Props> = ({
               <div className="vd-dato">
                 <span className="vd-dato-label">Duración</span>
                 <span className="vd-dato-valor">
-                  {venta.mesesRenta} mes{venta.mesesRenta !== 1 ? "es" : ""}
+                  {venta.mesesRenta} {venta.mesesRenta !== 1 ? etiquetaUnidadPlural : etiquetaUnidad}
                 </span>
               </div>
               <div className="vd-dato">
@@ -151,9 +173,15 @@ export const VentaDetalleModal: React.FC<Props> = ({
             >
               {(() => {
                 const meses = venta.mesesRenta || 1;
-                const precioMes = Number(venta.precioGeneral ?? 0) || 0;
+                const precioPeriodo =
+                  Number((venta as any).precioTotal ?? 0) > 0
+                    ? (Number((venta as any).precioTotal ?? 0) || 0) / Math.max(1, meses)
+                    : Number(venta.precioGeneral ?? 0) || 0;
                 // Total de venta: gastos adicionales se manejan aparte, no dentro de la venta.
-                const totalBruto = precioMes * meses;
+                const totalBruto =
+                  Number((venta as any).precioTotal ?? 0) > 0
+                    ? Number((venta as any).precioTotal ?? 0)
+                    : precioPeriodo * meses;
 
                 const totalCostos = venta.costos ?? 0;
                 const totalComision = venta.comision ?? 0;
@@ -242,13 +270,13 @@ export const VentaDetalleModal: React.FC<Props> = ({
                     <div className="resumen-fin-bloque">
                       <div className="resumen-fin-row resumen-fin-principal">
                         <span>
-                          Total ({meses} {meses === 1 ? "mes" : "meses"})
+                          Total ({meses} {meses === 1 ? etiquetaUnidad : etiquetaUnidadPlural})
                         </span>
                         <span>{fmt(totalBruto)}</span>
                       </div>
                       <div className="resumen-fin-row resumen-fin-sub">
-                        <span>↳ Precio por mes</span>
-                        <span>{fmt(precioMes)}</span>
+                        <span>↳ Precio por {etiquetaUnidad}</span>
+                        <span>{fmt(precioPeriodo)}</span>
                       </div>
                     </div>
 
@@ -257,13 +285,12 @@ export const VentaDetalleModal: React.FC<Props> = ({
                       <div className="resumen-fin-bloque resumen-fin-bloque-morado">
                         <div className="resumen-fin-row resumen-fin-principal resumen-fin-morado">
                           <span>
-                            Pago a Considerar ({meses}{" "}
-                            {meses === 1 ? "mes" : "meses"})
+                            Pago a Considerar ({meses} {meses === 1 ? etiquetaUnidad : etiquetaUnidadPlural})
                           </span>
                           <span>− {fmt(totalPagoCons)}</span>
                         </div>
                         <div className="resumen-fin-row resumen-fin-sub">
-                          <span>↳ Pago por mes</span>
+                          <span>↳ Pago por {etiquetaUnidad}</span>
                           <span>− {fmt(totalPagoCons / meses)}</span>
                         </div>
                       </div>
@@ -274,12 +301,12 @@ export const VentaDetalleModal: React.FC<Props> = ({
                       <div className="resumen-fin-bloque">
                         <div className="resumen-fin-row resumen-fin-principal">
                           <span>
-                            Costos ({meses} {meses === 1 ? "mes" : "meses"})
+                            Costos ({meses} {meses === 1 ? etiquetaUnidad : etiquetaUnidadPlural})
                           </span>
                           <span>{fmt(totalCostos)}</span>
                         </div>
                         <div className="resumen-fin-row resumen-fin-sub">
-                          <span>↳ Costo por mes</span>
+                          <span>↳ Costo por {etiquetaUnidad}</span>
                           <span>{fmt(totalCostos / meses)}</span>
                         </div>
                       </div>
@@ -290,12 +317,12 @@ export const VentaDetalleModal: React.FC<Props> = ({
                       <div className="resumen-fin-bloque resumen-fin-bloque-negativo">
                         <div className="resumen-fin-row resumen-fin-principal resumen-fin-negativo">
                           <span>
-                            Comisión ({meses} {meses === 1 ? "mes" : "meses"})
+                            Comisión ({meses} {meses === 1 ? etiquetaUnidad : etiquetaUnidadPlural})
                           </span>
                           <span>− {fmt(totalComision)}</span>
                         </div>
                         <div className="resumen-fin-row resumen-fin-sub">
-                          <span>↳ Comisión por mes</span>
+                          <span>↳ Comisión por {etiquetaUnidad}</span>
                           <span>− {fmt(totalComision / meses)}</span>
                         </div>
                       </div>
@@ -307,8 +334,7 @@ export const VentaDetalleModal: React.FC<Props> = ({
                         <div className="resumen-fin-bloque resumen-fin-bloque-morado">
                           <div className="resumen-fin-row resumen-fin-principal resumen-fin-morado">
                             <span>
-                              Monto socio ({meses}{" "}
-                              {meses === 1 ? "mes" : "meses"})
+                              Monto socio ({meses} {meses === 1 ? etiquetaUnidad : etiquetaUnidadPlural})
                             </span>
                             <span>− {fmt(totalMontoSocio)}</span>
                           </div>
@@ -318,7 +344,7 @@ export const VentaDetalleModal: React.FC<Props> = ({
                           </div>
                           {meses > 1 ? (
                             <div className="resumen-fin-row resumen-fin-sub">
-                              <span>↳ Precio por mes con porcentaje</span>
+                              <span>↳ Precio por {etiquetaUnidad} con porcentaje</span>
                               <span>{fmt(precioNetoPorMesTrasSocio)}</span>
                             </div>
                           ) : null}
@@ -338,7 +364,7 @@ export const VentaDetalleModal: React.FC<Props> = ({
                     </div>
                     {meses > 1 ? (
                       <div className="resumen-fin-row resumen-fin-sub">
-                        <span>↳ Utilidad neta por mes</span>
+                        <span>↳ Utilidad neta por {etiquetaUnidad}</span>
                         <span>{fmt(utilidadPorMes)}</span>
                       </div>
                     ) : null}

@@ -2,6 +2,37 @@ import type { Colaborador, RegistroVenta } from "../types";
 
 const round2Util = (n: number) => Math.round(n * 100) / 100;
 
+function esVentaPorDiasUtil(v: RegistroVenta): boolean {
+  const unidad = String((v as { duracionUnidad?: string }).duracionUnidad ?? "")
+    .toLowerCase()
+    .trim();
+  if (["dias", "días", "dia", "día"].includes(unidad)) return true;
+  if ((v as { gastoAdicionalEnDias?: boolean }).gastoAdicionalEnDias === true) {
+    return true;
+  }
+  const mr = Math.max(1, Number(v.mesesRenta ?? 1) || 1);
+  const fi = new Date(v.fechaInicio as Date | string);
+  const ff = new Date(v.fechaFin as Date | string);
+  if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return false;
+  const dias = Math.max(1, Math.round((ff.getTime() - fi.getTime()) / 86400000) + 1);
+  if ([1, 3, 7, 15].includes(mr) && dias <= 31) return true;
+  if (mr === dias || Math.abs(dias - mr) <= 1) return true;
+  return false;
+}
+
+function totalContratoVenta(v: RegistroVenta): number {
+  const totalPersistido = Math.max(
+    0,
+    Number(v.precioTotalContrato ?? v.precioTotal ?? v.importeTotal ?? 0) || 0,
+  );
+  if (totalPersistido > 0) return round2Util(totalPersistido);
+  const base = Number(v.precioGeneral ?? 0) || 0;
+  if (base <= 0) return 0;
+  if (esVentaPorDiasUtil(v)) return round2Util(base);
+  const meses = Math.max(1, Number(v.mesesRenta) || 1);
+  return round2Util(base * meses);
+}
+
 /**
  * Utilidad neta: porcentaje → precio total − monto % del socio;
  * precio fijo / consideración → costo de venta;
@@ -63,15 +94,7 @@ export function utilidadNetaContratoParaKpi(
   const cols = Array.isArray(colaboradores) ? colaboradores : [];
   const col = cols.find((c) => String(c.id) === String(v.colaboradorId));
   const tipo = String(col?.tipoComision ?? "").toLowerCase();
-  const meses = Math.max(1, Number(v.mesesRenta) || 1);
-  const precioMes = Number(v.precioGeneral ?? 0) || 0;
-  const totalBruto =
-    precioMes > 0
-      ? round2Util(precioMes * meses)
-      : Math.max(
-          0,
-          Number(v.precioTotalContrato ?? v.precioTotal ?? v.importeTotal ?? 0) || 0,
-        );
+  const totalBruto = totalContratoVenta(v);
 
   const totalComision = Number(v.comision ?? 0) || 0;
   const totalPagoCons =
@@ -120,13 +143,7 @@ export function utilidadNetaContratoParaKpi(
 
 /** Bruto del contrato (precio de venta total) para KPI: mismo criterio que el bruto en `utilidadNetaContratoParaKpi`, sin restar costos ni comisiones. */
 export function precioVentaTotalContratoParaKpi(v: RegistroVenta): number {
-  const meses = Math.max(1, Number(v.mesesRenta) || 1);
-  const precioMes = Number(v.precioGeneral ?? 0) || 0;
-  if (precioMes > 0) return round2Util(precioMes * meses);
-  return Math.max(
-    0,
-    Number(v.precioTotalContrato ?? v.precioTotal ?? v.importeTotal ?? 0) || 0,
-  );
+  return totalContratoVenta(v);
 }
 
 /**

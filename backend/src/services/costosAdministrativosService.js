@@ -132,6 +132,7 @@ export async function crear(body) {
   }
   if (!Number.isFinite(importe) || importe < 0) return { error: "importe debe ser >= 0" };
   if (!categoriaId) return { error: "categoria_id es obligatoria" };
+  if (!asociadoId) return { error: "asociado_id es obligatorio" };
 
   const v = await validarAsociadoEnCategoria(categoriaId, asociadoId);
   if (v.error) return { error: v.error };

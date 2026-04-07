@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { toast } from "react-toastify";
+import { confirmWithToast } from "../../lib/confirmWithToast";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -449,11 +450,10 @@ export const GastosAdmin: React.FC<Props> = ({
 
   const borrarGastoAdicional = async (v: RegistroVenta) => {
     const etiqueta = v.identificadorVenta || v.vendidoA || "esta venta";
-    if (
-      !window.confirm(
-        `¿Eliminar el gasto adicional de ${etiqueta}? Se pondrá en 0 y se quitará el periodo en notas.`,
-      )
-    ) {
+    const ok = await confirmWithToast(
+      `¿Eliminar el gasto adicional de ${etiqueta}? Se pondrá en 0 y se quitará el periodo en notas.`,
+    );
+    if (!ok) {
       return;
     }
     setGuardando(true);

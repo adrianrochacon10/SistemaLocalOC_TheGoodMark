@@ -108,20 +108,47 @@ export async function actualizarCategoria(id, body) {
 
 export async function eliminarCategoria(id) {
   if (!id) return { error: "id obligatorio" };
-  const { data: catRow } = await supabase.from(TABLA_CAT).select("tipo").eq("id", id).maybeSingle();
+  const { data: catRow, error: catErr } = await supabase
+    .from(TABLA_CAT)
+    .select("id, tipo")
+    .eq("id", id)
+    .maybeSingle();
+  if (catErr) throw new Error(catErr.message);
+  if (!catRow?.id) return { error: "Categoría no encontrada" };
   if (catRow?.tipo === "Sin clasificar") {
     return { error: "No se puede eliminar la categoría reservada «Sin clasificar»" };
   }
-  const { count, error: cErr } = await supabase
-    .from(TABLA_COSTOS)
-    .select("id", { count: "exact", head: true })
-    .eq("categoria_id", id);
-  if (cErr) throw new Error(cErr.message);
-  if ((count ?? 0) > 0) {
-    return {
-      error: "No se puede eliminar: hay costos administrativos usando esta categoría",
-    };
+
+  let { data: fallbackRow, error: fbErr } = await supabase
+    .from(TABLA_CAT)
+    .select("id")
+    .eq("tipo", "Sin clasificar")
+    .maybeSingle();
+  if (fbErr) throw new Error(fbErr.message);
+
+  // Entornos viejos o incompletos pueden no tener la categoría reservada.
+  // La creamos en caliente para evitar 500 al reubicar costos.
+  if (!fallbackRow?.id) {
+    const { data: createdFallback, error: createFallbackErr } = await supabase
+      .from(TABLA_CAT)
+      .insert({ tipo: "Sin clasificar" })
+      .select("id")
+      .single();
+    if (createFallbackErr) throw new Error(createFallbackErr.message);
+    fallbackRow = createdFallback;
   }
+
+  const { error: upErr } = await supabase
+    .from(TABLA_COSTOS)
+    .update({ categoria_id: fallbackRow.id, asociado_id: null })
+    .eq("categoria_id", id);
+  if (upErr) throw new Error(upErr.message);
+
+  // Si existen subcategorías (asociados) de esta categoría, elimínalas primero
+  // para no violar la FK al borrar la categoría padre.
+  const { error: delAsocErr } = await supabase.from(TABLA_ASOC).delete().eq("categoria_id", id);
+  if (delAsocErr) throw new Error(delAsocErr.message);
+
   const { error } = await supabase.from(TABLA_CAT).delete().eq("id", id);
   if (error) throw new Error(error.message);
   return {};

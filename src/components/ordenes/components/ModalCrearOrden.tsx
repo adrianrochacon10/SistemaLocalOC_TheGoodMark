@@ -73,10 +73,21 @@ function esVentaPorDiasModal(v: RegistroVenta): boolean {
     .toLowerCase()
     .trim();
   if (["dias", "días", "dia", "día"].includes(unidad)) return true;
+  if ((v as { gastoAdicionalEnDias?: boolean }).gastoAdicionalEnDias === true) {
+    return true;
+  }
   const notas = String(v.notas ?? "").toLowerCase();
-  return (
-    notas.includes("gasto_dia") || notas.includes("al día") || notas.includes("al dia")
-  );
+  if (notas.includes("gasto_dia") || notas.includes("al día") || notas.includes("al dia")) {
+    return true;
+  }
+  const mr = Math.max(1, Number(v.mesesRenta ?? 1) || 1);
+  const fi = new Date(v.fechaInicio);
+  const ff = new Date(v.fechaFin);
+  if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return false;
+  const dias = Math.max(1, Math.round((ff.getTime() - fi.getTime()) / 86400000) + 1);
+  if ([1, 3, 7, 15].includes(mr) && dias <= 31) return true;
+  if (mr === dias || Math.abs(dias - mr) <= 1) return true;
+  return false;
 }
 
 function costoVentaBrutoVenta(v: RegistroVenta): number {
@@ -775,6 +786,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
                   <ul className="modal-ventas-seleccion-list">
                     {ventasParaOrden.map((v) => {
                       const id = String(v.id);
+                      const porDias = esVentaPorDiasModal(v);
                       const checked = ventasSeleccionadas.has(id);
                       const pids = [...new Set(v.pantallasIds ?? [])];
                       const va =
@@ -888,7 +900,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                             ${fmtMoney(
                                               precioMensualProductoDesdeDetalle(v, pid),
                                             )}
-                                            /mes
+                                            {porDias ? "/día" : "/mes"}
                                           </span>
                                         </label>
                                       );
@@ -932,7 +944,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                           />
                                           <span className="modal-venta-check-label">{nombre}</span>
                                           <span className="modal-venta-check-precio">
-                                            ${fmtMoney(precioUnit)}/mes
+                                            ${fmtMoney(precioUnit)}{porDias ? "/día" : "/mes"}
                                           </span>
                                         </label>
                                       );
@@ -943,9 +955,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
                               {colaboradorMuestraCostoVentaEnOrden(
                                 colaboradorSeleccionado,
                               ) ? (() => {
-                                const { total, mensual, etiquetaSufijo } =
-                                  costoVentaDesgloseParaOrden(v);
-                                const porDias = esVentaPorDiasModal(v);
+                                const { total, mensual } = costoVentaDesgloseParaOrden(v);
                                 const mesesContrato = Math.max(
                                   1,
                                   Number(v.mesesRenta ?? 1) || 1,
@@ -963,13 +973,13 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                         </span>
                                         <span className="modal-venta-check-precio">
                                           $
-                                          {fmtMoney(porDias ? total : mensual)}
-                                          {porDias ? etiquetaSufijo : " por mes"}
+                                          {fmtMoney(mensual)}
+                                          {porDias ? " por día" : " por mes"}
                                         </span>
                                       </div>
-                                      {!porDias && mesesContrato > 1 ? (
+                                      {mesesContrato > 1 ? (
                                         <div className="modal-venta-costo-venta-total">
-                                          Total contrato:{" "}
+                                          {porDias ? "Total período: " : "Total contrato: "}
                                           <strong>${fmtMoney(total)}</strong>
                                         </div>
                                       ) : null}

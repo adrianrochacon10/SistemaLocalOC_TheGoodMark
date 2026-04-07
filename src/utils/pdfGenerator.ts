@@ -45,6 +45,22 @@ function round2(n: number): number {
   return Math.round(Number(n) * 100) / 100;
 }
 
+function esVentaPorDiasPdf(v: RegistroVenta): boolean {
+  const unidad = String((v as { duracionUnidad?: string }).duracionUnidad ?? "")
+    .toLowerCase()
+    .trim();
+  if (["dias", "días", "dia", "día"].includes(unidad)) return true;
+  if ((v as { gastoAdicionalEnDias?: boolean }).gastoAdicionalEnDias === true) return true;
+  const mr = Math.max(1, Number(v.mesesRenta ?? 1) || 1);
+  const fi = new Date(v.fechaInicio as Date | string);
+  const ff = new Date(v.fechaFin as Date | string);
+  if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return false;
+  const dias = Math.max(1, Math.round((ff.getTime() - fi.getTime()) / 86400000) + 1);
+  if ([1, 3, 7, 15].includes(mr) && dias <= 31) return true;
+  if (mr === dias || Math.abs(dias - mr) <= 1) return true;
+  return false;
+}
+
 /** Pantallas por registro de venta (misma lógica que el detalle del PDF). */
 function contarPantallasVentaResumenPdf(v: RegistroVenta): number {
   const detalle = Array.isArray(v.pantallasDetalle)
@@ -301,6 +317,7 @@ function drawResumenFinanciero(
     ivaTotal: number;
     total: number;
     ivaPercentaje: number;
+    ivaYaIncluido?: boolean;
   },
 ) {
   const pad = 3;
@@ -309,9 +326,13 @@ function drawResumenFinanciero(
   const iva = totales.ivaTotal;
   const total = totales.total;
   const pct = totales.ivaPercentaje;
+  const ivaYaIncluido = totales.ivaYaIncluido === true;
   const rows: { label: string; value: string; bold?: boolean }[] = [
     { label: "Subtotal", value: fmtMoney(sub) },
-    { label: `I.V.A. (${pct}%)`, value: fmtMoney(iva) },
+    {
+      label: ivaYaIncluido ? "IVA ya incluido" : `I.V.A. (${pct}%)`,
+      value: fmtMoney(iva),
+    },
   ];
   const titleH = 7;
   const totalBlockH = 11;
@@ -512,9 +533,7 @@ export async function exportarPDFOrden(
     const ff = new Date(venta.fechaFin).toLocaleDateString("es-MX");
     const pantallasSoloEtiquetas = pantallasConPrecioBase.length
       ? pantallasConPrecioBase.map((p) =>
-          paqueteEsPorDias
-            ? `- ${p.nombre} (tarifa fija por días)`
-            : `- ${p.nombre}`,
+          `- ${p.nombre}`,
         )
       : ["- Sin pantallas"];
     const prod = (venta.productoNombre ?? "").trim();
@@ -590,15 +609,17 @@ export async function exportarPDFOrden(
         ? colab.porcentajeSocio
         : null;
     const precioColumna = usarCostoPdf
-      ? round2(
-          costoLineaOrdenConsideracionPrecioFijo(
-            venta,
-            orden.mes ?? 0,
-            orden.año ?? new Date().getFullYear(),
-            precioVentaLinea,
-            diaCortePdf,
-          ),
-        )
+      ? esVentaPorDiasPdf(venta)
+        ? round2(Math.max(0, Number(venta.costoVenta ?? venta.costos ?? 0) || 0))
+        : round2(
+            costoLineaOrdenConsideracionPrecioFijo(
+              venta,
+              orden.mes ?? 0,
+              orden.año ?? new Date().getFullYear(),
+              precioVentaLinea,
+              diaCortePdf,
+            ),
+          )
       : round2(
           importeLineaOrdenTrasPorcentajeSocio(
             precioVentaLinea,
@@ -630,7 +651,9 @@ export async function exportarPDFOrden(
       }
     } else if (precioColumna > 0) {
       lineasTrasPantallasProd.push(
-        `Costo de venta: ${fmtMoney(precioColumna)}`,
+        esVentaPorDiasPdf(venta)
+          ? `Costo de venta fijo: ${fmtMoney(precioColumna)}`
+          : `Costo de venta: ${fmtMoney(precioColumna)}`,
       );
     }
     descByRow.set(idx - 1, {
@@ -672,8 +695,49 @@ export async function exportarPDFOrden(
 
   const pctIva = Number(orden.ivaPercentaje) || 16;
   const subtotalPdf = round2(sumLineasPdf);
-  const ivaPdf = round2(subtotalPdf * (pctIva / 100));
+  const baseIvaPdf = round2(
+    registros.reduce((s, venta) => {
+      if (esVentaPorDiasPdf(venta)) return s;
+      const esColabPorcentajePdf =
+        colaboradorEsTipoPorcentajeOrden(
+          colab?.tipoComision,
+          colab?.tipoPagoNombre,
+        ) || ventaTienePorcentajeSocioSnapshot(venta);
+      const pv = esColabPorcentajePdf
+        ? round2(
+            precioVentaTotalContratoBrutoColaboradorPorcentaje(venta, orden, numRegPdf),
+          )
+        : round2(importeLineaRespectoOrden(venta, orden, numRegPdf));
+      const usarCostoPdf = colaboradorUsaCostoComoBaseOrden(
+        colab?.tipoComision,
+        colab?.tipoPagoNombre,
+      );
+      const linea = usarCostoPdf
+        ? round2(
+            costoLineaOrdenConsideracionPrecioFijo(
+              venta,
+              orden.mes ?? 0,
+              orden.año ?? new Date().getFullYear(),
+              pv,
+              diaCortePdf,
+            ),
+          )
+        : round2(
+            importeLineaOrdenTrasPorcentajeSocio(
+              pv,
+              venta,
+              colab?.tipoComision,
+              typeof colab?.porcentajeSocio === "number" ? colab.porcentajeSocio : null,
+              colab?.tipoPagoNombre,
+            ),
+          );
+      return s + linea;
+    }, 0),
+  );
+  const ivaPdf = round2(baseIvaPdf * (pctIva / 100));
   const totalPdf = round2(subtotalPdf + ivaPdf);
+  const todasVentasPorDias =
+    registros.length > 0 && registros.every((v) => esVentaPorDiasPdf(v));
 
   const colPrecioW = 44;
   const colDescW = pageW - 2 * margin - 10 - 28 - colPrecioW;
@@ -822,6 +886,7 @@ export async function exportarPDFOrden(
     ivaTotal: ivaPdf,
     total: totalPdf,
     ivaPercentaje: pctIva,
+    ivaYaIncluido: todasVentasPorDias,
   });
   y += Math.max(hb, hr) + 10;
 

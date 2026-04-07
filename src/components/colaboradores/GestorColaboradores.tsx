@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "react-toastify";
+import { confirmWithToast } from "../../lib/confirmWithToast";
 import {
   Pantalla,
   AsignacionPantalla,
@@ -479,13 +480,13 @@ export function useGestorColaboradores(props: Props) {
       toast.warning("Solo un administrador puede eliminar colaboradores.");
       return;
     }
-    if (
-      confirm(
+    void (async () => {
+      const ok = await confirmWithToast(
         "¿Está seguro de que desea eliminar este colaborador y todas sus pantallas asociadas?",
-      )
-    ) {
+      );
+      if (!ok) return;
       void eliminar();
-    }
+    })();
   };
 
   // ─── DATOS DEL FORM EXPUESTOS ────────────────────────────────────────

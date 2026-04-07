@@ -167,6 +167,7 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { backendApi } from "../../lib/backendApi";
+import { confirmWithToast } from "../../lib/confirmWithToast";
 import { InputField } from "../ui/InputField";
 import { SelectField } from "../ui/SelectField";
 import { BotonAccion } from "../ui/BotonAccion";
@@ -326,7 +327,9 @@ export const AdminUsuarios: React.FC<AdminUsuariosProps> = ({
       return;
     }
 
-    const ok = window.confirm(`¿Eliminar a ${usuario.nombre}? Esta acción no se puede deshacer.`);
+    const ok = await confirmWithToast(
+      `¿Eliminar a ${usuario.nombre}? Esta acción no se puede deshacer.`,
+    );
     if (!ok) return;
 
     setError(null);

@@ -111,7 +111,7 @@ export const Dashboard: React.FC = () => {
             className={`nav-btn-nuevo ${vistaActual === "costosAdministrativos" ? "active" : ""}`}
             onClick={() => setVistaActual("costosAdministrativos")}
           >
-            📊 Costos administrativos
+            📊 Gastos administrativos
           </button>
         )}
         {esAdmin && (

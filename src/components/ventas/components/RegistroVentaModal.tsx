@@ -97,12 +97,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   onCerrar,
   ventaInicial,
 }) => {
-  const TARIFAS_DIAS: Record<number, number> = {
-    1: 500,
-    3: 1200,
-    7: 4300,
-    15: 6000,
-  };
   // ── Estados ───────────────────────────────────────────────────────────
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>(
     ventaInicial?.colaboradorId ?? "",
@@ -506,6 +500,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       (Number(precioVentaPantallaMap[String(p.id)] ?? p.precio ?? 0) || 0),
     0,
   );
+  const precioPorDiaAuto =
+    Math.round(Math.max(0, Number(precioPantallasSeleccionadas || 0)) * 100) / 100;
+  const costoAutoPorDia = precioPorDiaAuto;
   /** Precio mensual automático = Σ precios pantallas seleccionadas + Σ precios productos seleccionados. */
   const precioMensualSumaItems = Math.round(
     (Number(precioPantallasSeleccionadas || 0) +
@@ -516,17 +513,18 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     precioMensualManual != null
       ? Math.max(0, Number(precioMensualManual || 0))
       : precioMensualSumaItems;
+  const precioPorDiaFinal =
+    duracionUnidad === "dias"
+      ? precioMensualManual != null
+        ? Math.max(0, Number(precioMensualManual || 0))
+        : precioPorDiaAuto
+      : 0;
   /** `??` no sustituye el 0: si el manual queda en 0 (p. ej. campo vacío), el auto dejaba de aplicarse. */
-  const tarifaDiasCatalogo = Number(
-    TARIFAS_DIAS[Number(mesesRenta)] ?? TARIFAS_DIAS[1] ?? 0,
-  );
   const precioBasePorDuracion =
     duracionUnidad === "dias"
       ? precioTotalManual != null
         ? Number(precioTotalManual)
-        : Number(
-            precioMensualFinal > 0 ? precioMensualFinal : tarifaDiasCatalogo,
-          )
+        : Math.round(Number(precioPorDiaFinal) * Math.max(1, mesesRenta) * 100) / 100
       : precioTotalManual != null
         ? Number(precioTotalManual)
         : // Contrato por meses: total = precio mensual (ítems o manual) × meses
@@ -549,7 +547,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const totalComision =
     Math.round((totalVenta * (Number(comision || 0) / 100)) * 100) / 100;
   const costoPorMesCapturado = Math.max(0, Number(costos || 0));
-  const factorDuracion = duracionUnidad === "dias" ? 1 : Math.max(1, mesesRenta);
+  const factorDuracion = Math.max(1, mesesRenta);
   /** Total de costo de venta del contrato (captura mensual × meses; en días = monto único). */
   const costosBrutoTotales =
     duracionUnidad === "dias"
@@ -577,6 +575,19 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setPrecioTotalManual(null);
     setPrecioMensualManual(null);
   }, [lineasPrecioKey]);
+
+  /** En contratos por días: costo de venta = suma de pantallas seleccionadas (precio por día). */
+  useEffect(() => {
+    if (duracionUnidad !== "dias") return;
+    if (esColaboradorPorcentaje) return;
+    if (pantallasSeleccionadas.length === 0) return;
+    setCostos(costoAutoPorDia);
+  }, [
+    duracionUnidad,
+    esColaboradorPorcentaje,
+    pantallasSeleccionadas.length,
+    costoAutoPorDia,
+  ]);
 
   /** Si el usuario fijó el precio por mes, al cambiar la duración en meses se actualiza el total (mes × meses). */
   useEffect(() => {
@@ -1132,10 +1143,10 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                     onChange={(v: any) => setMesesRenta(Number(v) || 1)}
                     className="select-lg"
                     options={[
-                      { value: "1", label: "1 día — $500" },
-                      { value: "3", label: "3 días — $1,200" },
-                      { value: "7", label: "7 días — $4,300" },
-                      { value: "15", label: "15 días — $6,000" },
+                      { value: "1", label: "1 día" },
+                      { value: "3", label: "3 días" },
+                      { value: "7", label: "7 días" },
+                      { value: "15", label: "15 días" },
                     ]}
                   />
                 ) : (
@@ -1177,7 +1188,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                   const n = Math.max(0, toNumberSafe(v, Number(precioTotalCalculado || 0)));
                   setPrecioTotalManual(n);
                   if (duracionUnidad === "dias") {
-                    setPrecioMensualManual(n);
+                    setPrecioMensualManual(
+                      Math.round((n / Math.max(1, mesesRenta)) * 100) / 100,
+                    );
                   } else {
                     setPrecioMensualManual(
                       Math.round((n / Math.max(1, mesesRenta)) * 100) / 100,
@@ -1192,12 +1205,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
               <InputField
                 label={
                   duracionUnidad === "dias"
-                    ? "Tarifa por duración (días)"
+                    ? "Precio de la venta (por día)"
                     : "Precio de la venta (por mes)"
                 }
                 value={
                   duracionUnidad === "dias"
-                    ? Number(precioTotalCalculado || 0)
+                    ? Number(precioPorDiaFinal || 0)
                     : precioMensualFinal
                 }
                 onChange={(v: any) => {
@@ -1209,7 +1222,9 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                   const n = Math.max(0, toNumberSafe(v, Number(precioMensualFinal || 0)));
                   setPrecioMensualManual(n);
                   if (duracionUnidad === "dias") {
-                    setPrecioTotalManual(n);
+                    setPrecioTotalManual(
+                      Math.round(n * Math.max(1, mesesRenta) * 100) / 100,
+                    );
                   } else {
                     setPrecioTotalManual(
                       Math.round(n * Math.max(1, mesesRenta) * 100) / 100,
@@ -1225,7 +1240,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                   <InputField
                     label={
                       duracionUnidad === "dias"
-                        ? "Costo de la venta (total)"
+                        ? "Costo de la venta (por día)"
                         : "Costo de la venta (por mes)"
                     }
                     value={costos}
@@ -1238,16 +1253,16 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                     step={0.01}
                     placeholder="0.00"
                   />
-                  {duracionUnidad === "meses" &&
-                  mesesRenta > 1 &&
-                  costoPorMesCapturado > 0 ? (
+                  {mesesRenta > 1 && costoPorMesCapturado > 0 ? (
                     <div
                       className="registro-venta-costo-total-box"
                       role="status"
                       aria-live="polite"
                     >
                       <span className="registro-venta-costo-total-box-label">
-                        Costo total del contrato
+                        {duracionUnidad === "dias"
+                          ? "Costo total por todos los días"
+                          : "Costo total del contrato"}
                       </span>
                       <span className="registro-venta-costo-total-box-valor">
                         $

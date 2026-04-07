@@ -25,6 +25,7 @@ import {
   colaboradorEfectivoParaOrden,
   ventaTienePorcentajeSocioSnapshot,
 } from "../../../utils/ordenUtils";
+import { confirmWithToast } from "../../../lib/confirmWithToast";
 
 interface Props {
   orden: OrdenDeCompra;
@@ -51,6 +52,22 @@ const MESES = [
   "Noviembre",
   "Diciembre",
 ];
+
+function esVentaPorDiasOrdenCard(v: RegistroVenta): boolean {
+  const unidad = String((v as { duracionUnidad?: string }).duracionUnidad ?? "")
+    .toLowerCase()
+    .trim();
+  if (["dias", "días", "dia", "día"].includes(unidad)) return true;
+  if ((v as { gastoAdicionalEnDias?: boolean }).gastoAdicionalEnDias === true) return true;
+  const mr = Math.max(1, Number(v.mesesRenta ?? 1) || 1);
+  const fi = new Date(v.fechaInicio as Date | string);
+  const ff = new Date(v.fechaFin as Date | string);
+  if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return false;
+  const dias = Math.max(1, Math.round((ff.getTime() - fi.getTime()) / 86400000) + 1);
+  if ([1, 3, 7, 15].includes(mr) && dias <= 31) return true;
+  if (mr === dias || Math.abs(dias - mr) <= 1) return true;
+  return false;
+}
 
 function nombresProductoDesdeVenta(venta: RegistroVenta): string[] {
   const txt = String(venta.productoNombre ?? "").trim();
@@ -118,11 +135,13 @@ export const OrdenCard: React.FC<Props> = ({
     const subGuardado = Number(orden.subtotal ?? 0);
     const ivaGuardado = Number(orden.ivaTotal ?? 0);
     const totalGuardado = Number(orden.total ?? 0);
+    const hayVentaPorDias = regs.some((v) => esVentaPorDiasOrdenCard(v));
     // Colaborador por % o línea con % guardado: subtotal = Σ(precio contrato × %); no confiar en
     // totales persistidos si quedaron con IVA sobre el bruto.
     if (
       (!esColabPct || n === 0) &&
       !lineaConSnap &&
+      !hayVentaPorDias &&
       Number.isFinite(subGuardado) &&
       Number.isFinite(ivaGuardado) &&
       Number.isFinite(totalGuardado) &&
@@ -154,6 +173,38 @@ export const OrdenCard: React.FC<Props> = ({
             ? precioVentaTotalContratoBrutoColaboradorPorcentaje(v, orden, n)
             : importeLineaRespectoOrden(v, orden, n);
           const linea = usarCosto
+            ? esVentaPorDiasOrdenCard(v)
+              ? Math.max(0, Number(v.costoVenta ?? v.costos ?? 0) || 0)
+              : costoLineaOrdenConsideracionPrecioFijo(
+                  v,
+                  mes0,
+                  añoOrd,
+                  pv,
+                  diaCorte,
+                )
+            : importeLineaOrdenTrasPorcentajeSocio(
+                pv,
+                v,
+                colabEfectivo?.tipoComision,
+                typeof colabEfectivo?.porcentajeSocio === "number"
+                  ? colabEfectivo.porcentajeSocio
+                  : null,
+                colabEfectivo?.tipoPagoNombre,
+              );
+          return s + linea;
+        }, 0) * 100,
+      ) / 100;
+    const pct = Number(orden.ivaPercentaje ?? 16) || 16;
+    const baseIva =
+      Math.round(
+        regs.reduce((s, v) => {
+          if (esVentaPorDiasOrdenCard(v)) return s;
+          const baseContratoParaPct =
+            esColabPct || ventaTienePorcentajeSocioSnapshot(v);
+          const pv = baseContratoParaPct
+            ? precioVentaTotalContratoBrutoColaboradorPorcentaje(v, orden, n)
+            : importeLineaRespectoOrden(v, orden, n);
+          const linea = usarCosto
             ? costoLineaOrdenConsideracionPrecioFijo(
                 v,
                 mes0,
@@ -173,8 +224,7 @@ export const OrdenCard: React.FC<Props> = ({
           return s + linea;
         }, 0) * 100,
       ) / 100;
-    const pct = Number(orden.ivaPercentaje ?? 16) || 16;
-    const iva = Math.round(sub * (pct / 100) * 100) / 100;
+    const iva = Math.round(baseIva * (pct / 100) * 100) / 100;
     return {
       sub,
       iva,
@@ -186,11 +236,11 @@ export const OrdenCard: React.FC<Props> = ({
 
   const handleEliminar = () => {
     if (!esAdmin || deleteBusy) return;
-    const ok = window.confirm(
-      "¿Eliminar esta orden? También se desasociará de sus ventas.",
-    );
-    if (!ok) return;
     void (async () => {
+      const ok = await confirmWithToast(
+        "¿Eliminar esta orden? También se desasociará de sus ventas.",
+      );
+      if (!ok) return;
       setDeleteBusy(true);
       try {
         await onEliminarOrden(orden.id);
@@ -327,6 +377,7 @@ export const OrdenCard: React.FC<Props> = ({
                 1,
                 Number(venta.mesesRenta ?? 1) || 1,
               );
+              const ventaPorDias = esVentaPorDiasOrdenCard(venta);
               /** Cuota mensual informativa (contrato total ÷ meses). */
               const precioVentaMesBruto = esColabPorcentaje
                 ? precioVentaContrato > 0
@@ -363,16 +414,20 @@ export const OrdenCard: React.FC<Props> = ({
                 Number(venta.costoVenta ?? venta.costos ?? 0) || 0,
               );
               const montoContratoDetalle = detalleBasadoEnCosto
-                ? costoContratoVenta
+                ? ventaPorDias
+                  ? costoContratoVenta
+                  : costoContratoVenta
                 : precioVentaContrato;
               const montoMesBrutoDetalle = detalleBasadoEnCosto
-                ? costoLineaOrdenConsideracionPrecioFijo(
-                    venta,
-                    mes0Ord,
-                    añoOrd,
-                    precioVentaMesBruto,
-                    diaCorteOrd,
-                  )
+                ? ventaPorDias
+                  ? costoContratoVenta
+                  : costoLineaOrdenConsideracionPrecioFijo(
+                      venta,
+                      mes0Ord,
+                      añoOrd,
+                      precioVentaMesBruto,
+                      diaCorteOrd,
+                    )
                 : precioVentaMesBruto;
               const montoMesNetoDetalle = esColabPorcentaje
                 ? precioVentaMesNetoTrasPct
@@ -435,14 +490,16 @@ export const OrdenCard: React.FC<Props> = ({
                     </strong>{" "}
                     ({fmtMonto(montoContratoDetalle)})
                   </p>
-                  <p>
-                    <strong>
-                      {detalleBasadoEnCosto
-                        ? "Costo de la venta por mes"
-                        : "Precio de la venta por mes"}
-                    </strong>{" "}
-                    ({fmtMonto(montoMesBrutoDetalle)})
-                  </p>
+                  {!ventaPorDias ? (
+                    <p>
+                      <strong>
+                        {detalleBasadoEnCosto
+                          ? "Costo de la venta por mes"
+                          : "Precio de la venta por mes"}
+                      </strong>{" "}
+                      ({fmtMonto(montoMesBrutoDetalle)})
+                    </p>
+                  ) : null}
                   {esColabPorcentaje ? (
                     <p>
                       <strong>
