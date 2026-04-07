@@ -1,5 +1,5 @@
 // src/components/ventas/RegistroVentasNuevo.tsx
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   RegistroVenta,
   Pantalla,
@@ -51,6 +51,22 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   const [ventasParaGraficas, setVentasParaGraficas] =
     useState<RegistroVenta[]>(ventasRegistradas);
 
+  const handleVentasFiltradasChange = useCallback((ventas: RegistroVenta[]) => {
+    setVentasParaGraficas((prev) => {
+      if (prev.length === ventas.length) {
+        let iguales = true;
+        for (let i = 0; i < prev.length; i += 1) {
+          if (String(prev[i]?.id) !== String(ventas[i]?.id)) {
+            iguales = false;
+            break;
+          }
+        }
+        if (iguales) return prev;
+      }
+      return ventas;
+    });
+  }, []);
+
   const handleNuevaVenta = () => {
     setVentaEditando(null);
     setModalVentaKey((k) => k + 1);
@@ -72,7 +88,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
         colaboradores={clientes}
         usuarios={usuarios}
         ventasRegistradas={ventasRegistradas}
-        onVentasFiltradasChange={setVentasParaGraficas}
+        onVentasFiltradasChange={handleVentasFiltradasChange}
         onEliminarVenta={onEliminarVenta}
         onNuevaVenta={handleNuevaVenta}
         onEditarVenta={(venta) => {

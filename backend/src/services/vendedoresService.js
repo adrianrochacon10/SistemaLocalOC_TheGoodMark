@@ -86,8 +86,23 @@ export async function actualizar(id, nombre, email, rol, password) {
 export async function eliminar(id) {
   if (!id) return { error: "Id es obligatorio" };
 
+  // No permitir borrar vendedores con ventas asociadas.
+  const { count: ventasCount, error: ventasErr } = await supabase
+    .from("ventas")
+    .select("id", { count: "exact", head: true })
+    .eq("vendedor_id", id);
+  if (ventasErr) return { error: ventasErr.message };
+  if ((ventasCount ?? 0) > 0) {
+    return { error: "No se puede eliminar el usuario porque tiene ventas asociadas" };
+  }
+
   const { error: perfilError } = await supabase.from("perfiles").delete().eq("id", id);
-  if (perfilError) return { error: perfilError.message };
+  if (perfilError) {
+    if (String(perfilError.code ?? "") === "23503") {
+      return { error: "No se puede eliminar el usuario porque tiene registros relacionados" };
+    }
+    return { error: perfilError.message };
+  }
 
   const { error: authError } = await supabase.auth.admin.deleteUser(id);
   if (authError) return { error: authError.message };

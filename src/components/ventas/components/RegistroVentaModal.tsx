@@ -589,14 +589,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     costoAutoPorDia,
   ]);
 
-  /** Si el usuario fijó el precio por mes, al cambiar la duración en meses se actualiza el total (mes × meses). */
-  useEffect(() => {
-    if (duracionUnidad !== "meses") return;
-    if (precioMensualManual == null) return;
-    const next =
-      Math.round(precioMensualManual * Math.max(1, mesesRenta) * 100) / 100;
-    setPrecioTotalManual(next);
-  }, [mesesRenta, duracionUnidad, precioMensualManual]);
+  /** Precio por mes y total se pueden capturar manualmente sin auto-sobrescribirse entre sí. */
 
   // Al editar: si guardó porcentaje_socio > 0, el toggle «aplicar socio» queda activo (solo afecta utilidad / monto mostrado).
   useEffect(() => {
@@ -1186,21 +1179,11 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 value={Number(precioTotalCalculado) === 0 ? "" : precioTotalCalculado}
                 onChange={(v: any) => {
                   if (String(v).trim() === "") {
-                    setPrecioTotalManual(null);
-                    setPrecioMensualManual(null);
+                    setPrecioTotalManual(0);
                     return;
                   }
                   const n = Math.max(0, toNumberSafe(v, Number(precioTotalCalculado || 0)));
                   setPrecioTotalManual(n);
-                  if (duracionUnidad === "dias") {
-                    setPrecioMensualManual(
-                      Math.round((n / Math.max(1, mesesRenta)) * 100) / 100,
-                    );
-                  } else {
-                    setPrecioMensualManual(
-                      Math.round((n / Math.max(1, mesesRenta)) * 100) / 100,
-                    );
-                  }
                 }}
                 type="number"
                 min={0}
@@ -1224,21 +1207,11 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 }
                 onChange={(v: any) => {
                   if (String(v).trim() === "") {
-                    setPrecioMensualManual(null);
-                    setPrecioTotalManual(null);
+                    setPrecioMensualManual(0);
                     return;
                   }
                   const n = Math.max(0, toNumberSafe(v, Number(precioMensualFinal || 0)));
                   setPrecioMensualManual(n);
-                  if (duracionUnidad === "dias") {
-                    setPrecioTotalManual(
-                      Math.round(n * Math.max(1, mesesRenta) * 100) / 100,
-                    );
-                  } else {
-                    setPrecioTotalManual(
-                      Math.round(n * Math.max(1, mesesRenta) * 100) / 100,
-                    );
-                  }
                 }}
                 type="number"
                 min={0}
