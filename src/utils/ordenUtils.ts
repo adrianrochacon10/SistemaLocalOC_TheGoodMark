@@ -126,24 +126,10 @@ export function generarOrdenDelMes(
 
     // Nuevo modelo: registrosVenta (mapeo 1‑a‑1)
     registrosVenta: registrosDelMes.map((v) => ({
-      id: v.id,
-      pantallasIds: v.pantallasIds,
-      itemsVenta: v.itemsVenta,
-      clienteId: v.clienteId,
-      productoId: v.productoId ?? null,
-      vendidoA: v.vendidoA,
-      precioGeneral: v.precioGeneral,
-      cantidad: v.cantidad,
-      precioTotal: v.precioTotal,
+      ...v,
       fechaRegistro: new Date(v.fechaRegistro),
       fechaInicio: new Date(v.fechaInicio),
       fechaFin: new Date(v.fechaFin),
-      mesesRenta: v.mesesRenta,
-      importeTotal: v.importeTotal,
-      activo: v.activo,
-      usuarioRegistroId: v.usuarioRegistroId,
-      estadoVenta: v.estadoVenta,
-      tipoPagoId: v.tipoPagoId,
     })),
   };
 
@@ -463,7 +449,7 @@ export function porcentajeSocioEfectivoVentaEnOrden(
   porcentajeColaboradorFallback?: number | null,
 ): number {
   const vPct = venta?.porcentajeSocio;
-  if (vPct != null && vPct !== "" && Number.isFinite(Number(vPct))) {
+  if (vPct != null && Number.isFinite(Number(vPct))) {
     return Math.max(0, Math.min(100, Number(vPct)));
   }
   if (

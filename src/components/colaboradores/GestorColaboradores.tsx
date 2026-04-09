@@ -58,17 +58,17 @@ export function useGestorColaboradores(props: Props) {
     asignaciones,
     productos,
     asignacionesProductos,
-    onAgregarPantalla,
-    onActualizarPantalla,
-    onEliminarPantalla,
+    onAgregarPantalla: _onAgregarPantalla,
+    onActualizarPantalla: _onActualizarPantalla,
+    onEliminarPantalla: _onEliminarPantalla,
     onAgregarCliente,
     onActualizarCliente,
-    onAsignarPantalla,
+    onAsignarPantalla: _onAsignarPantalla,
     onEliminarPantallasYAsignaciones,
-    onAgregarProducto,
-    onActualizarProducto,
-    onEliminarProducto,
-    onAsignarProducto,
+    onAgregarProducto: _onAgregarProducto,
+    onActualizarProducto: _onActualizarProducto,
+    onEliminarProducto: _onEliminarProducto,
+    onAsignarProducto: _onAsignarProducto,
   } = props;
 
   // ─── ESTADO DEL MODAL ────────────────────────────────────────────────
@@ -308,7 +308,9 @@ export function useGestorColaboradores(props: Props) {
     }
     if (modoEdicion && profile?.rol === "vendedor" && !codigoValidado) {
       setMostrarModalCodigo(true);
-      setMensajeCodigo("Para guardar los cambios, ingresa tu código de autorización.");
+      setMensajeCodigo(
+        "Para guardar los cambios, solicita el código por correo e ingrésalo aquí. El código vence en 30 minutos.",
+      );
       setErrorCodigo("");
       return;
     }
@@ -445,11 +447,14 @@ export function useGestorColaboradores(props: Props) {
   const solicitarCodigoEdicion = async () => {
     if (!colaboradorPendiente) return;
     setErrorCodigo("");
-    const data = await backendApi.post("/api/codigos/solicitar", {
+    const data = (await backendApi.post("/api/codigos/solicitar", {
       entidad: "colaborador",
       entidad_id: colaboradorPendiente.id,
-    });
-    setMensajeCodigo(data?.mensaje ?? "Código solicitado. Revisa tu correo.");
+    })) as { mensaje?: string; vigencia_minutos?: number };
+    const mins = data.vigencia_minutos ?? 30;
+    setMensajeCodigo(
+      `${data?.mensaje ?? "Código solicitado. Revisa tu correo."} Válido ${mins} minutos.`,
+    );
   };
 
   const validarCodigoEdicion = async () => {

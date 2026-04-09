@@ -8,6 +8,7 @@ import { EmpresaForm } from "../empresa/EmpresaForm";
 import { GastosAdmin } from "../gastos/GastosAdmin";
 import { CostosAdministrativos } from "../costos/CostosAdministrativos";
 import { MetricasPage } from "../metricas/MetricasPage";
+import { AppLogo } from "../common/AppLogo";
 import "./Dashboard.css";
 import { useDashboardData } from "../../hooks/useDashboardData";
 
@@ -32,7 +33,12 @@ export const Dashboard: React.FC = () => {
     | "metricas"
   >("ordenes");
   if (loading) {
-    return <div className="cargando-perfil">Cargando perfil...</div>;
+    return (
+      <div className="cargando-perfil">
+        <AppLogo size="lg" className="cargando-perfil-logo" />
+        <span>Cargando perfil...</span>
+      </div>
+    );
   }
 
   if (!profile) {
@@ -53,6 +59,7 @@ export const Dashboard: React.FC = () => {
     <div className="dashboard-nuevo">
       <header className="dashboard-header-nuevo">
         <div className="header-left">
+          <AppLogo size="md" className="dashboard-header-logo" />
           <h1>The Good Mark</h1>
         </div>
         <div className="header-right">

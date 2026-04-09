@@ -38,10 +38,11 @@ export interface Colaborador {
   productoId: string;
   tipoPagoId?: string;
   fechaCreacion: Date;
-  pantallaId: string,
-  // color?: string;
+  pantallaId: string;
+  /** Color UI (filtros, chips); opcional. */
+  color?: string;
+  activo?: boolean;
   // tipoPdf?: 1 | 2;
-  // activo: boolean;
   tipoComision?: "porcentaje" | "ninguno" | "consideracion" | "precio_fijo";
   /** Nombre legible de `tipo_pago` (fallback si `tipoComision` no viene en API). */
   tipoPagoNombre?: string;

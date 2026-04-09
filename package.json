@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:icons": "tauri icon ./public/logo.svg"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",

@@ -1,4 +1,3 @@
-import React from "react";
 import { toast, type Id as ToastId } from "react-toastify";
 
 type ConfirmOpts = {

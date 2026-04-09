@@ -85,7 +85,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   pantallas,
   productos,
   asignaciones,
-  asignacionesProductos,
+  asignacionesProductos: _asignacionesProductos,
   clientes,
   usuarios = [],
   usuarioActual,
@@ -797,7 +797,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     }
     if (ventaInicial && usuarioActual.rol === "vendedor" && !codigoValidado) {
       setMensajeCodigo(
-        "Para guardar los cambios, solicita e ingresa tu código de autorización.",
+        "Para guardar los cambios, solicita el código por correo e ingrésalo aquí. El código vence en 30 minutos.",
       );
       setErrorCodigoModal("");
       setMostrarModalCodigo(true);
@@ -932,13 +932,14 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     if (!ventaInicial?.id) return;
     setErrorCodigoModal("");
     try {
-      const data = await backendApi.post<{
-        mensaje?: string;
-      }>("/api/codigos/solicitar", {
+      const data = (await backendApi.post("/api/codigos/solicitar", {
         entidad: "orden",
         entidad_id: ventaInicial.id,
-      });
-      setMensajeCodigo(data?.mensaje ?? "Código solicitado. Revisa tu correo.");
+      })) as { mensaje?: string; vigencia_minutos?: number };
+      const mins = data.vigencia_minutos ?? 30;
+      setMensajeCodigo(
+        `${data?.mensaje ?? "Código solicitado. Revisa tu correo."} Válido ${mins} minutos.`,
+      );
     } catch (e) {
       setErrorCodigoModal(
         e instanceof Error ? e.message : "No se pudo solicitar el código",

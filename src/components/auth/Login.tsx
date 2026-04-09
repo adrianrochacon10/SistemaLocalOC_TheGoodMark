@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { AppLogo } from "../common/AppLogo";
 import "./Login.css";
 
 interface LoginProps {
@@ -30,6 +31,7 @@ export const Login: React.FC<LoginProps> = ({
   return (
     <div className="login-container">
       <div className="login-card">
+        <AppLogo block size="xl" className="login-logo" />
         <h1>Sistema de Órdenes de Compra</h1>
         <p className="login-subtitle">Inicia sesión con tu correo</p>
 

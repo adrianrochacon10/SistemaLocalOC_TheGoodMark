@@ -79,12 +79,15 @@ export function useProductosExtra(profile: any, session: Session | null) {
         producto_id: asignacion.productoId,
         activa: true,
       });
-      const nueva = {
+      const nueva: AsignacionProductoExtra = {
         id: data.id,
         clienteId: data.cliente_id,
         productoId: data.producto_id,
-        activa: data.activa,
-        fechaAsignacion: data.fecha_asignacion,
+        precioUnitario: Number(data.precio_unitario ?? 0) || 0,
+        activo: data.activo !== false,
+        fechaAsignacion: data.fecha_asignacion
+          ? new Date(data.fecha_asignacion)
+          : new Date(),
       };
       setAsignacionesProductos((prev) => {
         const existe = prev.find((a) => a.id === nueva.id);

@@ -168,7 +168,6 @@ export const VentaDetalleModal: React.FC<Props> = ({
                 const totalCostos = venta.costos ?? 0;
                 const totalComision = venta.comision ?? 0;
                 const totalPagoCons = venta.pagoConsiderar ?? 0;
-                const gastosAdic = Number(venta.gastosAdicionales ?? 0) || 0;
                 // % del socio sobre monto de venta.
                 const baseSocioSinGastos = Math.max(0, totalBruto);
 

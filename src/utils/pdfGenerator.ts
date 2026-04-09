@@ -494,13 +494,6 @@ export async function exportarPDFOrden(
         !esLineaPrecioProductoEnDetalle(pid)
       );
     });
-    const nombresDesdeVenta = ids.map((id) =>
-      nombrePantallaDesdeVentaYCatalogo(
-        String(id),
-        pantallas,
-        venta.pantallasDetalle,
-      ),
-    );
     const pantallasConPrecioBase =
       pantallasDetalle.length > 0
         ? pantallasDetalle.map((p: any) => {
@@ -692,11 +685,6 @@ export async function exportarPDFOrden(
   const baseIvaPdf = round2(
     registros.reduce((s, venta) => {
       if (esVentaPorDiasPdf(venta)) return s;
-      const esColabPorcentajePdf =
-        colaboradorEsTipoPorcentajeOrden(
-          colab?.tipoComision,
-          colab?.tipoPagoNombre,
-        ) || ventaTienePorcentajeSocioSnapshot(venta);
       const pv = round2(importeLineaRespectoOrden(venta, orden, numRegPdf));
       const usarCostoPdf = colaboradorUsaCostoComoBaseOrden(
         colab?.tipoComision,

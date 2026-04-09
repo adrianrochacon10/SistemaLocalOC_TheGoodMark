@@ -251,8 +251,8 @@ export const ModalCrearOrden: React.FC<Props> = ({
     let cancel = false;
     void (async () => {
       try {
-        const data = await backendApi.get<Producto[]>("/api/productos");
-        if (!cancel && Array.isArray(data)) setProductosCatalogo(data);
+        const data = await backendApi.get("/api/productos");
+        if (!cancel && Array.isArray(data)) setProductosCatalogo(data as Producto[]);
       } catch {
         if (!cancel) setProductosCatalogo([]);
       }

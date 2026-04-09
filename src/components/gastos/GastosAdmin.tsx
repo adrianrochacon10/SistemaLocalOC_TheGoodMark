@@ -72,19 +72,6 @@ function leerPeriodosGasto(v: RegistroVenta): number[] {
   return [leerPeriodoGasto(v)];
 }
 
-function actualizarNotasConPeriodo(
-  notas: string | undefined,
-  periodo: number,
-  porDias: boolean,
-): string {
-  const base = String(notas ?? "")
-    .replace(/\(Gasto adicional aplicado al (mes|día|dia)\s+\d+:[^)]+\)/gi, "")
-    .replace(/GASTO_(MES|DIA)\s*:\s*\d+/gi, "")
-    .trim();
-  const tag = porDias ? "GASTO_DIA" : "GASTO_MES";
-  return `${base}${base ? " " : ""}${tag}:${periodo}`.trim();
-}
-
 function normalizarTexto(v: string): string {
   return String(v ?? "")
     .normalize("NFD")

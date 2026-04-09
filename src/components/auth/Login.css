@@ -28,6 +28,10 @@
   }
 }
 
+.login-logo {
+  margin-bottom: 1.25rem;
+}
+
 .login-card h1 {
   margin: 0 0 0.5rem 0;
   color: #333;

@@ -4,18 +4,22 @@ Backend mínimo en Express que expone una API REST sobre las tablas de Supabase.
 
 ### 1. Configurar variables de entorno
 
-1. Copia el archivo `.env.example` a `.env`:
+- **App (Vite / Tauri):** en la raíz del repositorio, copia `.env.example` → `.env` y rellena `VITE_*` (ver secciones en ese archivo).
+- **Backend:** dentro de `backend/`, copia el ejemplo del API:
 
 ```bash
+cd backend
 cp .env.example .env
 ```
 
-2. Rellena en `.env`:
+2. Rellena `backend/.env` (lista completa y opcionales en `backend/.env.example`):
 
 - `SUPABASE_URL`: URL de tu proyecto Supabase (Settings → API → Project URL)
 - `SUPABASE_SERVICE_ROLE_KEY`: clave `service_role` de Supabase (NO la compartas)
 - `PORT`: puerto del backend (por defecto 4000)
-- **Opcional (correo de códigos de edición):** `ADMIN_EMAIL` (correo fijo donde recibir los códigos; si no está, se usa el del primer admin en BD). `SMTP_HOST`, `SMTP_PORT` (ej. 587), `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`. Sin SMTP, los códigos se guardan pero no se envían por email.
+- `NODE_ENV`: p. ej. `development` o `production`
+- **Opcional (correo / códigos de edición):** `RESEND_API_KEY` o `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`. Sin correo configurado, los códigos se guardan pero pueden no enviarse por email.
+- **Scripts (`crear-primer-admin`, `crear-vendedor`):** `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NOMBRE`, `VENDEDOR_*` (opcionales si los escribes interactivo)
 
 ### 2. Instalar dependencias y ejecutar
 

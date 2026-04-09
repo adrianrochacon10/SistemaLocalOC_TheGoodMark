@@ -173,7 +173,7 @@ export function useGestorColaboradores(props: Props) {
       precio: number;
     }>;
 
-    const colaborador: Colaborador = {
+    const colaborador = {
       id: modoEdicion && colaboradorEditando ? colaboradorEditando : genId("c"),
       nombre,
       alias: alias || undefined,
@@ -184,7 +184,7 @@ export function useGestorColaboradores(props: Props) {
       porcentajeSocio: tipoComision === "porcentaje" ? porcentaje : undefined,
       activo: true,
       fechaCreacion: new Date(),
-    };
+    } as Colaborador;
 
     if (modoEdicion && colaboradorEditando) {
       onActualizarCliente(colaborador);

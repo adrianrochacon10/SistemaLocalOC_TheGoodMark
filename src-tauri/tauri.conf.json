@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "registro_oc",
-  "version": "0.1.0",
-  "identifier": "com.adria.registro_oc",
+  "version": "0.1.1", 
+  "identifier": "com.sistemalocalOC.TheGoodMark",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,12 +13,12 @@
     "windows": [
       {
         "title": "registro_oc",
-        "width": 800,
-        "height": 600
+        "width": 1024,
+        "height": 768
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' https://*.supabase.co data: blob:; connect-src 'self' https: wss: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:4000 http://localhost:4000 http://127.0.0.1:1420 http://localhost:1420; script-src 'self'; style-src 'self' 'unsafe-inline';"
     }
   },
   "bundle": {
