@@ -260,6 +260,7 @@ export function useVentas(profile: any, session: Session | null) {
       colaborador_id: venta.colaboradorId,
       producto_id: venta.productoId ?? null,
       producto_ids: venta.productoIds ?? (venta.productoId ? [venta.productoId] : []),
+      vendedor_id: venta.vendedorId ?? venta.usuarioRegistroId ?? null,
       precio_por_mes: venta.precioGeneral ?? 0,
       precio_unitario_manual: venta.precioGeneral ?? 0,
       estado: estadoApi,

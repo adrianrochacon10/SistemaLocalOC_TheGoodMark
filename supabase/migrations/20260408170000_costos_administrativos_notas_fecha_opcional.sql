@@ -3,3 +3,4 @@ alter table if exists public.costos_administrativos
 
 alter table if exists public.costos_administrativos
   alter column fecha drop not null;
+Q

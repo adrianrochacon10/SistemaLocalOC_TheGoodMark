@@ -340,6 +340,8 @@ export async function actualizar(id, body) {
   }
   if (body.notas !== undefined) payload.notas = body.notas;
   if (body.fuente_origen !== undefined) payload.fuente_origen = body.fuente_origen;
+  if (body.vendedor_id !== undefined) payload.vendedor_id = body.vendedor_id;
+  else if (body.vendedorId !== undefined) payload.vendedor_id = body.vendedorId;
   if (body.identificador_venta !== undefined || body.identificador !== undefined) {
     payload.identificador_venta = body.identificador_venta ?? body.identificador ?? null;
   }
