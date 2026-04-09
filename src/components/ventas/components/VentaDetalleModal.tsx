@@ -2,6 +2,7 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import { RegistroVenta, Colaborador, Pantalla, Usuario } from "../../../types";
+import { inferirDuracionUnidadVenta } from "../../../utils/duracionVenta";
 
 interface Props {
   venta: RegistroVenta;
@@ -28,25 +29,6 @@ const ESTADO_COLOR: Record<string, string> = {
   Prospecto: "badge-prospecto",
 };
 
-function inferirDuracionUnidad(venta: RegistroVenta): "meses" | "dias" {
-  const unidadGuardada = String((venta as any).duracionUnidad ?? "").toLowerCase().trim();
-  if (unidadGuardada === "dias" || unidadGuardada === "meses") {
-    return unidadGuardada as "dias" | "meses";
-  }
-  if ((venta as any).gastoAdicionalEnDias === true) return "dias";
-  if (!venta?.fechaInicio || !venta?.fechaFin) return "meses";
-  const fi = new Date(venta.fechaInicio);
-  const ff = new Date(venta.fechaFin);
-  if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return "meses";
-  const dias = Math.max(1, Math.round((ff.getTime() - fi.getTime()) / 86400000) + 1);
-  const mr = Math.max(1, Number(venta.mesesRenta) || 1);
-  // Ventas por días históricas pueden venir con fecha fin desfasada;
-  // si usa duraciones típicas de días y contrato corto, tratarlo como días.
-  if ([1, 3, 7, 15].includes(mr) && dias <= 31) return "dias";
-  if (mr === dias || Math.abs(dias - mr) <= 1) return "dias";
-  return "meses";
-}
-
 export const VentaDetalleModal: React.FC<Props> = ({
   venta,
   colaboradores,
@@ -57,7 +39,7 @@ export const VentaDetalleModal: React.FC<Props> = ({
 }) => {
   const colaborador = colaboradores.find((c) => c.id === venta.colaboradorId);
   const vendedor = usuarios.find((u) => u.id === venta.vendedorId);
-  const duracionUnidad = inferirDuracionUnidad(venta);
+  const duracionUnidad = inferirDuracionUnidadVenta(venta as any);
   const etiquetaUnidad = duracionUnidad === "dias" ? "día" : "mes";
   const etiquetaUnidadPlural = duracionUnidad === "dias" ? "días" : "meses";
 

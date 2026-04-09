@@ -115,7 +115,7 @@ async function validarAsociadoEnCategoria(categoriaId, asociadoId) {
 }
 
 export async function crear(body) {
-  const fecha = normalizarTexto(body.fecha);
+  const fechaRaw = normalizarTexto(body.fecha);
   const mes = Number(body.mes);
   const anio = Number(body.anio);
   const importe = Number(body.importe);
@@ -125,7 +125,6 @@ export async function crear(body) {
     : null;
   const nota = body.nota != null ? normalizarTexto(body.nota) : null;
 
-  if (!fecha) return { error: "fecha es obligatoria" };
   if (!Number.isFinite(mes) || mes < 1 || mes > 12) return { error: "mes debe ser 1-12" };
   if (!Number.isFinite(anio) || anio < 2000 || anio > 3000) {
     return { error: "anio fuera de rango (2000-3000)" };
@@ -136,6 +135,8 @@ export async function crear(body) {
 
   const v = await validarAsociadoEnCategoria(categoriaId, asociadoId);
   if (v.error) return { error: v.error };
+
+  const fecha = fechaRaw || `${Math.trunc(anio)}-${String(Math.trunc(mes)).padStart(2, "0")}-01`;
 
   const payload = {
     fecha,
@@ -168,13 +169,18 @@ export async function actualizar(id, body) {
 
   const { data: existente, error: exErr } = await supabase
     .from(TABLA)
-    .select("categoria_id, asociado_id")
+    .select("categoria_id, asociado_id, mes, anio")
     .eq("id", id)
     .single();
   if (exErr || !existente) return { error: "Registro no encontrado" };
 
   const payload = { updated_at: new Date().toISOString() };
-  if (body.fecha !== undefined) payload.fecha = normalizarTexto(body.fecha);
+  if (body.fecha !== undefined) {
+    payload.fecha =
+      body.fecha == null || String(body.fecha).trim() === ""
+        ? null
+        : normalizarTexto(body.fecha);
+  }
   if (body.mes !== undefined) payload.mes = Math.trunc(Number(body.mes));
   if (body.anio !== undefined) payload.anio = Math.trunc(Number(body.anio));
   if (body.importe !== undefined) payload.importe = Math.round(Number(body.importe) * 100) / 100;
@@ -193,7 +199,9 @@ export async function actualizar(id, body) {
       raw == null || String(raw).trim() === "" ? null : normalizarTexto(raw);
   }
 
-  if (payload.fecha !== undefined && !payload.fecha) return { error: "fecha invalida" };
+  if (payload.fecha !== undefined && payload.fecha !== null && !payload.fecha) {
+    return { error: "fecha invalida" };
+  }
   if (payload.mes !== undefined && (!Number.isFinite(payload.mes) || payload.mes < 1 || payload.mes > 12)) {
     return { error: "mes debe ser 1-12" };
   }
@@ -202,6 +210,17 @@ export async function actualizar(id, body) {
     (!Number.isFinite(payload.anio) || payload.anio < 2000 || payload.anio > 3000)
   ) {
     return { error: "anio fuera de rango (2000-3000)" };
+  }
+  if (payload.fecha === null) {
+    const mesFinal = Number(payload.mes ?? existente.mes);
+    const anioFinal = Number(payload.anio ?? existente.anio);
+    if (!Number.isFinite(mesFinal) || mesFinal < 1 || mesFinal > 12) {
+      return { error: "mes debe ser 1-12 para calcular fecha" };
+    }
+    if (!Number.isFinite(anioFinal) || anioFinal < 2000 || anioFinal > 3000) {
+      return { error: "anio fuera de rango (2000-3000)" };
+    }
+    payload.fecha = `${Math.trunc(anioFinal)}-${String(Math.trunc(mesFinal)).padStart(2, "0")}-01`;
   }
   if (payload.importe !== undefined && (!Number.isFinite(payload.importe) || payload.importe < 0)) {
     return { error: "importe debe ser >= 0" };

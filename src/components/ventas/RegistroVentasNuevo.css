@@ -650,6 +650,9 @@
   flex-direction: column;
   gap: 24px;
   margin-bottom: 34px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .kpi-grid {
@@ -737,6 +740,78 @@
     #fff;
 }
 
+/* Gráfico de tendencia: ancho completo del contenido (Chart.js + maintainAspectRatio: false) */
+.grafica-card-tendencia--full {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  align-self: stretch;
+}
+
+.grafica-tendencia-barras-wrap {
+  width: 100%;
+  min-width: 0;
+  height: 420px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Vacío con filtro de periodo (Métricas, costos admin) */
+.graficas-empty-mes {
+  text-align: center;
+  padding: 48px 28px;
+  margin: 8px 0 0;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.96) 0%, #fff 42%);
+  border: 2px dashed #cbd5e1;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+  animation: graficasEmptyMesIn 0.55s ease forwards;
+}
+
+.graficas-empty-mes__icon {
+  font-size: 2.5rem;
+  line-height: 1;
+  display: block;
+  margin-bottom: 14px;
+  animation: graficasEmptyMesFloat 2.4s ease-in-out infinite;
+}
+
+.graficas-empty-mes__title {
+  font-size: 1.08rem;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 10px;
+}
+
+.graficas-empty-mes__hint {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin: 0 auto;
+  max-width: 440px;
+  line-height: 1.5;
+}
+
+@keyframes graficasEmptyMesIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes graficasEmptyMesFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
 /* Barras apiladas */
 .grafica-barras {
   display: flex;
@@ -792,7 +867,7 @@
   min-height: 300px;
 }
 .grafica-linea-chartjs {
-  min-height: 340px;
+  min-height: 420px;
 }
 .grafica-svg {
   width: 100%;
@@ -874,7 +949,11 @@
     height: 290px;
   }
   .grafica-linea-chartjs {
-    min-height: 300px;
+    min-height: 360px;
+  }
+
+  .grafica-tendencia-barras-wrap {
+    height: 360px;
   }
   .grafica-bar-chartjs {
     min-height: 250px;

@@ -18,6 +18,8 @@ interface RegistroVentasListaProps {
   colaboradores: Colaborador[];
   usuarios: Usuario[];
   ventasRegistradas: RegistroVenta[];
+  /** Si es true, muestra el resumen numérico (solo administradores). */
+  esAdmin?: boolean;
   onVentasFiltradasChange?: (ventas: RegistroVenta[]) => void;
   onEliminarVenta: (ventaId: string) => void;
   onNuevaVenta: () => void;
@@ -45,6 +47,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   colaboradores = [],
   usuarios = [],
   ventasRegistradas,
+  esAdmin = false,
   onVentasFiltradasChange,
   onEliminarVenta,
   onNuevaVenta,
@@ -213,10 +216,9 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
               : `Registros de ${MESES[filtroMes]} de ${filtroAnio}`}
       </h2>
 
-      <EstadisticasVentas
-        ventasFiltradas={ventasFiltradas}
-        colaboradores={colaboradores}
-      />
+      {esAdmin ? (
+        <EstadisticasVentas ventasFiltradas={ventasFiltradas} />
+      ) : null}
 
       <div className="ventas-list ventas-compacta">
         {ventasPagina.map((venta) => (

@@ -102,6 +102,7 @@ export interface RegistroVenta {
   fechaInicio: Date;
   fechaFin: Date;
   mesesRenta: number;
+  duracionUnidad?: "meses" | "dias";
   importeTotal: number;
   /** Precio total del contrato en BD; en líneas de orden a veces `precioTotal` es solo la porción del mes. */
   precioTotalContrato?: number;
@@ -214,4 +215,6 @@ export interface ConfiguracionEmpresa {
   bancoCuenta?: string;
   bancoClabe?: string;
   diaCorteOrdenes?: number;
+  habilitarPrecioPorDia?: boolean;
+  tarifasDias?: Array<{ dias: number; precio: number }>;
 }

@@ -127,10 +127,12 @@ function actualizarNotasConPeriodos(
   notas: string | undefined,
   periodos: number[],
   porDias: boolean,
+  notaGasto?: string,
 ): string {
   const base = String(notas ?? "")
     .replace(/\(Gasto adicional aplicado al (mes|día|dia)\s+\d+:[^)]+\)/gi, "")
     .replace(/GASTO_(MES|DIA|MESES)\s*:\s*[0-9,\s]+/gi, "")
+    .replace(/GASTO_NOTA\s*:\s*[^|]+/gi, "")
     .trim();
   const limpios = Array.from(
     new Set(
@@ -146,7 +148,10 @@ function actualizarNotasConPeriodos(
       : porDias
         ? `GASTO_DIA:${limpios[0] ?? 1}`
         : `GASTO_MES:${limpios[0] ?? 1}`;
-  return `${base}${base ? " " : ""}${tag}`.trim();
+  const extraNota = normalizarTexto(notaGasto ?? "")
+    ? `GASTO_NOTA:${String(notaGasto).trim()}`
+    : "";
+  return [base, tag, extraNota].filter(Boolean).join(" ").trim();
 }
 
 /** Quita del campo notas los marcadores de gasto adicional (mismo criterio que al reasignar periodo). */
@@ -154,8 +159,15 @@ function limpiarNotasGasto(notas: string | undefined): string {
   return String(notas ?? "")
     .replace(/\(Gasto adicional aplicado al (mes|día|dia)\s+\d+:[^)]+\)/gi, "")
     .replace(/GASTO_(MES|DIA|MESES)\s*:\s*[0-9,\s]+/gi, "")
+    .replace(/GASTO_NOTA\s*:\s*[^|]+/gi, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+/** Texto libre guardado en `notas` con el prefijo `GASTO_NOTA:`. */
+function leerNotaGastoDesdeVentasNotas(notas: string | undefined): string {
+  const m = String(notas ?? "").match(/GASTO_NOTA\s*:\s*([^|]+)/i);
+  return m?.[1]?.trim() ?? "";
 }
 
 export const GastosAdmin: React.FC<Props> = ({
@@ -171,6 +183,7 @@ export const GastosAdmin: React.FC<Props> = ({
   const [mesGasto, setMesGasto] = useState(1);
   const [periodosGasto, setPeriodosGasto] = useState<number[]>([1]);
   const [montoGasto, setMontoGasto] = useState(0);
+  const [notaGastoVenta, setNotaGastoVenta] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [ventaDetalleActivaId, setVentaDetalleActivaId] = useState<string | null>(null);
   const [ventaModalId, setVentaModalId] = useState<string | null>(null);
@@ -272,6 +285,7 @@ export const GastosAdmin: React.FC<Props> = ({
   React.useEffect(() => {
     if (!ventaSeleccionada) return;
     setMontoGasto(Number(ventaSeleccionada.gastosAdicionales ?? 0) || 0);
+    setNotaGastoVenta(leerNotaGastoDesdeVentasNotas(ventaSeleccionada.notas));
     const periodos = leerPeriodosGasto(ventaSeleccionada);
     setPeriodosGasto(periodos);
     setMesGasto(periodos[0] ?? leerPeriodoGasto(ventaSeleccionada));
@@ -427,6 +441,7 @@ export const GastosAdmin: React.FC<Props> = ({
             Math.min(topePeriodoSeleccionado, Math.max(1, Number(n) || 1)),
           ),
           ventaSeleccionadaPorDias,
+          notaGastoVenta,
         ),
       };
       await onActualizarVenta(actualizado);
@@ -477,7 +492,7 @@ export const GastosAdmin: React.FC<Props> = ({
   return (
     <div className="registro-ventas-nuevo">
       <div className="formulario-section" ref={formGastosRef}>
-        <h3>💸 Gastos adicionales</h3>
+        <h3>💸 Gastos de venta</h3>
         <div className="form-row">
           <div className="form-group">
             <label>Buscar venta (identificador o nombre)</label>
@@ -656,6 +671,15 @@ export const GastosAdmin: React.FC<Props> = ({
                 />
               </div>
             </div>
+            <div className="form-group">
+              <label>Nota del gasto (opcional)</label>
+              <input
+                type="text"
+                value={notaGastoVenta}
+                onChange={(e) => setNotaGastoVenta(e.target.value)}
+                placeholder="Detalle breve del gasto"
+              />
+            </div>
             <button className="btn btn-primary" onClick={() => void guardarGasto()} disabled={guardando}>
               {guardando ? "Guardando..." : "Guardar gasto"}
             </button>
@@ -724,11 +748,17 @@ export const GastosAdmin: React.FC<Props> = ({
             <strong>Fecha fin:</strong>{" "}
             {new Date(ventaDetalleActiva.fechaFin as any).toLocaleDateString("es-MX")}
           </p>
+          <p>
+            <strong>Nota del gasto:</strong>{" "}
+            {leerNotaGastoDesdeVentasNotas(ventaDetalleActiva.notas) || (
+              <span style={{ color: "#6b7280" }}>Sin nota</span>
+            )}
+          </p>
         </div>
       ) : null}
 
       <div className="registro-section" style={{ marginTop: 18 }}>
-        <h4>Listado de gastos adicionales</h4>
+        <h4>Listado de gastos de venta</h4>
         <div className="form-row" style={{ marginBottom: 10 }}>
           <div className="form-group">
             <label>Buscar gasto (ID o venta)</label>
@@ -938,6 +968,21 @@ export const GastosAdmin: React.FC<Props> = ({
                 <p style={{ margin: "6px 0 0 0" }}>
                   <strong>Fecha fin:</strong>{" "}
                   {new Date(ventaModal.fechaFin as any).toLocaleDateString("es-MX")}
+                </p>
+              </div>
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 8,
+                  padding: 10,
+                }}
+              >
+                <p style={{ margin: 0 }}>
+                  <strong>Nota del gasto:</strong>{" "}
+                  {leerNotaGastoDesdeVentasNotas(ventaModal.notas) || (
+                    <span style={{ color: "#6b7280" }}>Sin nota</span>
+                  )}
                 </p>
               </div>
               <div

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { toast } from "react-toastify";
 import {
   OrdenDeCompra,
   Colaborador,
@@ -102,7 +103,7 @@ export const OrdenCard: React.FC<Props> = ({
           clientes,
         );
       } catch (e) {
-        alert(
+        toast.error(
           e instanceof Error
             ? e.message
             : "No se pudo generar el PDF. Prueba de nuevo.",

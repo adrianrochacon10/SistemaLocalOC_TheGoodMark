@@ -1,5 +1,5 @@
 // src/components/ventas/RegistroVentasNuevo.tsx
-import React, { useCallback, useState } from "react";
+import React, { useState } from "react";
 import {
   RegistroVenta,
   Pantalla,
@@ -8,11 +8,11 @@ import {
   Colaborador,
   Usuario,
   AsignacionProductoExtra,
+  ConfiguracionEmpresa,
 } from "../../types";
 import "./RegistroVentasNuevo.css";
 import { RegistroVentasLista } from "./components/RegistroVentaListas";
 import { RegistroVentaModal } from "./components/RegistroVentaModal";
-import { VentasGraficas } from "./components/VentaGrafica";
 
 interface RegistroVentasNuevoProps {
   pantallas: Pantalla[];
@@ -23,6 +23,7 @@ interface RegistroVentasNuevoProps {
   ventasRegistradas: RegistroVenta[];
   usuarios: Usuario[];
   usuarioActual: Usuario;
+  configEmpresa?: ConfiguracionEmpresa;
   onRegistrarVenta: (venta: RegistroVenta) => Promise<void> | void;
   onActualizarVenta: (venta: RegistroVenta) => Promise<void> | void;
   onEliminarVenta: (ventaId: string) => void;
@@ -38,6 +39,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
   productos,
   ventasRegistradas,
   usuarioActual,
+  configEmpresa,
   onRegistrarVenta,
   onActualizarVenta,
   onEliminarVenta,
@@ -48,24 +50,6 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
     null,
   );
   const [modalVentaKey, setModalVentaKey] = useState(0);
-  const [ventasParaGraficas, setVentasParaGraficas] =
-    useState<RegistroVenta[]>(ventasRegistradas);
-
-  const handleVentasFiltradasChange = useCallback((ventas: RegistroVenta[]) => {
-    setVentasParaGraficas((prev) => {
-      if (prev.length === ventas.length) {
-        let iguales = true;
-        for (let i = 0; i < prev.length; i += 1) {
-          if (String(prev[i]?.id) !== String(ventas[i]?.id)) {
-            iguales = false;
-            break;
-          }
-        }
-        if (iguales) return prev;
-      }
-      return ventas;
-    });
-  }, []);
 
   const handleNuevaVenta = () => {
     setVentaEditando(null);
@@ -88,7 +72,7 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
         colaboradores={clientes}
         usuarios={usuarios}
         ventasRegistradas={ventasRegistradas}
-        onVentasFiltradasChange={handleVentasFiltradasChange}
+        esAdmin={usuarioActual.rol === "admin"}
         onEliminarVenta={onEliminarVenta}
         onNuevaVenta={handleNuevaVenta}
         onEditarVenta={(venta) => {
@@ -96,13 +80,6 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
           setMostrarModalVenta(true);
         }}
       />
-
-      {usuarioActual?.rol === "admin" ? (
-        <VentasGraficas
-          ventasRegistradas={ventasParaGraficas}
-          colaboradores={clientes}
-        />
-      ) : null}
 
       {mostrarModalVenta && (
         <RegistroVentaModal
@@ -118,6 +95,8 @@ export const RegistroVentasNuevo: React.FC<RegistroVentasNuevoProps> = ({
           onCerrar={handleCerrarModal}
           ventaInicial={ventaEditando}
           usuarios={usuarios}
+          permitePrecioPorDia={Boolean(configEmpresa?.habilitarPrecioPorDia)}
+          tarifasDiasConfig={configEmpresa?.tarifasDias}
         />
       )}
     </div>

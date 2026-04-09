@@ -16,6 +16,7 @@ import {
 import { Line, Pie } from "react-chartjs-2";
 import { backendApi } from "../../lib/backendApi";
 import { confirmWithToast } from "../../lib/confirmWithToast";
+import { GraficasEmptyMes } from "../common/GraficasEmptyMes";
 import "../ventas/RegistroVentasNuevo.css";
 import "./CostosAdministrativos.css";
 
@@ -258,18 +259,12 @@ export const CostosAdministrativos: React.FC = () => {
   /** "" = todos los asociados de la categoría; "__sin__" = solo filas sin asociado; uuid = ese asociado. */
   const [filtroListadoAsociado, setFiltroListadoAsociado] = useState<string>("");
 
-  const [fecha, setFecha] = useState(() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  });
+  /** Opcional; mes/año del costo se eligen aparte (obligatorios). */
+  const [fecha, setFecha] = useState("");
   const [categoriaId, setCategoriaId] = useState("");
   const [asociadoId, setAsociadoId] = useState("");
-  const maInicial = mesAnioDesdeFechaISO(fecha);
-  const [mesNuevoCosto, setMesNuevoCosto] = useState<number>(maInicial?.mes ?? 1);
-  const [anioNuevoCosto, setAnioNuevoCosto] = useState<number>(maInicial?.anio ?? new Date().getFullYear());
+  const [mesNuevoCosto, setMesNuevoCosto] = useState<number>(() => new Date().getMonth() + 1);
+  const [anioNuevoCosto, setAnioNuevoCosto] = useState<number>(() => new Date().getFullYear());
   const [importe, setImporte] = useState<number>(0);
   const [nota, setNota] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -355,8 +350,9 @@ export const CostosAdministrativos: React.FC = () => {
     void cargar();
   }, [cargar]);
 
+  /** Si el usuario elige una fecha, se pueden alinear mes y año (sigue pudiendo cambiarlos a mano). */
   useEffect(() => {
-    const ma = mesAnioDesdeFechaISO(fecha);
+    const ma = mesAnioDesdeFechaISO(fecha.trim());
     if (!ma) return;
     setMesNuevoCosto(ma.mes);
     setAnioNuevoCosto(ma.anio);
@@ -377,6 +373,9 @@ export const CostosAdministrativos: React.FC = () => {
   }, [categorias, edCategoriaId]);
 
   const dataPie = useMemo(() => datosPiePorCategoria(filas), [filas]);
+
+  const filtroListadoActivo =
+    String(filtroMes ?? "").trim() !== "" || String(filtroAnio ?? "").trim() !== "";
   const dataLinea = useMemo(() => datosLineaPorMes(filas), [filas]);
   const hayDatosGraficas = filas.length > 0;
 
@@ -409,10 +408,6 @@ export const CostosAdministrativos: React.FC = () => {
   );
 
   const handleCrear = async () => {
-    if (!mesAnioDesdeFechaISO(fecha)) {
-      toast.warning("Fecha no válida.");
-      return;
-    }
     if (!categoriaId.trim()) {
       toast.warning("Elige una categoría.");
       return;
@@ -422,7 +417,7 @@ export const CostosAdministrativos: React.FC = () => {
       return;
     }
     if (!Number.isFinite(mesNuevoCosto) || mesNuevoCosto < 1 || mesNuevoCosto > 12) {
-      toast.warning("El mes debe estar entre 1 y 12.");
+      toast.warning("El mes es obligatorio (elige un mes entre 1 y 12).");
       return;
     }
     if (!Number.isFinite(anioNuevoCosto) || anioNuevoCosto < 2000 || anioNuevoCosto > 3000) {
@@ -436,7 +431,7 @@ export const CostosAdministrativos: React.FC = () => {
     setGuardando(true);
     try {
       await backendApi.post("/api/costos-administrativos", {
-        fecha,
+        fecha: fecha.trim() || null,
         mes: mesNuevoCosto,
         anio: anioNuevoCosto,
         importe,
@@ -477,7 +472,7 @@ export const CostosAdministrativos: React.FC = () => {
   const iniciarEdicion = async (r: CostoAdministrativoRow) => {
     await cargarCategorias(false);
     setEditandoId(r.id);
-    setEdFecha(r.fecha);
+    setEdFecha(r.fecha ? String(r.fecha).slice(0, 10) : "");
     setEdMes(Math.trunc(Number(r.mes)) || 1);
     setEdAnio(Math.trunc(Number(r.anio)) || new Date().getFullYear());
     setEdCategoriaId(r.categoria_id ?? "");
@@ -494,17 +489,18 @@ export const CostosAdministrativos: React.FC = () => {
 
   const guardarEdicion = async () => {
     if (!editandoId) return;
-    if (!edFecha.trim()) return toast.warning("La fecha es obligatoria.");
     if (!edCategoriaId.trim()) return toast.warning("Elige una categoría.");
     if (!edAsociadoId.trim()) return toast.warning("Elige una subcategoría.");
-    if (!Number.isFinite(edMes) || edMes < 1 || edMes > 12) return toast.warning("Mes inválido.");
+    if (!Number.isFinite(edMes) || edMes < 1 || edMes > 12) {
+      return toast.warning("El mes es obligatorio (elige un mes entre 1 y 12).");
+    }
     if (!Number.isFinite(edAnio) || edAnio < 2000 || edAnio > 3000) return toast.warning("Año inválido.");
     if (!Number.isFinite(edImporte) || edImporte < 0) return toast.warning("Importe inválido.");
 
     setGuardandoEdicion(true);
     try {
       await backendApi.patch(`/api/costos-administrativos/${encodeURIComponent(editandoId)}`, {
-        fecha: edFecha,
+        fecha: edFecha.trim() || null,
         mes: edMes,
         anio: edAnio,
         categoria_id: edCategoriaId,
@@ -575,15 +571,18 @@ export const CostosAdministrativos: React.FC = () => {
               <h4 className="costos-administrativos__subtitulo-form">Nuevo costo</h4>
               <div className="form-row costos-administrativos__nuevo-costo-grid">
                 <div className="form-group">
-                  <label>Fecha</label>
+                  <label>Fecha (opcional)</label>
                   <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label>Mes</label>
+                  <label>
+                    Mes <span className="kpi-label-muted">(obligatorio)</span>
+                  </label>
                   <select
                     value={String(mesNuevoCosto)}
                     onChange={(e) => setMesNuevoCosto(Number(e.target.value))}
-                    aria-label="Mes del costo"
+                    aria-label="Mes del costo (obligatorio)"
+                    required
                   >
                     {Array.from({ length: 12 }, (_, i) => (
                       <option key={i + 1} value={String(i + 1)}>
@@ -626,7 +625,7 @@ export const CostosAdministrativos: React.FC = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Subcategoría (obligatoria)</label>
+                  <label>Subcategoría</label>
                   <select
                     value={asociadoId}
                     onChange={(e) => setAsociadoId(e.target.value)}
@@ -653,7 +652,7 @@ export const CostosAdministrativos: React.FC = () => {
                 </div>
               </div>
               <div className="form-group">
-                <label>Nota (opcional)</label>
+                <label>Nota</label>
                 <input
                   type="text"
                   value={nota}
@@ -685,10 +684,16 @@ export const CostosAdministrativos: React.FC = () => {
           />
         </div>
         {!hayDatosGraficas && !cargando ? (
-          <p className="costos-administrativos__vacio">
-            Sin datos para graficar con el año (y demás filtros) elegidos. Prueba otro año arriba,
-            registra un costo o ajusta mes / categoría / subcategoría en &quot;Filtrar listado&quot;.
-          </p>
+          filtroListadoActivo ? (
+            <GraficasEmptyMes
+              titulo="No hay datos para graficar en este periodo"
+              hint="No hay costos con el mes, año o categorías elegidos en «Filtrar listado». Prueba otro mes o año, amplía la categoría o registra un nuevo costo."
+            />
+          ) : (
+            <p className="costos-administrativos__vacio">
+              Sin datos para graficar. Registra un costo o elige año en el resumen.
+            </p>
+          )
         ) : (
           <div className="costos-administrativos__charts-grid">
             <div className="costos-administrativos__chart-box">
@@ -780,7 +785,14 @@ export const CostosAdministrativos: React.FC = () => {
         {cargando && filas.length === 0 ? (
           <p>Cargando…</p>
         ) : filas.length === 0 ? (
-          <p className="costos-administrativos__vacio">No hay registros para este filtro.</p>
+          filtroListadoActivo ? (
+            <GraficasEmptyMes
+              titulo="No hay registros en este periodo"
+              hint="Ajusta mes, año, categoría o subcategoría en «Filtrar listado», o registra un costo para ese mes."
+            />
+          ) : (
+            <p className="costos-administrativos__vacio">No hay registros para este filtro.</p>
+          )
         ) : (
           <div className={`costos-administrativos__cards-wrap${cargando ? " costos-administrativos__tabla-wrap--actualizando" : ""}`}>
             {cargando ? (
@@ -799,12 +811,17 @@ export const CostosAdministrativos: React.FC = () => {
                       </header>
                       <div className="costos-administrativos__card-edit-grid">
                         <label>
-                          Fecha
+                          Fecha (opcional)
                           <input type="date" value={edFecha} onChange={(e) => setEdFecha(e.target.value)} />
                         </label>
                         <label>
-                          Mes
-                          <select value={String(edMes)} onChange={(e) => setEdMes(Number(e.target.value))}>
+                          Mes (obligatorio)
+                          <select
+                            value={String(edMes)}
+                            onChange={(e) => setEdMes(Number(e.target.value))}
+                            aria-label="Mes del costo (obligatorio)"
+                            required
+                          >
                             {Array.from({ length: 12 }, (_, i) => (
                               <option key={i + 1} value={String(i + 1)}>
                                 {MESES_CORTOS[i]} ({i + 1})
@@ -892,7 +909,7 @@ export const CostosAdministrativos: React.FC = () => {
                     <>
                       <header className="costos-administrativos__card-header">
                         <strong>{fmtMoney(Number(r.importe) || 0)}</strong>
-                        <span>{r.fecha}</span>
+                        <span>{r.fecha ? String(r.fecha).slice(0, 10) : "—"}</span>
                       </header>
                       <div className="costos-administrativos__card-body">
                         <p><b>Mes/Año:</b> {r.mes} / {r.anio}</p>

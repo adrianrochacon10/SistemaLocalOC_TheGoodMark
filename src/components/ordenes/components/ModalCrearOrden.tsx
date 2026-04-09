@@ -5,6 +5,7 @@ import React, {
   useCallback,
 } from "react";
 import ReactDOM from "react-dom";
+import { toast } from "react-toastify";
 import {
   RegistroVenta,
   Colaborador,
@@ -567,15 +568,15 @@ export const ModalCrearOrden: React.FC<Props> = ({
 
   const handleConfirmar = async () => {
     if (!colaboradorId) {
-      alert("Selecciona un colaborador");
+      toast.warning("Selecciona un colaborador");
       return;
     }
     if (ventasDelMes.length === 0) {
-      alert("No hay ventas para ese período");
+      toast.warning("No hay ventas para ese período");
       return;
     }
     if (detalleLineas.length === 0) {
-      alert(
+      toast.warning(
         "Selecciona al menos una pantalla o marca al menos un producto en la orden.",
       );
       return;

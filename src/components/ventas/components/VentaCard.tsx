@@ -3,6 +3,8 @@ import { diasEntreFechasInicioFin, formatearFecha } from "../../../utils/formate
 import { formatearMoneda } from "../../../utils/formateoMoneda";
 import { Colaborador, Pantalla, RegistroVenta } from "../../../types";
 import { utilidadNetaContratoParaKpi } from "../../../utils/utilidadVenta";
+import { inferirDuracionUnidadVenta } from "../../../utils/duracionVenta";
+import { confirmWithToast } from "../../../lib/confirmWithToast";
 
 interface VentaCardProps {
   venta: RegistroVenta;
@@ -23,21 +25,8 @@ export const VentaCard: React.FC<VentaCardProps> = ({
 }) => {
   const colaborador = colaboradores.find((c) => c.id === venta.colaboradorId);
 
-  const esVentaPorDias = (v: RegistroVenta): boolean => {
-    const unidad = String((v as { duracionUnidad?: string }).duracionUnidad ?? "")
-      .toLowerCase()
-      .trim();
-    if (["dias", "días", "dia", "día"].includes(unidad)) return true;
-    if ((v as { gastoAdicionalEnDias?: boolean }).gastoAdicionalEnDias === true) return true;
-    const mr = Math.max(1, Number(v.mesesRenta ?? 1) || 1);
-    const fi = v.fechaInicio instanceof Date ? v.fechaInicio : new Date(v.fechaInicio);
-    const ff = v.fechaFin instanceof Date ? v.fechaFin : new Date(v.fechaFin);
-    if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) return false;
-    const dias = Math.max(1, Math.round((ff.getTime() - fi.getTime()) / 86400000) + 1);
-    if ([1, 3, 7, 15].includes(mr) && dias <= 31) return true;
-    if (mr === dias || Math.abs(dias - mr) <= 1) return true;
-    return false;
-  };
+  const esVentaPorDias = (v: RegistroVenta): boolean =>
+    inferirDuracionUnidadVenta(v as any) === "dias";
 
   // ✅ Pantallas con recorte
   const todasLasPantallas = venta.pantallasIds
@@ -69,9 +58,7 @@ export const VentaCard: React.FC<VentaCardProps> = ({
       ? venta.fechaFin
       : new Date(venta.fechaFin);
   const diasEnContrato = diasEntreFechasInicioFin(fi, ff);
-  const unidadEsDia =
-    esVentaPorDias(venta) ||
-    (meses > 0 && (meses === diasEnContrato || Math.abs(diasEnContrato - meses) <= 1));
+  const unidadEsDia = esVentaPorDias(venta);
 
   const precioPorPeriodo =
     precioMes > 0
@@ -141,7 +128,10 @@ export const VentaCard: React.FC<VentaCardProps> = ({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (confirm("¿Eliminar esta venta?")) onEliminar(venta.id);
+            void (async () => {
+              const ok = await confirmWithToast("¿Eliminar esta venta?");
+              if (ok) onEliminar(venta.id);
+            })();
           }}
           title="Eliminar"
           style={{

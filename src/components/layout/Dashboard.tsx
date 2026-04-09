@@ -7,6 +7,7 @@ import { AdminUsuarios } from "../admin/AdminUsuarios";
 import { EmpresaForm } from "../empresa/EmpresaForm";
 import { GastosAdmin } from "../gastos/GastosAdmin";
 import { CostosAdministrativos } from "../costos/CostosAdministrativos";
+import { MetricasPage } from "../metricas/MetricasPage";
 import "./Dashboard.css";
 import { useDashboardData } from "../../hooks/useDashboardData";
 
@@ -28,6 +29,7 @@ export const Dashboard: React.FC = () => {
     | "admin"
     | "gastos"
     | "costosAdministrativos"
+    | "metricas"
   >("ordenes");
   if (loading) {
     return <div className="cargando-perfil">Cargando perfil...</div>;
@@ -80,14 +82,14 @@ export const Dashboard: React.FC = () => {
           className={`nav-btn-nuevo ${vistaActual === "ventas" ? "active" : ""}`}
           onClick={() => setVistaActual("ventas")}
         >
-          💰 Registrar Ventas
+          💰 Ventas
         </button>
         <button
           type="button"
           className={`nav-btn-nuevo ${vistaActual === "ordenes" ? "active" : ""}`}
           onClick={() => setVistaActual("ordenes")}
         >
-          📋 Órdenes de Compra Mensuales
+          📋 Ordenes de Compra
         </button>
         {esAdmin && (
           <button
@@ -102,7 +104,16 @@ export const Dashboard: React.FC = () => {
             className={`nav-btn-nuevo ${vistaActual === "gastos" ? "active" : ""}`}
             onClick={() => setVistaActual("gastos")}
           >
-            💸 Gastos
+            💸 Gastos de venta
+          </button>
+        )}
+        {esAdmin && (
+          <button
+            type="button"
+            className={`nav-btn-nuevo ${vistaActual === "metricas" ? "active" : ""}`}
+            onClick={() => setVistaActual("metricas")}
+          >
+            📈 Métricas
           </button>
         )}
         {esAdmin && (
@@ -157,6 +168,7 @@ export const Dashboard: React.FC = () => {
             ventasRegistradas={datos.ventasRegistradas}
             usuarios={datos.usuarios}
             usuarioActual={usuarioActual}
+            configEmpresa={datos.config}
             onRegistrarVenta={acciones.handleRegistrarVentaConSupabase}
             onActualizarVenta={acciones.handleActualizarVentaConSupabase}
             onEliminarVenta={acciones.handleEliminarVenta}
@@ -198,6 +210,12 @@ export const Dashboard: React.FC = () => {
           />
         )}
         {vistaActual === "costosAdministrativos" && esAdmin && <CostosAdministrativos />}
+        {vistaActual === "metricas" && esAdmin && (
+          <MetricasPage
+            ventasRegistradas={datos.ventasRegistradas}
+            colaboradores={datos.clientes}
+          />
+        )}
       </main>
     </div>
   );

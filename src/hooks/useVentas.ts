@@ -94,6 +94,12 @@ export function useVentas(profile: any, session: Session | null) {
       fechaInicio: new Date(row.fecha_inicio),
       fechaFin: new Date(row.fecha_fin),
       mesesRenta: row.duracion_meses ?? row.meses_renta ?? 1,
+      duracionUnidad:
+        String(row.duracion_unidad ?? "").toLowerCase().trim() === "dias"
+          ? "dias"
+          : String(row.duracion_unidad ?? "").toLowerCase().trim() === "meses"
+            ? "meses"
+            : undefined,
       importeTotal: row.importe_total ?? row.precio_total ?? 0,
       activo: row.activo ?? true,
       vendedorId: row.vendedor_id ?? undefined,

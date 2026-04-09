@@ -7,9 +7,17 @@ interface EmpresaFormProps {
   onCancel?: () => void;
 }
 
+const CONFIG_PRECIO_DIA_OVERRIDE_KEY = "config_precio_dia_override";
+
 export const EmpresaForm: React.FC<EmpresaFormProps> = ({
   onCancel,
 }) => {
+  const tarifasDefault = [
+    { dias: 1, precio: 0 },
+    { dias: 3, precio: 0 },
+    { dias: 7, precio: 0 },
+    { dias: 15, precio: 0 },
+  ];
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [editando, setEditando] = useState(false);
@@ -21,9 +29,49 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
     telefono: "",
     email: "",
     iva_percentaje: 16,
+    habilitar_precio_por_dia: false,
+    tarifas_dias: tarifasDefault,
     dia_corte_ordenes: 20,
     activo: true,
   });
+
+  const leerOverridePrecioDiaLocal = () => {
+    try {
+      const raw = localStorage.getItem(CONFIG_PRECIO_DIA_OVERRIDE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return {
+        habilitar_precio_por_dia: Boolean(parsed?.habilitarPrecioPorDia),
+        tarifas_dias: Array.isArray(parsed?.tarifasDias)
+          ? parsed.tarifasDias
+              .map((r: any) => ({
+                dias: Math.max(1, Number(r?.dias) || 0),
+                precio: Math.max(0, Number(r?.precio) || 0),
+              }))
+              .filter((r: any) => Number.isFinite(r.dias) && Number.isFinite(r.precio))
+          : tarifasDefault,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const guardarOverridePrecioDiaLocal = (
+    habilitar: boolean,
+    tarifas: Array<{ dias: number; precio: number }>,
+  ) => {
+    try {
+      localStorage.setItem(
+        CONFIG_PRECIO_DIA_OVERRIDE_KEY,
+        JSON.stringify({
+          habilitarPrecioPorDia: Boolean(habilitar),
+          tarifasDias: tarifas,
+        }),
+      );
+    } catch {
+      // noop
+    }
+  };
 
   const cargarConfiguracion = useCallback(async (silencioso = false) => {
     if (!silencioso) {
@@ -33,6 +81,11 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
     try {
       const data = await backendApi.get("/api/configuracion");
       if (data) {
+        const override = leerOverridePrecioDiaLocal();
+        const backendTraePrecioDia =
+          data.habilitar_precio_por_dia != null || data.habilitarPrecioPorDia != null;
+        const backendTraeTarifas =
+          data.tarifas_dias != null || data.tarifasDias != null;
         setFormData({
           nombre_empresa: data.nombre_empresa ?? "",
           rfc: data.rfc ?? "",
@@ -40,6 +93,20 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
           telefono: data.telefono ?? "",
           email: data.email ?? "",
           iva_percentaje: Number(data.iva_percentaje ?? 16),
+          habilitar_precio_por_dia: backendTraePrecioDia
+            ? Boolean(
+                data.habilitar_precio_por_dia ?? data.habilitarPrecioPorDia ?? false,
+              )
+            : Boolean(override?.habilitar_precio_por_dia ?? false),
+          tarifas_dias: backendTraeTarifas
+            ? (data.tarifas_dias ?? data.tarifasDias)
+                .map((r: any) => ({
+                  dias: Math.max(1, Number(r?.dias) || 0),
+                  precio: Math.max(0, Number(r?.precio) || 0),
+                }))
+                .filter((r: any) => Number.isFinite(r.dias) && Number.isFinite(r.precio))
+                .sort((a: any, b: any) => a.dias - b.dias)
+            : (override?.tarifas_dias ?? tarifasDefault),
           dia_corte_ordenes: Number(data.dia_corte_ordenes ?? 20),
           activo: Boolean(data.activo ?? true),
         });
@@ -84,6 +151,10 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
 
     setGuardando(true);
     try {
+      guardarOverridePrecioDiaLocal(
+        Boolean(formData.habilitar_precio_por_dia),
+        formData.tarifas_dias,
+      );
       await backendApi.post("/api/configuracion", {
         nombreEmpresa: formData.nombre_empresa,
         rfc: formData.rfc || null,
@@ -91,11 +162,14 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
         telefono: formData.telefono || null,
         email: formData.email || null,
         ivaPercentaje: Number(formData.iva_percentaje || 0),
+        habilitarPrecioPorDia: Boolean(formData.habilitar_precio_por_dia),
+        tarifasDias: formData.tarifas_dias,
         diaCorteOrdenes: Number(formData.dia_corte_ordenes || 20),
         activo: formData.activo,
       });
       toast.success("Configuración guardada correctamente.");
       setMensaje("Configuración guardada correctamente");
+      window.dispatchEvent(new Event("configuracion-actualizada"));
       setEditando(false);
       await cargarConfiguracion(true);
     } catch (e) {
@@ -154,6 +228,20 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
                     <div className="empresa-info-item">
                       <span className="empresa-info-label">Activo</span>
                       <span className="empresa-info-value">{formData.activo ? "Sí" : "No"}</span>
+                    </div>
+                    <div className="empresa-info-item">
+                      <span className="empresa-info-label">Precio por día</span>
+                      <span className="empresa-info-value">
+                        {formData.habilitar_precio_por_dia ? "Habilitado" : "Deshabilitado"}
+                      </span>
+                    </div>
+                    <div className="empresa-info-item empresa-info-item--full">
+                      <span className="empresa-info-label">Tarifas por día</span>
+                      <span className="empresa-info-value empresa-info-value--multiline">
+                        {(formData.tarifas_dias ?? [])
+                          .map((t) => `${t.dias}d: $${Number(t.precio).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+                          .join(" · ") || "-"}
+                      </span>
                     </div>
                   </div>
                   <div className="form-actions">
@@ -285,6 +373,16 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
                       />
                     </div>
                     <div className="form-group empresa-form-group--checkbox">
+                      <label htmlFor="habilitar_precio_por_dia">Precio por día</label>
+                      <input
+                        type="checkbox"
+                        id="habilitar_precio_por_dia"
+                        name="habilitar_precio_por_dia"
+                        checked={formData.habilitar_precio_por_dia}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="form-group empresa-form-group--checkbox">
                       <label htmlFor="activo">Activo</label>
                       <input
                         type="checkbox"
@@ -293,6 +391,81 @@ export const EmpresaForm: React.FC<EmpresaFormProps> = ({
                         checked={formData.activo}
                         onChange={handleChange}
                       />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Tarifas fijas por día (sin IVA adicional)</label>
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {(formData.tarifas_dias ?? []).map((t, idx) => (
+                        <div
+                          key={`tarifa-${idx}`}
+                          style={{ display: "grid", gridTemplateColumns: "120px 1fr auto", gap: 8 }}
+                        >
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={Number(t.dias) || ""}
+                            onChange={(e) => {
+                              const dias = Math.max(1, Number(e.target.value) || 1);
+                              setFormData((prev) => {
+                                const next = [...(prev.tarifas_dias ?? [])];
+                                next[idx] = { ...next[idx], dias };
+                                return { ...prev, tarifas_dias: next };
+                              });
+                            }}
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={Number(t.precio) === 0 ? "" : Number(t.precio)}
+                            placeholder="Precio fijo total"
+                            onChange={(e) => {
+                              const precio = Math.max(0, Number(e.target.value) || 0);
+                              setFormData((prev) => {
+                                const next = [...(prev.tarifas_dias ?? [])];
+                                next[idx] = { ...next[idx], precio };
+                                return { ...prev, tarifas_dias: next };
+                              });
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                tarifas_dias: (prev.tarifas_dias ?? []).filter((_, i) => i !== idx),
+                              }))
+                            }
+                            disabled={(formData.tarifas_dias ?? []).length <= 1}
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            tarifas_dias: [
+                              ...(prev.tarifas_dias ?? []),
+                              {
+                                dias:
+                                  ((prev.tarifas_dias ?? [])[Math.max(0, (prev.tarifas_dias ?? []).length - 1)]?.dias ?? 0) + 1,
+                                precio: 0,
+                              },
+                            ],
+                          }))
+                        }
+                      >
+                        + Agregar día/tarifa
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -161,7 +161,7 @@ export const OrdenesMensualesNuevo: React.FC<Props> = ({
     <div className="ordenes-mensuales-nuevo">
       <div className="ordenes-header ordenes-header-bar">
         <div className="ordenes-titulo-row">
-          <h2>📋 Órdenes de Compra Mensuales</h2>
+          <h2>📋 Ordenes de Compra</h2>
           <button
             type="button"
             className="btn btn-primary btn-crear-orden-inline"

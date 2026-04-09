@@ -6,6 +6,60 @@ import { backendApi } from "../lib/backendApi";
 import { mapOrdenFromApi } from "../utils/ordenApiMapper";
 import type { CrearOrdenPayload } from "../utils/ordenCompraLineas";
 
+const CONFIG_PRECIO_DIA_OVERRIDE_KEY = "config_precio_dia_override";
+const TARIFAS_DIAS_DEFAULT = [
+  { dias: 1, precio: 0 },
+  { dias: 3, precio: 0 },
+  { dias: 7, precio: 0 },
+  { dias: 15, precio: 0 },
+];
+
+function normalizarTarifasDias(raw: any): Array<{ dias: number; precio: number }> {
+  if (!Array.isArray(raw)) return TARIFAS_DIAS_DEFAULT;
+  const out = raw
+    .map((r: any) => ({
+      dias: Math.max(1, Number(r?.dias) || 0),
+      precio: Math.max(0, Number(r?.precio) || 0),
+    }))
+    .filter((r) => Number.isFinite(r.dias) && Number.isFinite(r.precio))
+    .sort((a, b) => a.dias - b.dias);
+  return out.length > 0 ? out : TARIFAS_DIAS_DEFAULT;
+}
+
+function leerOverridePrecioDiaLocal(): {
+  habilitarPrecioPorDia: boolean;
+  tarifasDias: Array<{ dias: number; precio: number }>;
+} | null {
+  try {
+    const raw = localStorage.getItem(CONFIG_PRECIO_DIA_OVERRIDE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return {
+      habilitarPrecioPorDia: Boolean(parsed?.habilitarPrecioPorDia),
+      tarifasDias: normalizarTarifasDias(parsed?.tarifasDias),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function guardarOverridePrecioDiaLocal(
+  habilitarPrecioPorDia: boolean,
+  tarifasDias: Array<{ dias: number; precio: number }>,
+): void {
+  try {
+    localStorage.setItem(
+      CONFIG_PRECIO_DIA_OVERRIDE_KEY,
+      JSON.stringify({
+        habilitarPrecioPorDia: Boolean(habilitarPrecioPorDia),
+        tarifasDias: normalizarTarifasDias(tarifasDias),
+      }),
+    );
+  } catch {
+    // noop
+  }
+}
+
 export function useConfiguracion(profile: any, session: Session | null) {
   const [config, setConfig] = useState<ConfiguracionEmpresa>({
     id: "cfg1",
@@ -15,35 +69,68 @@ export function useConfiguracion(profile: any, session: Session | null) {
     telefono: "555-123-4567",
     email: "contacto@empresa.com",
     ivaPercentaje: 16,
+    habilitarPrecioPorDia: false,
+    tarifasDias: TARIFAS_DIAS_DEFAULT,
     activo: true,
   });
   const [ordenes, setOrdenes] = useState<OrdenDeCompra[]>([]);
+
+  const aplicarConfigDesdeApi = useCallback((data: any) => {
+    if (!data) return;
+    const overrideLocal = leerOverridePrecioDiaLocal();
+    const backendTraePrecioDia =
+      data.habilitar_precio_por_dia != null || data.habilitarPrecioPorDia != null;
+    const backendTraeTarifas =
+      data.tarifas_dias != null || data.tarifasDias != null;
+    setConfig((prev) => ({
+      ...prev,
+      id: data.id ?? prev.id ?? "cfg1",
+      nombreEmpresa: data.nombre_empresa ?? prev.nombreEmpresa ?? "Mi Empresa de Pantallas",
+      rfc: data.rfc ?? prev.rfc ?? undefined,
+      direccion: data.direccion ?? prev.direccion ?? undefined,
+      telefono: data.telefono ?? prev.telefono ?? undefined,
+      email: data.email ?? prev.email ?? undefined,
+      ivaPercentaje: data.iva_percentaje ?? prev.ivaPercentaje ?? 16,
+      habilitarPrecioPorDia: backendTraePrecioDia
+        ? Boolean(
+            data.habilitar_precio_por_dia ?? data.habilitarPrecioPorDia ?? false,
+          )
+        : Boolean(
+            overrideLocal?.habilitarPrecioPorDia ??
+              prev.habilitarPrecioPorDia ??
+              false,
+          ),
+      tarifasDias: backendTraeTarifas
+        ? normalizarTarifasDias(data.tarifas_dias ?? data.tarifasDias)
+        : normalizarTarifasDias(overrideLocal?.tarifasDias ?? prev.tarifasDias),
+      activo: data.activo ?? prev.activo ?? true,
+      sitioWeb: data.sitio_web ?? data.sitioWeb ?? prev.sitioWeb ?? undefined,
+      bancoTitular:
+        data.banco_titular ?? data.bancoTitular ?? prev.bancoTitular ?? undefined,
+      bancoNombre:
+        data.banco_nombre ?? data.bancoNombre ?? prev.bancoNombre ?? undefined,
+      bancoTarjeta:
+        data.banco_tarjeta ?? data.bancoTarjeta ?? prev.bancoTarjeta ?? undefined,
+      bancoCuenta:
+        data.banco_cuenta ?? data.bancoCuenta ?? prev.bancoCuenta ?? undefined,
+      bancoClabe:
+        data.banco_clabe ?? data.bancoClabe ?? prev.bancoClabe ?? undefined,
+      diaCorteOrdenes:
+        Number(data.dia_corte_ordenes ?? data.diaCorteOrdenes ?? prev.diaCorteOrdenes ?? 20) ||
+        20,
+    }));
+  }, []);
+
+  const refetchConfig = useCallback(async () => {
+    const data = await backendApi.get("/api/configuracion");
+    aplicarConfigDesdeApi(data);
+  }, [aplicarConfigDesdeApi]);
 
   // Cargar desde backend
   useEffect(() => {
     const cargar = async () => {
       try {
-        const data = await backendApi.get("/api/configuracion");
-        if (data) {
-          setConfig({
-            id: data.id ?? "cfg1",
-            nombreEmpresa: data.nombre_empresa ?? "Mi Empresa de Pantallas",
-            rfc: data.rfc ?? undefined,
-            direccion: data.direccion ?? undefined,
-            telefono: data.telefono ?? undefined,
-            email: data.email ?? undefined,
-            ivaPercentaje: data.iva_percentaje ?? 16,
-            activo: data.activo ?? true,
-            sitioWeb: data.sitio_web ?? data.sitioWeb ?? undefined,
-            bancoTitular: data.banco_titular ?? data.bancoTitular ?? undefined,
-            bancoNombre: data.banco_nombre ?? data.bancoNombre ?? undefined,
-            bancoTarjeta: data.banco_tarjeta ?? data.bancoTarjeta ?? undefined,
-            bancoCuenta: data.banco_cuenta ?? data.bancoCuenta ?? undefined,
-            bancoClabe: data.banco_clabe ?? data.bancoClabe ?? undefined,
-            diaCorteOrdenes:
-              Number(data.dia_corte_ordenes ?? data.diaCorteOrdenes ?? 20) || 20,
-          });
-        }
+        await refetchConfig();
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (/fetch|Failed to fetch|NETWORK|refused|reset/i.test(msg)) {
@@ -56,7 +143,17 @@ export function useConfiguracion(profile: any, session: Session | null) {
       }
     };
     cargar();
-  }, [profile?.id, session?.access_token]);
+  }, [profile?.id, session?.access_token, refetchConfig]);
+
+  useEffect(() => {
+    const onActualizada = () => {
+      void refetchConfig();
+    };
+    window.addEventListener("configuracion-actualizada", onActualizada);
+    return () => {
+      window.removeEventListener("configuracion-actualizada", onActualizada);
+    };
+  }, [refetchConfig]);
 
   // Persistir
   useEffect(() => {
@@ -74,7 +171,26 @@ export function useConfiguracion(profile: any, session: Session | null) {
     if (datos) {
       try {
         const parsed = JSON.parse(datos);
-        setConfig(parsed.config || config);
+        const cfg = parsed?.config ?? {};
+        const override = leerOverridePrecioDiaLocal();
+        setConfig((prev) => ({
+          ...prev,
+          ...cfg,
+          habilitarPrecioPorDia:
+            cfg?.habilitarPrecioPorDia != null
+              ? Boolean(cfg.habilitarPrecioPorDia)
+              : Boolean(
+                  override?.habilitarPrecioPorDia ??
+                    prev.habilitarPrecioPorDia ??
+                    false,
+                ),
+          tarifasDias: normalizarTarifasDias(
+            cfg?.tarifasDias ??
+              override?.tarifasDias ??
+              prev.tarifasDias ??
+              TARIFAS_DIAS_DEFAULT,
+          ),
+        }));
       } catch (e) {
         console.error("Error cargando config desde localStorage:", e);
       }
@@ -117,6 +233,10 @@ export function useConfiguracion(profile: any, session: Session | null) {
   }, [refetchOrdenes]);
 
   const handleGuardarConfiguracion = async () => {
+    guardarOverridePrecioDiaLocal(
+      Boolean(config.habilitarPrecioPorDia),
+      normalizarTarifasDias(config.tarifasDias),
+    );
     try {
       const data = await backendApi.post("/api/configuracion", {
         nombreEmpresa: config.nombreEmpresa,
@@ -125,6 +245,8 @@ export function useConfiguracion(profile: any, session: Session | null) {
         telefono: config.telefono ?? null,
         email: config.email ?? null,
         ivaPercentaje: config.ivaPercentaje,
+        habilitarPrecioPorDia: Boolean(config.habilitarPrecioPorDia),
+        tarifasDias: normalizarTarifasDias(config.tarifasDias),
         diaCorteOrdenes: Number(config.diaCorteOrdenes ?? 20) || 20,
         activo: config.activo,
       });
