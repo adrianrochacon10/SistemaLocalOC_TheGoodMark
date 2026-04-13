@@ -163,6 +163,7 @@ function paqueteDesdeVenta(v: RegistroVenta): string {
 /**
  * Texto de periodo en el detalle del PDF: mes de la orden y el siguiente (0–11),
  * p. ej. orden de abril → "abril - mayo". Diciembre → "diciembre - enero" (año siguiente).
+ * Respaldo si no hay fecha de inicio válida.
  */
 function periodoPdfMesOrdenYSiguiente(anio: number, mes0: number): string {
   const a = Number(anio) || new Date().getFullYear();
@@ -173,6 +174,54 @@ function periodoPdfMesOrdenYSiguiente(anio: number, mes0: number): string {
   const aSig = m === 11 ? a + 1 : a;
   const siguiente = new Date(aSig, mSig, 1).toLocaleDateString("es-MX", opt);
   return `${actual} - ${siguiente}`;
+}
+
+/** Día y mes en español; año solo si se pide (p. ej. "10 de abril"). */
+function formatDiaMesEs(
+  d: Date,
+  opts: { conAnio: boolean },
+): string {
+  const base: Intl.DateTimeFormatOptions = {
+    day: "numeric",
+    month: "long",
+    ...(opts.conAnio ? { year: "numeric" } : {}),
+  };
+  return d.toLocaleDateString("es-MX", base);
+}
+
+/**
+ * Periodo mensual en PDF: mismo día del calendario que la fecha de inicio del contrato,
+ * aplicado al mes de la orden → mismo día del mes siguiente.
+ * Ej.: inicio 10 abr, orden de mayo → "10 de mayo a 10 de junio".
+ */
+function periodoPdfPorDiaInicioYMesOrden(
+  fechaInicioVenta: Date | string | undefined,
+  mesOrden0: number,
+  anioOrden: number,
+): string {
+  const fi =
+    fechaInicioVenta instanceof Date
+      ? fechaInicioVenta
+      : new Date(fechaInicioVenta as string);
+  if (Number.isNaN(fi.getTime())) {
+    return periodoPdfMesOrdenYSiguiente(anioOrden, mesOrden0);
+  }
+
+  const dia = fi.getDate();
+  const a = Number(anioOrden) || new Date().getFullYear();
+  const m = Math.min(11, Math.max(0, Math.floor(Number(mesOrden0) || 0)));
+
+  const inicio = new Date(a, m, dia);
+  const fin = new Date(a, m + 1, dia);
+
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
+    return periodoPdfMesOrdenYSiguiente(anioOrden, mesOrden0);
+  }
+
+  const cruzaAnio = inicio.getFullYear() !== fin.getFullYear();
+  const sInicio = formatDiaMesEs(inicio, { conAnio: cruzaAnio });
+  const sFin = formatDiaMesEs(fin, { conAnio: cruzaAnio });
+  return `${sInicio} a ${sFin}`;
 }
 
 /** Monto de línea para PDF: prioriza importe total ya guardado en la orden (detalle). */
@@ -666,9 +715,10 @@ export async function exportarPDFOrden(
         ...lineasTrasPantallasProd,
         paqueteEsPorDias
           ? `Periodo: ${paqueteOriginal}`
-          : `Periodo: ${periodoPdfMesOrdenYSiguiente(
-              orden.año ?? new Date().getFullYear(),
+          : `Periodo: ${periodoPdfPorDiaInicioYMesOrden(
+              venta.fechaInicio,
               orden.mes ?? 0,
+              orden.año ?? new Date().getFullYear(),
             )}`,
       ],
     });
