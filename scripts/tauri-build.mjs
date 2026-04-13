@@ -17,6 +17,27 @@ if (!process.env.CARGO_TARGET_DIR?.trim()) {
   process.env.CARGO_TARGET_DIR = path.join(os.homedir(), ".cargo-target-tgm");
 }
 
+// Crates `windows` / LLVM: en algunas PCs MSVC rustc aborta con 0xc0000409 si el stack del hilo es justo.
+if (os.platform() === "win32" && !process.env.RUST_MIN_STACK?.trim()) {
+  process.env.RUST_MIN_STACK = String(32 * 1024 * 1024);
+}
+
+// rustc puede hacer stack overflow parseando el --check-cfg enorme del crate `windows`; el wrapper lo acorta.
+if (os.platform() === "win32" && !process.env.RUSTC_WRAPPER?.trim()) {
+  const wrap = path.resolve(__dirname, "rustc-wrapper-tauri.cmd");
+  if (fs.existsSync(wrap)) {
+    process.env.RUSTC_WRAPPER = wrap;
+  }
+}
+
+// Menos crates en paralelo = menos pico de RAM (útil si rustc falla con "Allocation failed" / 0xc0000409).
+if (process.env.TGM_LOW_MEM_BUILD === "1" && !process.env.CARGO_BUILD_JOBS?.trim()) {
+  process.env.CARGO_BUILD_JOBS = "1";
+  console.log(
+    "TGM_LOW_MEM_BUILD: CARGO_BUILD_JOBS=1 (compilación más lenta, menos memoria).\n",
+  );
+}
+
 const r = spawnSync("npx", ["tauri", "build"], {
   cwd: root,
   stdio: "inherit",

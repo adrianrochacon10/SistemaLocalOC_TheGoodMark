@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:prepare": "node scripts/prepare-tauri-bundle.mjs",
-    "tauri:build": "node scripts/tauri-build.mjs"
+    "tauri:build": "node scripts/tauri-build.mjs",
+    "tauri:build:lowmem": "node scripts/tauri-build-lowmem.mjs",
+    "build:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1",
+    "build:installer:cmd": "scripts\\build-installer.cmd"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",

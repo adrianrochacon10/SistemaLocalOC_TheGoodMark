@@ -24,3 +24,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-shell = "2"
 
+# Menor pico de RAM / menos trabajo en LLVM que opt-level=3 (ayuda en builds frágiles en Windows).
+[profile.release]
+opt-level = 2
+lto = false
+codegen-units = 8
