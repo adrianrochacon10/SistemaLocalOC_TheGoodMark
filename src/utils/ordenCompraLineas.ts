@@ -4,6 +4,7 @@ import {
   detallePrecioMensual,
   esLineaPrecioProductoEnDetalle,
 } from "./ordenApiMapper";
+import { fechaParaInputDateLocal } from "./formateoFecha";
 import {
   colaboradorUsaCostoComoBaseOrden,
   colaboradorEsTipoPorcentajeOrden,
@@ -372,8 +373,8 @@ export function construirDetalleLineas(
       precio_base_mensual: baseMensual,
       importe: imp,
       vendido_a: v.vendidoA ?? "",
-      fecha_inicio: fi.toISOString().slice(0, 10),
-      fecha_fin: ff.toISOString().slice(0, 10),
+      fecha_inicio: fechaParaInputDateLocal(fi),
+      fecha_fin: fechaParaInputDateLocal(ff),
       meses_renta: mesesRentaDesdeVenta(v),
     });
   }

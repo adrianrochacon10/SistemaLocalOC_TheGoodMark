@@ -191,8 +191,8 @@ function formatDiaMesEs(
 
 /**
  * Periodo mensual en PDF: mismo día del calendario que la fecha de inicio del contrato,
- * aplicado al mes de la orden → mismo día del mes siguiente.
- * Ej.: inicio 10 abr, orden de mayo → "10 de mayo a 10 de junio".
+ * aplicado al mes de la orden; el fin es el día anterior al mismo día del mes siguiente.
+ * Ej.: inicio 10 abr, orden de mayo → "10 de mayo a 9 de junio".
  */
 function periodoPdfPorDiaInicioYMesOrden(
   fechaInicioVenta: Date | string | undefined,
@@ -212,11 +212,17 @@ function periodoPdfPorDiaInicioYMesOrden(
   const m = Math.min(11, Math.max(0, Math.floor(Number(mesOrden0) || 0)));
 
   const inicio = new Date(a, m, dia);
-  const fin = new Date(a, m + 1, dia);
+  const finAnclaMesSiguiente = new Date(a, m + 1, dia);
 
-  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
+  if (
+    Number.isNaN(inicio.getTime()) ||
+    Number.isNaN(finAnclaMesSiguiente.getTime())
+  ) {
     return periodoPdfMesOrdenYSiguiente(anioOrden, mesOrden0);
   }
+
+  const fin = new Date(finAnclaMesSiguiente);
+  fin.setDate(fin.getDate() - 1);
 
   const cruzaAnio = inicio.getFullYear() !== fin.getFullYear();
   const sInicio = formatDiaMesEs(inicio, { conAnio: cruzaAnio });

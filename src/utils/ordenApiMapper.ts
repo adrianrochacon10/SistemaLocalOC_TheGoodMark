@@ -1,4 +1,5 @@
 import type { OrdenDeCompra, RegistroVenta } from "../types";
+import { parseFechaLocalOnly } from "./formateoFecha";
 import {
   parseIndiceGastoAdicionalDesdeNotas,
   utilidadNetaDesdeFilaApi,
@@ -128,25 +129,6 @@ function mesFrontend(mesDb: unknown): number {
   const m = Number(mesDb);
   if (m >= 1 && m <= 12) return m - 1;
   return 0;
-}
-
-/**
- * Convierte strings tipo 'YYYY-MM-DD' a Date local SIN offset de timezone.
- * (new Date('YYYY-MM-DD') se trata como UTC y puede mostrar el día anterior/siguiente)
- */
-function parseFechaLocalOnly(input: unknown): Date {
-  if (input instanceof Date) return input;
-  if (typeof input !== "string") return new Date();
-  const s = input.trim();
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) {
-    const yyyy = Number(m[1]);
-    const mm = Number(m[2]);
-    const dd = Number(m[3]);
-    return new Date(yyyy, mm - 1, dd);
-  }
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
 /**

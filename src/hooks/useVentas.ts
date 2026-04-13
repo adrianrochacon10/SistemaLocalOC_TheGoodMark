@@ -11,6 +11,10 @@ import {
   esLineaPrecioProductoEnDetalle,
 } from "../utils/ordenApiMapper";
 import {
+  fechaParaInputDateLocal,
+  parseFechaLocalOnly,
+} from "../utils/formateoFecha";
+import {
   parseIndiceGastoAdicionalDesdeNotas,
   utilidadNetaDesdeFilaApi,
 } from "../utils/utilidadVenta";
@@ -102,8 +106,8 @@ export function useVentas(profile: any, session: Session | null) {
         : row.fecha_registro
           ? new Date(row.fecha_registro)
           : new Date(),
-      fechaInicio: new Date(row.fecha_inicio),
-      fechaFin: new Date(row.fecha_fin),
+      fechaInicio: parseFechaLocalOnly(row.fecha_inicio),
+      fechaFin: parseFechaLocalOnly(row.fecha_fin),
       mesesRenta: row.duracion_meses ?? row.meses_renta ?? 1,
       duracionUnidad:
         String(row.duracion_unidad ?? "").toLowerCase().trim() === "dias"
@@ -202,8 +206,8 @@ export function useVentas(profile: any, session: Session | null) {
         venta.precioGeneral ?? 0,
       tipo_pago_id: venta.tipoPagoId ?? null,
       estado: estadoApi,
-      fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
-      fecha_fin: venta.fechaFin.toISOString().slice(0, 10),
+      fecha_inicio: fechaParaInputDateLocal(venta.fechaInicio),
+      fecha_fin: fechaParaInputDateLocal(venta.fechaFin),
       duracion_meses: venta.mesesRenta,
       duracion_unidad: venta.duracionUnidad === "dias" ? "dias" : "meses",
       vendido_a: venta.vendidoA,
@@ -277,8 +281,8 @@ export function useVentas(profile: any, session: Session | null) {
       precio_por_mes: venta.precioGeneral ?? 0,
       precio_unitario_manual: venta.precioGeneral ?? 0,
       estado: estadoApi,
-      fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
-      fecha_fin: venta.fechaFin.toISOString().slice(0, 10),
+      fecha_inicio: fechaParaInputDateLocal(venta.fechaInicio),
+      fecha_fin: fechaParaInputDateLocal(venta.fechaFin),
       duracion_meses: venta.mesesRenta,
       duracion_unidad: venta.duracionUnidad === "dias" ? "dias" : "meses",
       vendido_a: venta.vendidoA,

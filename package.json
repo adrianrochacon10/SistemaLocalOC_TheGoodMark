@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:prepare": "node scripts/prepare-tauri-bundle.mjs",
-    "tauri:build": "tauri build"
+    "tauri:build": "node scripts/tauri-build.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",

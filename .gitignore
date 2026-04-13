@@ -9,6 +9,9 @@ lerna-debug.log*
 
 node_modules
 installers
+# Salida de `npm run tauri:build` (la carpeta installer/ sí va al repo; no los binarios)
+installer/*.exe
+installer/*.msi
 dist
 dist-ssr
 *.local

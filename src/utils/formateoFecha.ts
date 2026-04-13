@@ -5,6 +5,25 @@ export const stringAFecha = (fechaString: string): Date => {
   return new Date(año, mes - 1, día);
 };
 
+/**
+ * Fecha de calendario local desde API/BD (`date` como "YYYY-MM-DD").
+ * `new Date("YYYY-MM-DD")` es medianoche UTC y en zonas como México muestra el día anterior.
+ */
+export function parseFechaLocalOnly(input: unknown): Date {
+  if (input instanceof Date) return input;
+  if (typeof input !== "string") return new Date();
+  const s = input.trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    const yyyy = Number(m[1]);
+    const mm = Number(m[2]);
+    const dd = Number(m[3]);
+    return new Date(yyyy, mm - 1, dd);
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
 /** Valor para `<input type="date">` sin desfase UTC (p. ej. 10 feb no debe verse como 9 feb). */
 export function fechaParaInputDateLocal(src: Date | string): string {
   let d: Date;
@@ -56,6 +75,8 @@ export const calcularFechaFin = (fechaInicio: string, mesesRenta: number): strin
   const inicio = stringAFecha(fechaInicio);
   const fin = new Date(inicio);
   fin.setMonth(fin.getMonth() + mesesRenta);
+  // Período inclusive: mismo día del mes N, menos un día (ej. 20 feb → 19 mar en 1 mes).
+  fin.setDate(fin.getDate() - 1);
   return fechaFinAStringLocal(fin);
 };
 
@@ -79,6 +100,7 @@ export const calcularFechaFinDuracion = (
     fin.setDate(fin.getDate() + duracion);
   } else {
     fin.setMonth(fin.getMonth() + duracion);
+    fin.setDate(fin.getDate() - 1);
   }
   return fechaFinAStringLocal(fin);
 };

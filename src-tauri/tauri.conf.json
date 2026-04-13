@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "TheGoodMark",
-  "version": "0.1.1", 
+  "productName": "SL_TheGoodMark",
+  "version": "0.1.2",
   "identifier": "com.sistemalocalOC.TheGoodMark",
   "build": {
     "beforeDevCommand": "node scripts/ensure-backend-sidecar.mjs && npm run dev",
