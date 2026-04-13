@@ -3,6 +3,10 @@ import React from "react";
 import ReactDOM from "react-dom";
 import { RegistroVenta, Colaborador, Pantalla, Usuario } from "../../../types";
 import { inferirDuracionUnidadVenta } from "../../../utils/duracionVenta";
+import {
+  montoSocioPorcentajeColaboradorDesdeVenta,
+  montoSocioPorcentajeEvitandoNetoEmpresa,
+} from "../../../utils/utilidadVenta";
 
 interface Props {
   venta: RegistroVenta;
@@ -89,7 +93,7 @@ export const VentaDetalleModal: React.FC<Props> = ({
                 </span>
               </div>
               <div className="vd-dato">
-                <span className="vd-dato-label">Vendido a</span>
+                <span className="vd-dato-label">Cliente</span>
                 <span className="vd-dato-valor">
                   {venta.vendidoA && venta.vendidoA !== "-"
                     ? venta.vendidoA
@@ -181,12 +185,11 @@ export const VentaDetalleModal: React.FC<Props> = ({
 
                 const importeGuardado = Number(venta.importeTotal ?? 0) || 0;
                 const socioDesdePorcentaje =
-                  pctGuardado != null &&
-                  pctGuardado >= 0 &&
-                  baseSocioSinGastos > 0
-                    ? Math.round(
-                        (baseSocioSinGastos * pctGuardado) / 100 * 100,
-                      ) / 100
+                  pctGuardado != null && pctGuardado >= 0
+                    ? montoSocioPorcentajeColaboradorDesdeVenta(
+                        venta,
+                        pctGuardado,
+                      )
                     : 0;
 
                 const esPorcentaje = colaborador?.tipoComision === "porcentaje";
@@ -194,18 +197,13 @@ export const VentaDetalleModal: React.FC<Props> = ({
                   colaborador?.tipoComision === "consideracion" ||
                   colaborador?.tipoComision === "precio_fijo";
                 let totalMontoSocio = 0;
-                if (esPorcentaje) {
-                  // Si el importe guardado es menor que el bruto, es el monto socio real (líneas producto/pantalla).
-                  if (
-                    importeGuardado > 0 &&
-                    totalBruto > 0 &&
-                    importeGuardado < totalBruto - 0.01
-                  ) {
-                    totalMontoSocio = importeGuardado;
-                  } else if (socioDesdePorcentaje > 0) {
-                    // importeTotal === precioTotal (error) o solo hay %: aplica % sobre el bruto, no el 100 %.
-                    totalMontoSocio = socioDesdePorcentaje;
-                  }
+                if (esPorcentaje && socioDesdePorcentaje > 0) {
+                  totalMontoSocio = montoSocioPorcentajeEvitandoNetoEmpresa(
+                    totalBruto,
+                    importeGuardado,
+                    pctGuardado,
+                    socioDesdePorcentaje,
+                  );
                 }
 
                 const precioNetoPorMesTrasSocio =
@@ -325,7 +323,10 @@ export const VentaDetalleModal: React.FC<Props> = ({
                           </div>
                           {meses > 1 ? (
                             <div className="resumen-fin-row resumen-fin-sub">
-                              <span>↳ Precio por {etiquetaUnidad} con porcentaje</span>
+                              <span>
+                                ↳ Ingreso neto por {etiquetaUnidad} (tras cuota
+                                socio)
+                              </span>
                               <span>{fmt(precioNetoPorMesTrasSocio)}</span>
                             </div>
                           ) : null}

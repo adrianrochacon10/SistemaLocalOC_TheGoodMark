@@ -470,6 +470,7 @@
   font-size: 15px;
 }
 
+.cliente-en-venta,
 .vendido-a {
   margin: 0;
   color: #666;
@@ -1755,6 +1756,11 @@
   color: #0f172a;
 }
 
+.modal-venta-titulo-cliente {
+  font-weight: 600;
+  color: #64748b;
+}
+
 .modal-venta-pantallas {
   font-size: 0.8125rem;
   color: #475569;
@@ -1923,13 +1929,40 @@
 
 .modal-venta-importe {
   flex-shrink: 0;
-  font-weight: 800;
-  font-size: 0.95rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-weight: 700;
+  font-size: 0.875rem;
   color: #1e3a5f;
-  white-space: nowrap;
   align-self: center;
   margin: 0;
   padding: 4px 0;
   cursor: pointer;
   user-select: none;
+  text-align: right;
+  max-width: 160px;
+}
+
+.modal-venta-importe-k {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.modal-venta-importe-v {
+  font-weight: 800;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.modal-venta-importe-sub {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #475569;
+  white-space: normal;
+  line-height: 1.25;
 }

@@ -18,6 +18,7 @@ import configuracionRoutes from "./routes/configuracion.js";
 import asignacionesRoutes from "./routes/asignaciones.js";
 import costosAdministrativosRoutes from "./routes/costosAdministrativos.js";
 import costosCategoriasRoutes from "./routes/costosCategorias.js";
+import clientsRoutes from "./routes/clients.js";
 
 const PORT = Number(process.env.PORT) || 4000;
 const app = express();
@@ -46,9 +47,10 @@ app.use("/api/configuracion", configuracionRoutes);
 app.use("/api/asignaciones", asignacionesRoutes);
 app.use("/api/costos-administrativos", costosAdministrativosRoutes);
 app.use("/api/costos-categorias", costosCategoriasRoutes);
+app.use("/api/clients", clientsRoutes);
 
-const server = app.listen(PORT, () => {
-  console.log("The Good Mark (BACKEND) en http://localhost:" + PORT);
+const server = app.listen(PORT, "127.0.0.1", () => {
+  console.log("The Good Mark (BACKEND) en http://127.0.0.1:" + PORT);
 });
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {

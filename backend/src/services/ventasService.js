@@ -1,7 +1,7 @@
 import { supabase } from "../config/supabase.js";
 
 const SELECT_VENTAS =
-  "*, colaborador:colaboradores(id,nombre,email,telefono,contacto,tipo_pago:tipo_pago(id,nombre),pantalla:pantallas(id,nombre),producto:productos(id,nombre)), tipo_pago(id,nombre), orden:orden_de_compra(id,mes,anio,subtotal,iva,total)";
+  "*, client:clients(id,nombre,telefono,correo), colaborador:colaboradores(id,nombre,email,telefono,contacto,tipo_pago:tipo_pago(id,nombre),pantalla:pantallas(id,nombre),producto:productos(id,nombre)), tipo_pago(id,nombre), orden:orden_de_compra(id,mes,anio,subtotal,iva,total)";
 
 function leerPrecioProducto(producto) {
   const raw =
@@ -11,6 +11,42 @@ function leerPrecioProducto(producto) {
     0;
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
+}
+
+function notasIndicanVentaPorDias(notas) {
+  return /\[UNIDAD\s*:\s*DIAS\]/i.test(String(notas ?? ""));
+}
+
+/**
+ * % del socio: por meses = (precio_por_mes × %) × duración;
+ * por días = % sobre precio_total del período.
+ */
+function montoSocioPorcentajeDesdePrecioMensual({
+  precioPorMes,
+  duracionMeses,
+  precioTotal,
+  porcentajeSocio,
+  notas,
+  duracionUnidad,
+}) {
+  const ps = Number(porcentajeSocio);
+  if (!(Number.isFinite(ps) && ps > 0)) return 0;
+  const pct = Math.min(100, Math.max(0, ps));
+  const pm = Number(precioPorMes) || 0;
+  const n = Math.max(1, Math.floor(Number(duracionMeses) || 1));
+  const pt = Number(precioTotal) || 0;
+  const du = String(duracionUnidad ?? "").toLowerCase();
+  const esDias =
+    notasIndicanVentaPorDias(notas) ||
+    du === "dias" ||
+    du === "días" ||
+    du === "dia" ||
+    du === "día";
+  if (esDias) {
+    return pt > 0 ? Math.round((pt * pct) / 100 * 100) / 100 : 0;
+  }
+  const socioMensual = Math.round((pm * pct) / 100 * 100) / 100;
+  return Math.round(socioMensual * n * 100) / 100;
 }
 
 /** Si la migración `porcentaje_socio` aún no está aplicada en Supabase. */
@@ -69,16 +105,38 @@ export async function crear(body, vendedorId) {
     null;
   const colaboradorId = body.colaborador_id;
   const estadoVenta = body.estado_venta ?? body.estado;
-  const vendidoA =
+  let vendidoA =
     body.vendido_a ??
     body.a_quien ??
     body.a_quein ??
     body.a_quien_se_vendio ??
     null;
 
+  const clientIdRaw = body.client_id ?? body.clientId ?? null;
+  const clientId =
+    clientIdRaw != null && String(clientIdRaw).trim() !== ""
+      ? String(clientIdRaw).trim()
+      : "";
+
+  if (clientId) {
+    const { data: cliRow, error: errCli } = await supabase
+      .from("clients")
+      .select("id,nombre")
+      .eq("id", clientId)
+      .single();
+    if (errCli || !cliRow) return { error: "Cliente no encontrado" };
+    vendidoA = cliRow.nombre;
+  }
+
   if (!colaboradorId) return { error: "Colaborador es obligatorio" };
   if (!vendedorFinal) return { error: "Vendedor es obligatorio" };
   if (!estadoVenta) return { error: "Estado de venta es obligatorio" };
+  if (!String(vendidoA ?? "").trim()) {
+    return {
+      error:
+        "Cliente de la venta obligatorio: envía client_id de un cliente registrado en /api/clients o vendido_a",
+    };
+  }
   if (!body.fecha_inicio || !body.fecha_fin)
     return { error: "Fecha inicio y fin son obligatorias" };
   if (body.duracion_meses == null)
@@ -168,10 +226,16 @@ export async function crear(body, vendedorId) {
   const esTipoPorcentaje = tipoPagoNombre.includes("porcentaje");
   const esTipoCostoFijo =
     tipoPagoNombre.includes("consideracion") || tipoPagoNombre.includes("precio fijo");
-  const montoPorcentajeSobrePrecio =
-    esTipoPorcentaje && Number.isFinite(porcentajeSocio) && porcentajeSocio > 0
-      ? Math.round((precioTotal * porcentajeSocio) / 100 * 100) / 100
-      : 0;
+  const montoPorcentajeSobrePrecio = esTipoPorcentaje
+    ? montoSocioPorcentajeDesdePrecioMensual({
+        precioPorMes,
+        duracionMeses,
+        precioTotal,
+        porcentajeSocio,
+        notas: body.notas,
+        duracionUnidad: body.duracion_unidad,
+      })
+    : 0;
   const consideracionAplicada = esTipoCostoFijo ? consideracionMonto : 0;
   const costoVentaFinal = Math.max(
     0,
@@ -190,6 +254,7 @@ export async function crear(body, vendedorId) {
   const insertPayload = {
     colaborador_id: colaboradorId,
     client_name: colaborador.nombre,
+    client_id: clientId || null,
     vendido_a: vendidoA,
     estado_venta: estadoVenta,
     fecha_inicio: body.fecha_inicio,
@@ -337,6 +402,21 @@ export async function actualizar(id, body) {
       body.a_quein ??
       body.a_quien_se_vendio ??
       null;
+  }
+  if (body.client_id !== undefined || body.clientId !== undefined) {
+    const cid = String(body.client_id ?? body.clientId ?? "").trim();
+    if (!cid) {
+      payload.client_id = null;
+    } else {
+      const { data: cliRow, error: errCli } = await supabase
+        .from("clients")
+        .select("id,nombre")
+        .eq("id", cid)
+        .single();
+      if (errCli || !cliRow) throw new Error("Cliente no encontrado");
+      payload.client_id = cliRow.id;
+      payload.vendido_a = cliRow.nombre;
+    }
   }
   if (body.notas !== undefined) payload.notas = body.notas;
   if (body.fuente_origen !== undefined) payload.fuente_origen = body.fuente_origen;
@@ -500,9 +580,18 @@ export async function actualizar(id, body) {
       Number(payload.costo_venta ?? payload.costos ?? venta.costo_venta ?? venta.costos ?? 0) ||
       0;
     const psFin = Number(payload.porcentaje_socio ?? venta.porcentaje_socio ?? 0) || 0;
+    const notasFin = String(payload.notas ?? venta.notas ?? "");
+    const durUnidadFin =
+      payload.duracion_unidad ?? venta.duracion_unidad ?? body.duracion_unidad ?? "";
     if (esPct) {
-      const m =
-        psFin > 0 ? Math.round(((precioFin * psFin) / 100) * 100) / 100 : 0;
+      const m = montoSocioPorcentajeDesdePrecioMensual({
+        precioPorMes: Number(payload.precio_por_mes ?? venta.precio_por_mes ?? 0) || 0,
+        duracionMeses: Number(payload.duracion_meses ?? venta.duracion_meses ?? 1) || 1,
+        precioTotal: precioFin,
+        porcentajeSocio: psFin,
+        notas: notasFin,
+        duracionUnidad: durUnidadFin,
+      });
       payload.utilidad_neta = Math.max(0, Math.round((precioFin - m) * 100) / 100);
     } else {
       payload.utilidad_neta = Math.max(0, Math.round((precioFin - costoFin) * 100) / 100);
@@ -601,6 +690,7 @@ export async function renovar(id, body) {
   const insertPayload = {
     colaborador_id: venta.colaborador_id,
     client_name: colaborador.nombre,
+    client_id: venta.client_id ?? null,
     vendido_a: venta.vendido_a ?? null, // ✅ hereda el receptor original
     estado_venta: "aceptado",
     fecha_inicio: nuevaInicio,

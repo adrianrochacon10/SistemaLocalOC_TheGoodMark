@@ -63,6 +63,11 @@ export function mapVentaFromApi(row: any): RegistroVenta {
       sinDescuento: false,
     })),
     colaboradorId: row.colaborador_id ?? "",
+    colaboradorAlias: (() => {
+      const emb = row.colaborador;
+      const s = String(emb?.contacto ?? emb?.alias ?? "").trim();
+      return s || undefined;
+    })(),
     productoId: row.producto_id ?? undefined,
     productoIds: Array.isArray(row.producto_ids)
       ? row.producto_ids.map((x: any) => String(x))
@@ -258,10 +263,19 @@ export function mapOrdenFromApi(row: any): OrdenDeCompra {
         mesesRenta: (() => {
           const fromLine = Number(line.meses_renta ?? line.duracion_meses);
           if (Number.isFinite(fromLine) && fromLine > 0) return Math.floor(fromLine);
+          const fromSrc = Number(ventaSrc?.duracion_meses ?? ventaSrc?.meses_renta);
+          if (Number.isFinite(fromSrc) && fromSrc > 0) return Math.floor(fromSrc);
           const n =
             (ff.getFullYear() - fi.getFullYear()) * 12 +
             (ff.getMonth() - fi.getMonth());
           return Math.max(1, n);
+        })(),
+        duracionUnidad: (() => {
+          const u = String(ventaSrc?.duracion_unidad ?? ventaSrc?.duracionUnidad ?? "")
+            .toLowerCase()
+            .trim();
+          if (u.includes("dia")) return "dias" as const;
+          return "meses" as const;
         })(),
         importeTotal: imp,
         activo: true,

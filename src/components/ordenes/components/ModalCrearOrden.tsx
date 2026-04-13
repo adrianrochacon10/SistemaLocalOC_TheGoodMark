@@ -23,7 +23,6 @@ import {
 import {
   ventaIncluidaEnMesOrdenConCorte,
   porcentajeSocioEfectivoVentaEnOrden,
-  importeLineaOrdenTrasPorcentajeSocio,
 } from "../../../utils/ordenUtils";
 import {
   construirDetalleLineas,
@@ -114,18 +113,44 @@ function costoVentaDesgloseParaOrden(v: RegistroVenta): {
   };
 }
 
-function colaboradorMuestraCostoVentaEnOrden(c: Colaborador | undefined): boolean {
-  if (!c) return false;
-  const t = String(c.tipoComision ?? "").toLowerCase();
-  if (t === "precio_fijo" || t === "consideracion") return true;
-  const nombreTp = String(
-    (c as Colaborador & { tipoPagoNombre?: string }).tipoPagoNombre ?? "",
-  ).toLowerCase();
-  return (
-    nombreTp.includes("consider") ||
-    nombreTp.includes("precio fijo") ||
-    nombreTp.includes("precio_fijo")
-  );
+function precioVentaMensualBrutoModal(v: RegistroVenta, porDias: boolean): number {
+  if (porDias) {
+    return Math.max(
+      0,
+      Number(v.precioGeneral ?? v.importeTotal ?? v.precioTotal ?? 0) || 0,
+    );
+  }
+  const pg = Number(v.precioGeneral ?? 0) || 0;
+  if (pg > 0) return pg;
+  const tot = Math.max(0, Number(v.importeTotal ?? v.precioTotal ?? 0) || 0);
+  const meses = Math.max(1, Number(v.mesesRenta ?? 1) || 1);
+  return round2(tot / meses);
+}
+
+/**
+ * Colaborador por %: **cuota del socio** = precio de venta (bruto) × % — lo mismo que PDF/subtotal OC.
+ * No usar (100−%): eso es “lo que queda” del cliente, no la cuota a pagar al colaborador.
+ */
+function cuotaSocioDesdePrecioVentaDesglose(
+  v: RegistroVenta,
+  porDias: boolean,
+  pctSocio: number,
+): { total: number; mensual: number; etiquetaSufijo: string } {
+  const p = Math.min(100, Math.max(0, Number(pctSocio) || 0));
+  const factorPct = p / 100;
+  if (porDias) {
+    const bruto = Math.max(
+      0,
+      Number(v.precioGeneral ?? v.importeTotal ?? v.precioTotal ?? 0) || 0,
+    );
+    const cuota = round2(bruto * factorPct);
+    return { mensual: cuota, total: cuota, etiquetaSufijo: " (período)" };
+  }
+  const meses = Math.max(1, Number(v.mesesRenta ?? 1) || 1);
+  const mensualBruto = precioVentaMensualBrutoModal(v, false);
+  const cuotaMensual = round2(mensualBruto * factorPct);
+  const totalCuotaContrato = round2(cuotaMensual * meses);
+  return { mensual: cuotaMensual, total: totalCuotaContrato, etiquetaSufijo: "/mes" };
 }
 
 function idsProductosVenta(v: RegistroVenta): string[] {
@@ -327,16 +352,15 @@ export const ModalCrearOrden: React.FC<Props> = ({
   useEffect(() => {
     const todas = new Set(ventasDelMes.map((v) => String(v.id)));
     const porVenta: Record<string, string[]> = {};
+    const porProd: Record<string, string[]> = {};
     for (const v of ventasDelMes) {
-      porVenta[String(v.id)] = [...new Set(v.pantallasIds ?? [])];
+      const id = String(v.id);
+      porVenta[id] = [...new Set(v.pantallasIds ?? [])];
+      porProd[id] = idsProductosVenta(v);
     }
     setVentasSeleccionadas(todas);
     setPantallasSeleccionadasPorVenta(porVenta);
-  }, [colaboradorId, mes, año, ventaIdsKey]);
-
-  // Productos en orden: el usuario elige cuáles (por venta). No auto-marcar.
-  useEffect(() => {
-    setProductosIncluidosPorVenta({});
+    setProductosIncluidosPorVenta(porProd);
   }, [colaboradorId, mes, año, ventaIdsKey]);
 
   const toggleVenta = useCallback((ventaId: string) => {
@@ -360,6 +384,10 @@ export const ModalCrearOrden: React.FC<Props> = ({
         setPantallasSeleccionadasPorVenta((prevSel) => ({
           ...prevSel,
           [ventaId]: pids,
+        }));
+        setProductosIncluidosPorVenta((prevProd) => ({
+          ...prevProd,
+          [ventaId]: venta ? idsProductosVenta(venta) : [],
         }));
       }
       return next;
@@ -417,16 +445,18 @@ export const ModalCrearOrden: React.FC<Props> = ({
     [pantallasSeleccionadasPorVenta],
   );
 
-  const marcarTodasVentas = () =>
-    {
-      setVentasSeleccionadas(new Set(ventasDelMes.map((v) => String(v.id))));
-      const porVenta: Record<string, string[]> = {};
-      for (const v of ventasDelMes) {
-        const id = String(v.id);
-        porVenta[id] = [...new Set(v.pantallasIds ?? [])];
-      }
-      setPantallasSeleccionadasPorVenta(porVenta);
-    };
+  const marcarTodasVentas = () => {
+    setVentasSeleccionadas(new Set(ventasDelMes.map((v) => String(v.id))));
+    const porVenta: Record<string, string[]> = {};
+    const porProd: Record<string, string[]> = {};
+    for (const v of ventasDelMes) {
+      const id = String(v.id);
+      porVenta[id] = [...new Set(v.pantallasIds ?? [])];
+      porProd[id] = idsProductosVenta(v);
+    }
+    setPantallasSeleccionadasPorVenta(porVenta);
+    setProductosIncluidosPorVenta(porProd);
+  };
   const quitarTodasVentas = () => {
     setVentasSeleccionadas(new Set());
     setProductosIncluidosPorVenta({});
@@ -774,23 +804,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
                       const porDias = esVentaPorDiasModal(v);
                       const checked = ventasSeleccionadas.has(id);
                       const pids = [...new Set(v.pantallasIds ?? [])];
-                      const va =
-                        ventasAjustadasParaOrden.find((x) => String(x.id) === id) ??
-                        v;
-                      const importeLineaBruto = detalleLineas
-                        .filter((l) => String(l.venta_id) === id)
-                        .reduce((s, l) => s + l.importe, 0);
-                      const importeLinea = esColaboradorPorcentaje
-                        ? importeLineaOrdenTrasPorcentajeSocio(
-                            importeLineaBruto,
-                            va,
-                            colaboradorSeleccionado?.tipoComision,
-                            typeof colaboradorSeleccionado?.porcentajeSocio === "number"
-                              ? colaboradorSeleccionado.porcentajeSocio
-                              : null,
-                            colaboradorSeleccionado?.tipoPagoNombre,
-                          )
-                        : importeLineaBruto;
                       const productoTxt = (v.productoNombre ?? "").trim();
                       const productoIdsVenta = idsProductosVenta(v);
                       const tieneProducto =
@@ -814,6 +827,31 @@ export const ModalCrearOrden: React.FC<Props> = ({
                         incluirPctPdf ? " + % socio (PDF)" : ""
                       }`;
                       const mainChkId = `modal-venta-main-${id}`;
+                      const costoDesgloseVenta = costoVentaDesgloseParaOrden(v);
+                      const pctSocioVenta = porcentajeSocioEfectivoVentaEnOrden(
+                        v,
+                        typeof colaboradorSeleccionado?.porcentajeSocio ===
+                          "number"
+                          ? colaboradorSeleccionado.porcentajeSocio
+                          : null,
+                      );
+                      const cuotaSocioDesglose =
+                        esColaboradorPorcentaje && pctSocioVenta > 0
+                          ? cuotaSocioDesdePrecioVentaDesglose(
+                              v,
+                              porDias,
+                              pctSocioVenta,
+                            )
+                          : null;
+                      const columnaReferenciaVenta =
+                        cuotaSocioDesglose ?? costoDesgloseVenta;
+                      const etiquetaColumnaReferencia = esColaboradorPorcentaje
+                        ? "Cuota del socio (precio venta × %)"
+                        : "Costo de la venta";
+                      const mesesContratoVenta = Math.max(
+                        1,
+                        Number(v.mesesRenta ?? 1) || 1,
+                      );
                       return (
                         <li key={id}>
                           <div className="modal-venta-fila">
@@ -826,6 +864,7 @@ export const ModalCrearOrden: React.FC<Props> = ({
                             <div className="modal-venta-fila-body">
                               <label htmlFor={mainChkId} className="modal-venta-fila-select">
                                 <span className="modal-venta-titulo">
+                                  <span className="modal-venta-titulo-cliente">Cliente:</span>{" "}
                                   {v.vendidoA || "—"}
                                 </span>
                                 <div className="modal-venta-meta">
@@ -876,12 +915,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                           <span className="modal-venta-check-label">
                                             {nombreProd}
                                           </span>
-                                          <span className="modal-venta-check-precio">
-                                            ${fmtMoney(
-                                              precioMensualProductoDesdeDetalle(v, pid),
-                                            )}
-                                            {porDias ? "/día" : "/mes"}
-                                          </span>
                                         </label>
                                       );
                                     })}
@@ -905,14 +938,6 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                         pantallas.find((p) => String(p.id) === String(pid))
                                           ?.nombre ||
                                         "Pantalla";
-                                      const precioSnap = detallePrecioMensual(snap);
-                                      const precioCat =
-                                        Number(
-                                          pantallas.find((p) => String(p.id) === String(pid))
-                                            ?.precio ?? 0,
-                                        ) || 0;
-                                      const precioUnit =
-                                        precioSnap > 0 ? precioSnap : precioCat;
                                       const subId = `modal-venta-p-${id}-${pid}`;
                                       return (
                                         <label key={`${id}-${pid}`} className="modal-venta-check-row">
@@ -923,50 +948,12 @@ export const ModalCrearOrden: React.FC<Props> = ({
                                             onChange={() => togglePantallaEnVenta(id, pid)}
                                           />
                                           <span className="modal-venta-check-label">{nombre}</span>
-                                          <span className="modal-venta-check-precio">
-                                            ${fmtMoney(precioUnit)}{porDias ? "/día" : "/mes"}
-                                          </span>
                                         </label>
                                       );
                                     })}
                                   </div>
                                 </div>
                               ) : null}
-                              {colaboradorMuestraCostoVentaEnOrden(
-                                colaboradorSeleccionado,
-                              ) ? (() => {
-                                const { total, mensual } = costoVentaDesgloseParaOrden(v);
-                                const mesesContrato = Math.max(
-                                  1,
-                                  Number(v.mesesRenta ?? 1) || 1,
-                                );
-                                return (
-                                  <div className="modal-venta-section modal-venta-section--costo-venta">
-                                    <div
-                                      className="modal-venta-checklist"
-                                      role="group"
-                                      aria-label="Costo de la venta"
-                                    >
-                                      <div className="modal-venta-check-row modal-venta-costo-venta-row">
-                                        <span className="modal-venta-check-label">
-                                          Costo de la venta
-                                        </span>
-                                        <span className="modal-venta-check-precio">
-                                          $
-                                          {fmtMoney(mensual)}
-                                          {porDias ? " por día" : " por mes"}
-                                        </span>
-                                      </div>
-                                      {mesesContrato > 1 ? (
-                                        <div className="modal-venta-costo-venta-total">
-                                          {porDias ? "Total período: " : "Total contrato: "}
-                                          <strong>${fmtMoney(total)}</strong>
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                );
-                              })() : null}
                       {esColaboradorPorcentaje ? (
                                 <div className="modal-venta-section modal-venta-section--gastos-last">
                                   <div className="modal-venta-section-title">
@@ -992,10 +979,49 @@ export const ModalCrearOrden: React.FC<Props> = ({
                               ) : null}
                             </div>
                             <label htmlFor={mainChkId} className="modal-venta-importe">
-                              $
-                              {(checked ? importeLinea : 0).toLocaleString("es-MX", {
-                                minimumFractionDigits: 2,
-                              })}
+                              <span className="modal-venta-importe-k">
+                                {etiquetaColumnaReferencia}
+                              </span>
+                              {columnaReferenciaVenta.total > 0 ? (
+                                <>
+                                  <span className="modal-venta-importe-v">
+                                    $
+                                    {fmtMoney(
+                                      checked ? columnaReferenciaVenta.mensual : 0,
+                                    )}
+                                    {esColaboradorPorcentaje && cuotaSocioDesglose
+                                      ? porDias
+                                        ? " (período)"
+                                        : " /mes"
+                                      : porDias
+                                        ? " /día"
+                                        : " /mes"}
+                                  </span>
+                                  {!porDias && mesesContratoVenta > 1 ? (
+                                    <span className="modal-venta-importe-sub">
+                                      {esColaboradorPorcentaje
+                                        ? "Total cuota del contrato:"
+                                        : "Total contrato:"}{" "}
+                                      <strong>
+                                        $
+                                        {fmtMoney(columnaReferenciaVenta.total)}
+                                      </strong>
+                                    </span>
+                                  ) : porDias ? (
+                                    <span className="modal-venta-importe-sub">
+                                      {esColaboradorPorcentaje
+                                        ? "Total cuota del período:"
+                                        : "Total período:"}{" "}
+                                      <strong>
+                                        $
+                                        {fmtMoney(columnaReferenciaVenta.total)}
+                                      </strong>
+                                    </span>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <span className="modal-venta-importe-v">—</span>
+                              )}
                             </label>
                           </div>
                         </li>

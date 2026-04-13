@@ -70,31 +70,44 @@ export function useDashboardData() {
     cargar();
   }, [profile, session?.access_token]);
 
-  // Healthcheck BD
+  // Healthcheck BD (sin auth: no depende de Supabase; reintentos por arranque lento del sidecar en Tauri)
   useEffect(() => {
     if (!profile) return;
     let cancelado = false;
 
+    const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
     const probarConexion = async () => {
       setEstadoBD("checking");
       setMensajeBD(null);
-      try {
-        await backendApi.get("/api/health");
-        if (!cancelado) {
-          setEstadoBD("ok");
-          setMensajeBD(null);
+      const intentos = 35;
+      const pausaMs = 400;
+      let ultimo: string | null = null;
+
+      for (let i = 0; i < intentos; i++) {
+        if (cancelado) return;
+        try {
+          await backendApi.get("/api/health", { skipAuth: true });
+          if (!cancelado) {
+            setEstadoBD("ok");
+            setMensajeBD(null);
+          }
+          return;
+        } catch (e) {
+          ultimo =
+            e instanceof Error ? e.message : "Error desconocido de conexión";
+          if (!cancelado) setMensajeBD(ultimo);
+          if (i < intentos - 1) await esperar(pausaMs);
         }
-      } catch (e) {
-        if (!cancelado) {
-          setEstadoBD("error");
-          setMensajeBD(
-            e instanceof Error ? e.message : "Error desconocido de conexión",
-          );
-        }
+      }
+
+      if (!cancelado) {
+        setEstadoBD("error");
+        setMensajeBD(ultimo);
       }
     };
 
-    probarConexion();
+    void probarConexion();
     return () => {
       cancelado = true;
     };
@@ -107,6 +120,8 @@ export function useDashboardData() {
   return {
     auth: { profile, loading, authError, signIn, signOut },
     estadoBD,
+    /** URL base del API Express (healthcheck); no es Supabase directo. */
+    apiBaseUrl: backendApi.BACKEND_URL,
     mensajeBD,
     errorVenta: ventas.errorVenta,
     datos: {

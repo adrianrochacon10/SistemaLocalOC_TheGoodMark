@@ -5,6 +5,31 @@ export const stringAFecha = (fechaString: string): Date => {
   return new Date(año, mes - 1, día);
 };
 
+/** Valor para `<input type="date">` sin desfase UTC (p. ej. 10 feb no debe verse como 9 feb). */
+export function fechaParaInputDateLocal(src: Date | string): string {
+  let d: Date;
+  if (typeof src === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(src.trim())) {
+      return src.trim();
+    }
+    d = new Date(src);
+  } else {
+    d = src;
+  }
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function fechaFinAStringLocal(fin: Date): string {
+  const y = fin.getFullYear();
+  const m = String(fin.getMonth() + 1).padStart(2, "0");
+  const day = String(fin.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export const formatearFecha = (fecha: Date | string): string => {
   if (!fecha) return "-";
   let d: Date;
@@ -31,7 +56,7 @@ export const calcularFechaFin = (fechaInicio: string, mesesRenta: number): strin
   const inicio = stringAFecha(fechaInicio);
   const fin = new Date(inicio);
   fin.setMonth(fin.getMonth() + mesesRenta);
-  return fin.toISOString().split("T")[0];
+  return fechaFinAStringLocal(fin);
 };
 
 /** Días calendario entre inicio y fin (excluye el día final tipo “checkout” si coincide con calcularFechaFinDuracion en días). */
@@ -55,5 +80,5 @@ export const calcularFechaFinDuracion = (
   } else {
     fin.setMonth(fin.getMonth() + duracion);
   }
-  return fin.toISOString().split("T")[0];
+  return fechaFinAStringLocal(fin);
 };

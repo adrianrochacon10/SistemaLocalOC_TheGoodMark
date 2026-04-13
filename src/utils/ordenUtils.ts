@@ -294,8 +294,14 @@ export function costoLineaOrdenConsideracionPrecioFijo(
 }
 
 /**
- * Importe de línea en OC/PDF: **mes de la orden** (prorrateo por días en ese mes).
- * Si el registro trae un importe menor (subselección de pantallas/producto en detalle), se respeta.
+ * Precio de venta **bruto** (mensual / prorrateado a la OC) para aplicar % o costo.
+ *
+ * - Si `precioTotalContrato` es mayor que el importe de la línea → hay contrato total y la línea
+ *   puede ser la cuota mensual o una subselección (pantallas/producto).
+ * - Si no hay contrato “mayor” que la línea, **no** se usa `precioTotal` como contrato (en filas
+ *   desde `detalle_lineas` suelen repetir la misma cuota); se respeta `importeTotal` tal cual.
+ * - Si importe = contrato total guardado en BD (misma cifra), se deriva la mensualidad con
+ *   `importeVentaEnMesOrden` (÷ meses o regla por días).
  */
 export function importeLineaRespectoOrden(
   v: RegistroVenta,
@@ -304,15 +310,10 @@ export function importeLineaRespectoOrden(
 ): number {
   const mes0 = orden.mes ?? 0;
   const año = orden.año ?? new Date().getFullYear();
-  const contrato = round2Orden(
-    Number(v.precioTotalContrato ?? 0) > 0
-      ? Number(v.precioTotalContrato)
-      : Number(v.precioTotal ?? v.importeTotal ?? 0) || 0,
-  );
   const imp = round2Orden(Number(v.importeTotal ?? v.precioTotal ?? 0) || 0);
-  const sub = round2Orden(Number(orden.subtotal ?? 0) || 0);
+  const contrato = round2Orden(Number(v.precioTotalContrato ?? 0) || 0);
 
-  if (contrato > 0) {
+  if (contrato > imp + EPS_IMP_ORDEN) {
     const mesCompleto = importeVentaEnMesOrden(v, mes0, año, contrato);
     if (Math.abs(imp - mesCompleto) < EPS_IMP_ORDEN) {
       return mesCompleto;
@@ -326,41 +327,23 @@ export function importeLineaRespectoOrden(
     return mesCompleto;
   }
 
-  if (_numLineas === 1 && sub > 0) return sub;
+  if (contrato > 0 && Math.abs(contrato - imp) < EPS_IMP_ORDEN) {
+    return importeVentaEnMesOrden(v, mes0, año, contrato);
+  }
+
   if (imp > 0) return imp;
   return importeVentaEnMesOrden(v, mes0, año, undefined);
 }
 
 /**
- * Consideración / precio fijo: OC sobre costo de venta.
- * Por porcentaje: sobre precio de venta (neto tras %).
- * Si `tipoComision` no viene, se infiere por nombre de `tipo_pago` (como en backend).
+ * Subtotal de OC: **precio de venta** solo si el colaborador es por **porcentaje**;
+ * en cualquier otro caso (precio fijo, consideración, etc.) la base es el **costo de la venta**.
  */
 export function colaboradorUsaCostoComoBaseOrden(
   tipoComision?: string,
   tipoPagoNombre?: string,
 ): boolean {
-  const t = String(tipoComision ?? "").toLowerCase();
-  if (t === "porcentaje") return false;
-  if (t === "consideracion" || t === "precio_fijo") return true;
-  const nom = String(tipoPagoNombre ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-  if (!nom) return false;
-  if (nom.includes("porcentaje")) return false;
-  if (
-    nom.includes("consideracion") ||
-    nom.includes("consideración")
-  )
-    return true;
-  if (
-    nom.includes("precio fijo") ||
-    nom.includes("precio_fijo") ||
-    nom.includes("pago fijo")
-  )
-    return true;
-  return false;
+  return !colaboradorEsTipoPorcentajeOrden(tipoComision, tipoPagoNombre);
 }
 
 function normalizarTextoComision(s: unknown): string {

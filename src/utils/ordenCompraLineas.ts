@@ -83,6 +83,12 @@ export type DetalleLineaOrden = {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+function ventaTieneProductoEnContrato(v: RegistroVenta): boolean {
+  if (Array.isArray(v.productoIds) && v.productoIds.length > 0) return true;
+  if (v.productoId) return true;
+  return false;
+}
+
 function esVentaPorDiasOrden(v: RegistroVenta): boolean {
   const unidad = String((v as { duracionUnidad?: string }).duracionUnidad ?? "")
     .toLowerCase()
@@ -141,14 +147,14 @@ export type PartesImporteOrden = {
 
 /**
  * Reparte el **importe total de la venta** (precioTotal / importeTotal del contrato) según lo
- * seleccionado: suma de precios de pantallas + producto como pesos.
- * No usa solo precios “por mes” aislados: el total del contrato es la base y los pesos salen
- * del desglose (pantallas + producto).
+ * seleccionado. Si hay pesos monetarios en el detalle guardado (ventas antiguas), usa proporción;
+ * si no, reparte en partes iguales entre pantallas del contrato y producto (si aplica).
+ * No usa el precio de catálogo de pantallas.
  */
 export function partesImporteOrdenVenta(
   venta: RegistroVenta,
   pantallasSeleccionadas: string[],
-  precios: Map<string, number>,
+  _precios: Map<string, number>,
 ): PartesImporteOrden {
   const ids = [...new Set((venta.pantallasIds ?? []).map(String))];
   const sel = [
@@ -173,10 +179,6 @@ export function partesImporteOrdenVenta(
     0,
     Number(venta.importeTotal ?? venta.precioTotal ?? 0) || 0,
   );
-  const precioPantallasMensualStore = Math.max(
-    0,
-    Number(venta.precioPantallasMensual ?? 0) || 0,
-  );
 
   const ventaDetalle = Array.isArray(venta.pantallasDetalle)
     ? venta.pantallasDetalle.filter(
@@ -191,30 +193,16 @@ export function partesImporteOrdenVenta(
       detallePrecioMensual(d),
     ]),
   );
+  /** Solo snapshot guardado en la venta; no se usa precio de catálogo de pantalla. */
   const precioPantalla = (id: string): number => {
     const key = String(id);
     const snap = preciosVenta.get(key);
     if (snap != null && snap > 0) return snap;
-    return precios.get(key) ?? 0;
+    return 0;
   };
 
-  let sumAllPant = ids.reduce((s, id) => s + precioPantalla(id), 0);
-  if (sumAllPant <= 0 && precioPantallasMensualStore > 0) {
-    sumAllPant = precioPantallasMensualStore;
-  }
-
-  let sumSel = sel.reduce((s, id) => s + precioPantalla(id), 0);
-  if (sumSel <= 0 && sel.length > 0 && sumAllPant > 0 && ids.length > 0) {
-    sumSel = (sel.length / ids.length) * sumAllPant;
-  }
-  if (
-    sel.length === ids.length &&
-    ids.length > 0 &&
-    sumSel <= 0 &&
-    sumAllPant > 0
-  ) {
-    sumSel = sumAllPant;
-  }
+  const sumAllPant = ids.reduce((s, id) => s + precioPantalla(id), 0);
+  const sumSel = sel.reduce((s, id) => s + precioPantalla(id), 0);
 
   const denom = sumAllPant + precioProductoContrato;
   const mesesContrato = mesesRentaDesdeVenta(venta);
@@ -243,6 +231,12 @@ export function partesImporteOrdenVenta(
     };
   }
 
+  const hasProdContrato = ventaTieneProductoEnContrato(venta);
+  const denomUnidades =
+    ids.length + (hasProdContrato ? 1 : 0);
+  const numUnidades =
+    sel.length + (productoIncluido && hasProdContrato ? 1 : 0);
+
   const num =
     sumSel +
     (productoIncluido ? precioProductoSeleccion : 0);
@@ -250,18 +244,26 @@ export function partesImporteOrdenVenta(
   let importe: number;
   let productoPart: number;
 
-  if (denom <= 0) {
-    importe = round2(num);
-    productoPart = productoIncluido ? precioProductoSeleccion : 0;
-  } else if (T <= 0) {
-    importe = round2(num);
-    productoPart = productoIncluido ? precioProductoSeleccion : 0;
-  } else {
-    importe = round2(T * (num / denom));
+  if (denom > 0) {
+    if (T <= 0) {
+      importe = round2(num);
+      productoPart = productoIncluido ? precioProductoSeleccion : 0;
+    } else {
+      importe = round2(T * (num / denom));
+      productoPart =
+        productoIncluido && precioProductoSeleccion > 0
+          ? round2(T * (precioProductoSeleccion / denom))
+          : 0;
+    }
+  } else if (denomUnidades > 0 && T > 0) {
+    importe = round2(T * (numUnidades / denomUnidades));
     productoPart =
-      productoIncluido && precioProductoSeleccion > 0
-        ? round2(T * (precioProductoSeleccion / denom))
+      productoIncluido && hasProdContrato
+        ? round2(T * (1 / denomUnidades))
         : 0;
+  } else {
+    importe = round2(num);
+    productoPart = productoIncluido ? precioProductoSeleccion : 0;
   }
 
   const basePantallasPart = round2(importe - productoPart);
@@ -278,9 +280,9 @@ export function partesImporteOrdenVenta(
 export function importeVentaSeleccion(
   venta: RegistroVenta,
   pantallasSeleccionadas: string[],
-  precios: Map<string, number>,
+  _precios: Map<string, number>,
 ): number {
-  return partesImporteOrdenVenta(venta, pantallasSeleccionadas, precios).importe;
+  return partesImporteOrdenVenta(venta, pantallasSeleccionadas, _precios).importe;
 }
 
 export function nombresPantallas(
@@ -326,33 +328,19 @@ export function construirDetalleLineas(
     } else {
       imp = round2(imp);
     }
-    const productoMensual = Number(v.productoPrecioMensual ?? 0) || 0;
     const baseMensual = Math.max(0, partes.basePantallasPart);
     const fi = new Date(v.fechaInicio);
     const ff = new Date(v.fechaFin);
-    const pantallasDetalleVenta = Array.isArray(v.pantallasDetalle)
-      ? v.pantallasDetalle.filter(
-          (d) =>
-            detallePantallaId(d) !== "__producto_total__" &&
-            !esLineaPrecioProductoEnDetalle(detallePantallaId(d)),
-        )
-      : [];
     const detallePantallasSeleccionadas = sel.map((pid) => {
-      const snap = pantallasDetalleVenta.find(
-        (p) => detallePantallaId(p) === String(pid),
-      );
       const nombre = nombrePantallaDesdeVentaYCatalogo(
         String(pid),
         pantallas,
         v.pantallasDetalle,
       );
-      const precioSnap = detallePrecioMensual(snap);
-      const precioCat = precios.get(String(pid)) ?? 0;
-      const precio = precioSnap > 0 ? precioSnap : precioCat;
       return {
         pantalla_id: String(pid),
         nombre,
-        precio_mensual: precio,
+        precio_mensual: 0,
       };
     });
     const pctSnap =
@@ -373,7 +361,7 @@ export function construirDetalleLineas(
       nombres_pantallas: nombresPantallas(sel, pantallas, v),
       pantallas_detalle: detallePantallasSeleccionadas,
       producto_nombre: v.productoNombre ?? undefined,
-      producto_precio_mensual: productoMensual,
+      producto_precio_mensual: 0,
       producto_incluido: productoIncluido,
       ...(typeof v.aplicarPorcentajeSocioEnOrden === "boolean"
         ? { aplicar_porcentaje_socio: v.aplicarPorcentajeSocioEnOrden }

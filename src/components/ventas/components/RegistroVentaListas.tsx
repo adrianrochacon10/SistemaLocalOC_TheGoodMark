@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { registroSolapaMesCalendario } from "../../../utils/ordenUtils";
 import {
   RegistroVenta,
   Pantalla,
@@ -7,7 +6,9 @@ import {
   Colaborador,
   Usuario,
 } from "../../../types";
-import { FiltrosVentas } from "./filtrosVentas";
+import { backendApi } from "../../../lib/backendApi";
+import { ventaSolapaMesCalendario } from "../../../utils/ventaFiltroPeriodo";
+import { FiltrosVentas, type FilaClienteCompradorFiltro } from "./filtrosVentas";
 import { EstadisticasVentas } from "./EstadisticasVenta";
 import { VentaCard } from "./VentaCard";
 import { VentaDetalleModal } from "./VentaDetalleModal";
@@ -53,11 +54,14 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
   onNuevaVenta,
   onEditarVenta,
 }) => {
-  const hoy = new Date();
-
   const [busquedaVenta, setBusquedaVenta] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<string>("Todos");
   const [filtroCliente, setFiltroCliente] = useState<string>("Todos");
+  const [filtroCompradorCliente, setFiltroCompradorCliente] =
+    useState<string>("Todos");
+  const [catalogoClientesComprador, setCatalogoClientesComprador] = useState<
+    FilaClienteCompradorFiltro[]
+  >([]);
   const [filtroVendedor, setFiltroVendedor] = useState<string>("Todos");
   const [filtroMes, setFiltroMes] = useState<number>(-1);
   const [filtroAnio, setFiltroAnio] = useState<number>(-1);
@@ -66,12 +70,42 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
 
   const ventasPorPagina = 20;
 
+  useEffect(() => {
+    let cancel = false;
+    void (async () => {
+      try {
+        const rows = (await backendApi.get("/api/clients")) as {
+          id: string;
+          nombre: string;
+        }[];
+        if (cancel || !Array.isArray(rows)) return;
+        setCatalogoClientesComprador(
+          rows.map((r) => ({ id: String(r.id), nombre: String(r.nombre ?? "") })),
+        );
+      } catch {
+        if (!cancel) setCatalogoClientesComprador([]);
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, []);
+
   const aniosDisponibles = useMemo(() => {
-    const set = new Set(
-      ventasRegistradas.map((v) => new Date(v.fechaInicio).getFullYear()),
-    );
+    const set = new Set<number>();
+    for (const v of ventasRegistradas) {
+      const fi = new Date(v.fechaInicio);
+      const ff = new Date(v.fechaFin);
+      if (Number.isNaN(fi.getTime()) || Number.isNaN(ff.getTime())) continue;
+      const y1 = fi.getFullYear();
+      const y2 = ff.getFullYear();
+      const a = Math.min(y1, y2);
+      const b = Math.max(y1, y2);
+      for (let y = a; y <= b; y += 1) set.add(y);
+    }
     const arr = Array.from(set).sort((a, b) => b - a);
-    if (!arr.includes(hoy.getFullYear())) arr.unshift(hoy.getFullYear());
+    const yNow = new Date().getFullYear();
+    if (!arr.includes(yNow)) arr.unshift(yNow);
     return arr;
   }, [ventasRegistradas]);
 
@@ -81,63 +115,51 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
         (c) => c.id === venta.colaboradorId,
       );
 
-      // Búsqueda por nombre colaborador o vendidoA
+      const q = busquedaVenta.trim().toLowerCase();
       const vendido = (venta.vendidoA ?? "").toLowerCase();
+      const nombreColab = (colaborador?.nombre ?? "").toLowerCase();
+      const aliasTexto = String(
+        colaborador?.alias ?? venta.colaboradorAlias ?? "",
+      ).toLowerCase();
       const coincideBusqueda =
-        busquedaVenta === "" ||
-        (colaborador?.nombre ?? "")
-          .toLowerCase()
-          .includes(busquedaVenta.toLowerCase()) ||
-        vendido.includes(busquedaVenta.toLowerCase());
+        q === "" ||
+        nombreColab.includes(q) ||
+        aliasTexto.includes(q) ||
+        vendido.includes(q);
 
       // Filtro por estado
       const coincideEstado =
         filtroEstado === "Todos" ||
         (venta.estadoVenta ?? "Prospecto") === filtroEstado;
 
-      // Filtro por colaborador/cliente
-      const coincideCliente =
+      const coincideColaborador =
         filtroCliente === "Todos" || venta.colaboradorId === filtroCliente;
+
+      const cid = String(venta.clientId ?? "").trim();
+      const sinCatalogo = !cid;
+      const coincideCompradorFiltro =
+        filtroCompradorCliente === "Todos" ||
+        (filtroCompradorCliente === "__legacy__" && sinCatalogo) ||
+        (filtroCompradorCliente !== "__legacy__" &&
+          filtroCompradorCliente !== "Todos" &&
+          cid === filtroCompradorCliente);
 
       const coincideVendedor =
         filtroVendedor === "Todos" ||
         String(venta.vendedorId ?? "") === String(filtroVendedor);
 
-      // Filtro por mes/año: contrato que **cruza** el periodo (fecha inicio–fin), no solo mesesRenta contados desde inicio
-      let coincideMesAnio = true;
-      if (filtroMes >= 0 || filtroAnio >= 0) {
-        const fi = new Date(venta.fechaInicio);
-        const ff = new Date(venta.fechaFin);
-        if (filtroMes >= 0 && filtroAnio >= 0) {
-          coincideMesAnio = registroSolapaMesCalendario(
-            fi,
-            ff,
-            filtroMes,
-            filtroAnio,
-          );
-        } else if (filtroMes >= 0 && filtroAnio < 0) {
-          coincideMesAnio = false;
-          for (let y = fi.getFullYear(); y <= ff.getFullYear(); y++) {
-            if (registroSolapaMesCalendario(fi, ff, filtroMes, y)) {
-              coincideMesAnio = true;
-              break;
-            }
-          }
-        } else if (filtroAnio >= 0 && filtroMes < 0) {
-          coincideMesAnio = false;
-          for (let m = 0; m < 12; m++) {
-            if (registroSolapaMesCalendario(fi, ff, m, filtroAnio)) {
-              coincideMesAnio = true;
-              break;
-            }
-          }
-        }
-      }
+      const coincideMesAnio = ventaSolapaMesCalendario(
+        venta.fechaInicio,
+        venta.fechaFin,
+        filtroMes,
+        filtroAnio,
+      );
 
       return (
         coincideBusqueda &&
         coincideEstado &&
-        coincideCliente &&
+        coincideColaborador &&
+        coincideCompradorFiltro &&
         coincideVendedor &&
         coincideMesAnio
       );
@@ -147,6 +169,7 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
     busquedaVenta,
     filtroEstado,
     filtroCliente,
+    filtroCompradorCliente,
     filtroMes,
     filtroAnio,
     filtroVendedor,
@@ -171,11 +194,13 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
         busquedaVenta={busquedaVenta}
         filtroEstado={filtroEstado}
         filtroCliente={filtroCliente}
+        filtroCompradorCliente={filtroCompradorCliente}
         filtroVendedor={filtroVendedor}
         filtroMes={filtroMes}
         filtroAnio={filtroAnio}
         aniosDisponibles={aniosDisponibles}
         colaboradores={colaboradores}
+        catalogoClientesComprador={catalogoClientesComprador}
         usuarios={usuarios}
         asignaciones={asignaciones}
         onBusqueda={(v) => {
@@ -188,6 +213,10 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
         }}
         onFiltroCliente={(v) => {
           setFiltroCliente(v);
+          resetPagina();
+        }}
+        onFiltroCompradorCliente={(v) => {
+          setFiltroCompradorCliente(v);
           resetPagina();
         }}
         onFiltroVendedor={(v) => {
@@ -210,10 +239,10 @@ export const RegistroVentasLista: React.FC<RegistroVentasListaProps> = ({
         {filtroMes < 0 && filtroAnio < 0
           ? "Todas las ventas"
           : filtroMes < 0
-            ? `Ventas de ${filtroAnio}`
+            ? `Ventas con contrato en ${filtroAnio}`
             : filtroAnio < 0
-              ? `Ventas de ${MESES[filtroMes]} (todos los años)`
-              : `Registros de ${MESES[filtroMes]} de ${filtroAnio}`}
+              ? `Ventas que pasan por ${MESES[filtroMes]} (cualquier año)`
+              : `Ventas que pasan por ${MESES[filtroMes]} de ${filtroAnio}`}
       </h2>
 
       {esAdmin ? (

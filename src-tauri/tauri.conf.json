@@ -1,20 +1,21 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "registro_oc",
+  "productName": "TheGoodMark",
   "version": "0.1.1", 
   "identifier": "com.sistemalocalOC.TheGoodMark",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "node scripts/ensure-backend-sidecar.mjs && npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build && npm run tauri:prepare",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "registro_oc",
+        "title": "The Good Mark",
         "width": 1024,
-        "height": 768
+        "height": 768,
+        "useHttpsScheme": false
       }
     ],
     "security": {
@@ -24,6 +25,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": ["binaries/tgm-backend"],
+    "resources": ["resources/server.env"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

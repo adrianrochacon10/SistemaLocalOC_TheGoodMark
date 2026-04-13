@@ -171,7 +171,7 @@ function importeVentaEnMes(venta, inicioMes, finMes) {
   return round2((pt * diasOverlap) / diasTotal);
 }
 
-/** Para colaboradores por %: precio total del contrato (no la cuota mensual). */
+/** Precio total del contrato (base para derivar cuota mensual o prorrateo por días). */
 function importeTotalContratoVentaParaPct(venta) {
   const total = Number(venta?.precio_total ?? venta?.importe_total ?? 0) || 0;
   if (total > 0) return round2(total);
@@ -181,16 +181,45 @@ function importeTotalContratoVentaParaPct(venta) {
   return 0;
 }
 
-function colaboradorUsaCostoEnOrden(row) {
-  if (!row) return false;
-  const tc = String(row.tipo_comision ?? "").toLowerCase();
-  if (tc === "consideracion" || tc === "precio_fijo") return true;
-  const nom = String(row.tipo_pago?.nombre ?? "").toLowerCase();
-  return (
-    nom.includes("consideracion") ||
-    nom.includes("precio fijo") ||
-    nom.includes("precio_fijo")
+/**
+ * Venta por días (paquete): misma heurística que el front `esVentaPorDiasOrden`.
+ */
+function esVentaPorDiasOrdenBackend(venta) {
+  const u = String(venta?.duracion_unidad ?? "").toLowerCase();
+  if (["dias", "días", "dia", "día"].some((x) => u.includes(x))) return true;
+  const mr = Math.max(
+    1,
+    Math.floor(Number(venta?.duracion_meses ?? venta?.meses_renta) || 1),
   );
+  const s = String(venta?.fecha_inicio ?? "").slice(0, 10);
+  const e = String(venta?.fecha_fin ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(e)) return false;
+  const vi = new Date(`${s}T12:00:00`);
+  const vf = new Date(`${e}T12:00:00`);
+  if (Number.isNaN(vi.getTime()) || Number.isNaN(vf.getTime())) return false;
+  const dias = Math.max(1, Math.round((vf - vi) / 86400000) + 1);
+  if ([1, 3, 7, 15].includes(mr) && dias <= 31) return true;
+  if (mr === dias || Math.abs(dias - mr) <= 1) return true;
+  return false;
+}
+
+/**
+ * Base bruta antes del % del socio (igual que front `importeVentaEnMesOrden` para OC):
+ * contrato por meses → total/meses; por días → prorrateo de `precio_total` al mes calendario.
+ */
+function importeBrutoAplicarPorcentajeEnMes(venta, inicioMes, finMesStr) {
+  const pt = importeTotalContratoVentaParaPct(venta);
+  if (!(pt > 0)) return 0;
+  if (esVentaPorDiasOrdenBackend(venta)) {
+    return round2(importeVentaEnMes(venta, inicioMes, finMesStr));
+  }
+  const meses = mesesContratoVenta(venta);
+  return round2(pt / meses);
+}
+
+/** Subtotal OC: importe de venta solo con colaborador por %; si no, base en costo de la venta. */
+function colaboradorUsaCostoEnOrden(row) {
+  return !colaboradorEsTipoPorcentaje(row);
 }
 
 function colaboradorEsTipoPorcentaje(row) {
@@ -328,8 +357,9 @@ async function subtotalGrupoOrden(
   }
   return round2(
     groupVentas.reduce((sum, v) => {
-      const im = importeTotalContratoVentaParaPct(v);
-      return sum + importeTrasPorcentajeSocio(v, im, c, undefined, pctVivo);
+      if (!ventaIncluidaEnMesOrden(v, mes1a12, anio, diaCorte)) return sum;
+      const bruto = importeBrutoAplicarPorcentajeEnMes(v, inicio, finStr);
+      return sum + importeTrasPorcentajeSocio(v, bruto, c, undefined, pctVivo);
     }, 0),
   );
 }
@@ -376,7 +406,7 @@ export async function generarOrden(mes, anio, userId) {
   let vq = supabase
     .from("ventas")
     .select(
-      "id,colaborador_id,precio_total,costo_venta,costos,fecha_inicio,fecha_fin,porcentaje_socio,duracion_meses",
+      "id,colaborador_id,precio_total,costo_venta,costos,fecha_inicio,fecha_fin,porcentaje_socio,duracion_meses,precio_por_mes",
     );
   vq = queryVentasSolapanMes(vq, inicio, finStr);
   const { data: ventas, error: errVentas } = await vq;
@@ -478,7 +508,7 @@ export async function generarOrdenColaborador(mes, anio, colaborador_id, userId)
   let vq = supabase
     .from("ventas")
     .select(
-      "id,colaborador_id,precio_total,costo_venta,costos,fecha_inicio,fecha_fin,porcentaje_socio,duracion_meses",
+      "id,colaborador_id,precio_total,costo_venta,costos,fecha_inicio,fecha_fin,porcentaje_socio,duracion_meses,precio_por_mes",
     )
     .eq("colaborador_id", cid);
   vq = queryVentasSolapanMes(vq, inicio, finStr);
@@ -620,14 +650,20 @@ export async function crearManual({
       const ventaRow = list.find((x) => String(x.id) === wid);
       const imp = Number(line.importe) || 0;
       const aplicarPct = line.aplicar_porcentaje_socio;
-      const brutoContrato =
-        ventaRow != null ? importeTotalContratoVentaParaPct(ventaRow) : 0;
-      const basePct =
+      /** El front envía `importe` = precio de venta del mes (o prorrateo); el % se aplica por venta sobre eso. */
+      let basePct = imp;
+      if (
         !usarCosto &&
         colaboradorEsTipoPorcentaje(colabOrdenRow) &&
-        brutoContrato > 0
-          ? brutoContrato
-          : imp;
+        !(basePct > 0) &&
+        ventaRow
+      ) {
+        basePct = importeBrutoAplicarPorcentajeEnMes(
+          ventaRow,
+          inicioMesManual,
+          finMesManual,
+        );
+      }
       const psLinea =
         line.porcentaje_socio_aplicado ?? line.porcentajeSocioAplicado;
       const ventaParaPct =

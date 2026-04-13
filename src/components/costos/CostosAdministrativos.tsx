@@ -1,36 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { CostosCategoriasPanel, type CostoCategoria } from "./CostosCategoriasPanel";
-import {
-  Chart as ChartJS,
-  ArcElement,
-  CategoryScale,
-  Filler,
-  Legend,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-} from "chart.js";
-import { Line, Pie } from "react-chartjs-2";
+import { type TooltipItem } from "chart.js";
+import { Doughnut, Line } from "react-chartjs-2";
+import "../../lib/chartRegisterCostosAdmin";
 import { backendApi } from "../../lib/backendApi";
 import { confirmWithToast } from "../../lib/confirmWithToast";
 import { GraficasEmptyMes } from "../common/GraficasEmptyMes";
 import "../ventas/RegistroVentasNuevo.css";
 import "./CostosAdministrativos.css";
-
-ChartJS.register(
-  ArcElement,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Filler,
-  Legend,
-);
 
 export interface CostoAdministrativoRow {
   id: string;
@@ -164,31 +142,15 @@ function datosPiePorCategoria(filas: CostoAdministrativoRow[]) {
   };
 }
 
-function datosLineaPorMes(filas: CostoAdministrativoRow[]) {
-  const porMes = new Array(12).fill(0) as number[];
-  for (const r of filas) {
-    const m = Math.trunc(Number(r.mes));
-    if (m >= 1 && m <= 12) {
-      porMes[m - 1] += Number(r.importe) || 0;
-    }
-  }
-  return {
-    labels: MESES_CORTOS,
-    datasets: [
-      {
-        fill: true,
-        label: "Importe (mes)",
-        data: porMes,
-        borderColor: "rgb(53, 162, 235)",
-        backgroundColor: "rgba(53, 162, 235, 0.35)",
-        tension: 0.25,
-      },
-    ],
-  };
+function fmtImporteMx(n: number) {
+  return Number(n).toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  });
 }
 
 /** Sin animación al actualizar datos: evita “temblor” visual del layout. */
-const opcionesLinea = {
+const opcionesLineaBase = {
   animation: false as const,
   responsive: true,
   maintainAspectRatio: false,
@@ -197,6 +159,15 @@ const opcionesLinea = {
     title: {
       display: true,
       text: "Total por mes (importe)",
+    },
+    tooltip: {
+      callbacks: {
+        title: (items: { label?: string }[]) => items[0]?.label ?? "",
+        label: (ctx: TooltipItem<"line">) => {
+          const v = ctx.parsed.y;
+          return `Total del mes: ${fmtImporteMx(Number(v) || 0)}`;
+        },
+      },
     },
   },
   scales: {
@@ -214,24 +185,30 @@ const opcionesLinea = {
   },
 };
 
-const opcionesPie = {
+const opcionesDoughnutBase = {
   animation: false as const,
   responsive: true,
   maintainAspectRatio: false,
+  cutout: "58%",
   plugins: {
-    legend: { position: "right" as const },
+    legend: { display: false as const },
     title: {
       display: true,
       text: "Por categoría (importe)",
     },
     tooltip: {
       callbacks: {
-        label: (ctx: { label?: string; parsed: number }) => {
+        title: (items: { label?: string }[]) => items[0]?.label ?? "",
+        label: (ctx: { parsed: number }) => {
           const v = ctx.parsed;
-          return `${ctx.label ?? ""}: ${Number(v).toLocaleString("es-MX", {
-            style: "currency",
-            currency: "MXN",
-          })}`;
+          return `Gasto: ${fmtImporteMx(v)}`;
+        },
+        afterLabel: (ctx: { parsed: number; dataset?: { data?: unknown[] } }) => {
+          const values = (ctx.dataset?.data as number[] | undefined) ?? [];
+          const total = values.reduce((a, x) => a + (Number(x) || 0), 0);
+          if (total <= 0) return "";
+          const pct = ((Number(ctx.parsed) || 0) / total) * 100;
+          return `${pct.toFixed(1)}% del total`;
         },
       },
     },
@@ -373,38 +350,86 @@ export const CostosAdministrativos: React.FC = () => {
   }, [categorias, edCategoriaId]);
 
   const dataPie = useMemo(() => datosPiePorCategoria(filas), [filas]);
+  const dataLinea = useMemo(() => {
+    const porMes = new Array(12).fill(0) as number[];
+    for (const r of filas) {
+      const m = Math.trunc(Number(r.mes));
+      if (m >= 1 && m <= 12) {
+        porMes[m - 1] += Number(r.importe) || 0;
+      }
+    }
+    return {
+      labels: MESES_CORTOS,
+      datasets: [
+        {
+          fill: true,
+          label: "Importe (mes)",
+          data: porMes,
+          borderColor: "rgb(53, 162, 235)",
+          backgroundColor: "rgba(53, 162, 235, 0.35)",
+          tension: 0.25,
+        },
+      ],
+    };
+  }, [filas]);
 
   const filtroListadoActivo =
-    String(filtroMes ?? "").trim() !== "" || String(filtroAnio ?? "").trim() !== "";
-  const dataLinea = useMemo(() => datosLineaPorMes(filas), [filas]);
+    String(filtroMes ?? "").trim() !== "" ||
+    String(filtroAnio ?? "").trim() !== "" ||
+    String(filtroListadoCategoriaId ?? "").trim() !== "";
+
   const hayDatosGraficas = filas.length > 0;
 
-  const sufijoTituloAnio = filtroAnio.trim() ? ` — ${filtroAnio}` : " — todos los años";
+  const sufijoTituloGraficas = useMemo(() => {
+    const partes: string[] = [];
+    const m = String(filtroMes ?? "").trim();
+    const mi = Number(m);
+    if (m && Number.isFinite(mi) && mi >= 1 && mi <= 12) {
+      partes.push(MESES_CORTOS[mi - 1]);
+    }
+    const y = String(filtroAnio ?? "").trim();
+    if (y) partes.push(`año ${y}`);
+    const cat = categorias.find((c) => c.id === filtroListadoCategoriaId);
+    if (cat?.tipo) partes.push(String(cat.tipo));
+    return partes.length ? ` — ${partes.join(" · ")}` : " — todos los periodos";
+  }, [filtroMes, filtroAnio, filtroListadoCategoriaId, categorias]);
+
+  const tituloDoughnutResumen = useMemo(
+    () => `Gastos por categoría (importe)${sufijoTituloGraficas}`,
+    [sufijoTituloGraficas],
+  );
+
+  const tituloLineaResumen = useMemo(
+    () => `Total por mes (importe)${sufijoTituloGraficas}`,
+    [sufijoTituloGraficas],
+  );
+
+  const opcionesDoughnutDinamicas = useMemo(
+    () => ({
+      ...opcionesDoughnutBase,
+      plugins: {
+        ...opcionesDoughnutBase.plugins,
+        title: {
+          display: true as const,
+          text: tituloDoughnutResumen,
+        },
+      },
+    }),
+    [tituloDoughnutResumen],
+  );
+
   const opcionesLineaDinamicas = useMemo(
     () => ({
-      ...opcionesLinea,
+      ...opcionesLineaBase,
       plugins: {
-        ...opcionesLinea.plugins,
+        ...opcionesLineaBase.plugins,
         title: {
           display: true as const,
-          text: `Total por mes (importe)${sufijoTituloAnio}`,
+          text: tituloLineaResumen,
         },
       },
     }),
-    [sufijoTituloAnio],
-  );
-  const opcionesPieDinamicas = useMemo(
-    () => ({
-      ...opcionesPie,
-      plugins: {
-        ...opcionesPie.plugins,
-        title: {
-          display: true as const,
-          text: `Por categoría (importe)${sufijoTituloAnio}`,
-        },
-      },
-    }),
-    [sufijoTituloAnio],
+    [tituloLineaResumen],
   );
 
   const handleCrear = async () => {
@@ -676,12 +701,6 @@ export const CostosAdministrativos: React.FC = () => {
       <div className="formulario-section costos-administrativos__graficas">
         <div className="costos-administrativos__resumen-header">
           <h4>Resumen</h4>
-          <SelectAnioCostos
-            id="costos-resumen-anio"
-            value={filtroAnio}
-            onChange={setFiltroAnio}
-            label="Año"
-          />
         </div>
         {!hayDatosGraficas && !cargando ? (
           filtroListadoActivo ? (
@@ -691,14 +710,41 @@ export const CostosAdministrativos: React.FC = () => {
             />
           ) : (
             <p className="costos-administrativos__vacio">
-              Sin datos para graficar. Registra un costo o elige año en el resumen.
+              Sin datos para graficar. Registra un costo o usa «Filtrar listado» para acotar periodo o categoría.
             </p>
           )
         ) : (
           <div className="costos-administrativos__charts-grid">
-            <div className="costos-administrativos__chart-box">
+            <div className="costos-administrativos__chart-box costos-administrativos__chart-box--doughnut">
               {hayDatosGraficas && dataPie.labels.length > 0 ? (
-                <Pie data={dataPie} options={opcionesPieDinamicas} />
+                <div className="costos-administrativos__doughnut-bloque">
+                  <div className="costos-administrativos__doughnut-canvas">
+                    <Doughnut data={dataPie} options={opcionesDoughnutDinamicas} />
+                  </div>
+                  <ul
+                    className="costos-administrativos__gasto-cards"
+                    aria-label="Desglose por tipo de gasto"
+                  >
+                    {dataPie.labels.map((lbl, i) => {
+                      const raw = dataPie.datasets[0]?.data[i];
+                      const val = typeof raw === "number" ? raw : Number(raw) || 0;
+                      const border = PIE_BORDER[i % PIE_BORDER.length];
+                      return (
+                        <li
+                          key={`${String(lbl)}-${i}`}
+                          className="costos-administrativos__gasto-card"
+                          style={{ borderLeftColor: border }}
+                        >
+                          <span className="costos-administrativos__gasto-card-tipo">Tipo de gasto</span>
+                          <span className="costos-administrativos__gasto-card-nombre">{String(lbl)}</span>
+                          <span className="costos-administrativos__gasto-card-importe">
+                            {fmtImporteMx(val)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               ) : (
                 <p className="costos-administrativos__vacio">—</p>
               )}

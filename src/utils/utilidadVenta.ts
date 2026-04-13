@@ -33,6 +33,104 @@ function totalContratoVenta(v: RegistroVenta): number {
   return round2Util(base * meses);
 }
 
+function notasIndicanVentaPorDias(notas: unknown): boolean {
+  return /\[UNIDAD\s*:\s*DIAS\]/i.test(String(notas ?? ""));
+}
+
+/**
+ * Monto del socio (contrato): en meses = (precio de venta por mes × %) × meses;
+ * en venta por días = % sobre el total del período.
+ */
+export function montoSocioPorcentajeColaboradorDesdeVenta(
+  v: RegistroVenta,
+  pct: number | null | undefined,
+): number {
+  if (pct == null || !Number.isFinite(Number(pct)) || Number(pct) < 0) return 0;
+  const pctN = Math.min(100, Math.max(0, Number(pct)));
+  if (!(pctN > 0)) return 0;
+  const bruto = totalContratoVenta(v);
+  if (esVentaPorDiasUtil(v) || notasIndicanVentaPorDias(v.notas)) {
+    return bruto > 0 ? round2Util((bruto * pctN) / 100) : 0;
+  }
+  const pm = Number(v.precioGeneral ?? 0) || 0;
+  const meses = Math.max(1, Math.floor(Number(v.mesesRenta) || 1));
+  if (!(pm > 0)) return 0;
+  const socioMensual = round2Util((pm * pctN) / 100);
+  return round2Util(socioMensual * meses);
+}
+
+/**
+ * Si `importe_total` < bruto del contrato, no asumir que es la cuota del socio: también puede ser
+ * el **neto empresa** bruto × (100−%)/100. En ese caso se usa `socioCalc` (bruto × %/100).
+ */
+export function montoSocioPorcentajeEvitandoNetoEmpresa(
+  totalBruto: number,
+  importeGuardado: number,
+  pctGuardado: number | null | undefined,
+  socioCalc: number,
+): number {
+  if (!(socioCalc > 0)) return 0;
+  if (pctGuardado == null || !Number.isFinite(Number(pctGuardado))) {
+    return socioCalc;
+  }
+  const pct = Math.min(100, Math.max(0, Number(pctGuardado)));
+  if (!(pct > 0)) return socioCalc;
+
+  const bruto = round2Util(Number(totalBruto) || 0);
+  const imp = round2Util(Number(importeGuardado) || 0);
+  if (!(imp > 0) || !(bruto > 0) || !(imp < bruto - 0.01)) {
+    return socioCalc;
+  }
+
+  const eps = Math.max(0.5, bruto * 0.005);
+  const complemento =
+    pct < 100 ? round2Util((bruto * (100 - pct)) / 100) : 0;
+  const cercaComplemento =
+    pct < 100 && complemento > 0 && Math.abs(imp - complemento) <= eps;
+  const cercaSocio = Math.abs(imp - socioCalc) <= eps;
+
+  if (cercaComplemento && !cercaSocio) {
+    return socioCalc;
+  }
+  if (cercaSocio) {
+    return round2Util(imp);
+  }
+  return socioCalc;
+}
+
+function montoSocioPorcentajeDesdeFilaApi(row: any): number {
+  const ps = Number(row?.porcentaje_socio ?? 0) || 0;
+  if (!(ps > 0)) return 0;
+  const pm =
+    Number(
+      row?.precio_por_mes ??
+        row?.precio_general ??
+        row?.precioPorMes ??
+        0,
+    ) || 0;
+  const n = Math.max(
+    1,
+    Math.floor(
+      Number(row?.duracion_meses ?? row?.meses_renta ?? row?.mesesRenta ?? 1) ||
+        1,
+    ),
+  );
+  const pt = Number(row?.precio_total ?? row?.importe_total ?? 0) || 0;
+  const notas = String(row?.notas ?? "");
+  const du = String(row?.duracion_unidad ?? row?.duracionUnidad ?? "").toLowerCase();
+  const esDias =
+    notasIndicanVentaPorDias(notas) ||
+    du === "dias" ||
+    du === "días" ||
+    du === "dia" ||
+    du === "día";
+  if (esDias) {
+    return pt > 0 ? Math.round((pt * ps) / 100 * 100) / 100 : 0;
+  }
+  const socioMensual = Math.round((pm * ps) / 100 * 100) / 100;
+  return Math.round(socioMensual * n * 100) / 100;
+}
+
 /**
  * Utilidad neta: porcentaje → precio total − monto % del socio;
  * precio fijo / consideración → costo de venta;
@@ -45,7 +143,6 @@ export function utilidadNetaDesdeFilaApi(row: any): number {
   }
   const pt = Number(row?.precio_total ?? row?.importe_total ?? 0) || 0;
   const cv = Number(row?.costo_venta ?? row?.costos ?? 0) || 0;
-  const ps = Number(row?.porcentaje_socio ?? 0) || 0;
   const nombre = String(
     row?.tipo_pago?.nombre ?? row?.colaborador?.tipo_pago?.nombre ?? "",
   ).toLowerCase();
@@ -56,7 +153,7 @@ export function utilidadNetaDesdeFilaApi(row: any): number {
     nombre.includes("precio fijo") ||
     nombre.includes("precio_fijo");
   if (esPct) {
-    const m = ps > 0 ? Math.round((pt * ps) / 100 * 100) / 100 : 0;
+    const m = montoSocioPorcentajeDesdeFilaApi(row);
     return Math.max(0, Math.round((pt - m) * 100) / 100);
   }
   if (esFijo) {
@@ -78,6 +175,10 @@ export function utilidadNetaParaAgregados(v: RegistroVenta): number {
     costo_venta: v.costoVenta,
     costos: v.costos,
     porcentaje_socio: v.porcentajeSocio,
+    precio_por_mes: v.precioGeneral,
+    duracion_meses: v.mesesRenta,
+    notas: v.notas,
+    duracion_unidad: (v as { duracionUnidad?: string }).duracionUnidad,
   });
 }
 
@@ -114,19 +215,16 @@ export function utilidadNetaContratoParaKpi(
 
   let totalMontoSocio = 0;
   if (esPorcentaje) {
-    const socioDesdePorcentaje =
-      pctGuardado != null && pctGuardado >= 0 && totalBruto > 0
-        ? round2Util((totalBruto * pctGuardado) / 100)
-        : 0;
-    if (
-      importeGuardado > 0 &&
-      totalBruto > 0 &&
-      importeGuardado < totalBruto - 0.01
-    ) {
-      totalMontoSocio = importeGuardado;
-    } else if (socioDesdePorcentaje > 0) {
-      totalMontoSocio = socioDesdePorcentaje;
-    }
+    const socioDesdePorcentaje = montoSocioPorcentajeColaboradorDesdeVenta(
+      v,
+      pctGuardado,
+    );
+    totalMontoSocio = montoSocioPorcentajeEvitandoNetoEmpresa(
+      totalBruto,
+      importeGuardado,
+      pctGuardado,
+      socioDesdePorcentaje,
+    );
   }
 
   let u: number;

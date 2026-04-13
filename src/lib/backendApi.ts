@@ -1,6 +1,8 @@
 import { supabase } from "./supabaseClient";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+/** Preferir 127.0.0.1: en Windows `localhost` a veces va por IPv6 (::1) y el backend solo escucha IPv4. */
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:4000";
 
 /** Evita golpear Supabase Auth en cada fetch paralelo */
 let tokenCache: { accessToken: string; expiresAtSec: number } | null = null;
@@ -62,8 +64,13 @@ async function getAccessTokenForBackend(): Promise<string | null> {
   });
 }
 
-async function request(path: string, options: RequestInit = {}, isRetryAfterRefresh = false) {
-  const token = await getAccessTokenForBackend();
+async function request(
+  path: string,
+  options: RequestInit = {},
+  isRetryAfterRefresh = false,
+  withAuth = true,
+) {
+  const token = withAuth ? await getAccessTokenForBackend() : null;
 
   const res = await fetch(`${BACKEND_URL}${path}`, {
     headers: {
@@ -88,7 +95,7 @@ async function request(path: string, options: RequestInit = {}, isRetryAfterRefr
     ) {
       invalidateBackendAuthCache();
       await withAuthMutex(() => supabase.auth.refreshSession());
-      return request(path, options, true);
+      return request(path, options, true, withAuth);
     }
   }
 
@@ -103,17 +110,24 @@ async function request(path: string, options: RequestInit = {}, isRetryAfterRefr
   return text || null;
 }
 
+export type BackendGetOptions = { skipAuth?: boolean };
+
 export const backendApi = {
   BACKEND_URL,
-  get: (path: string) =>
-    request(path, {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        Pragma: "no-cache",
+  get: (path: string, opts?: BackendGetOptions) =>
+    request(
+      path,
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
       },
-    }),
+      false,
+      opts?.skipAuth !== true,
+    ),
   post: (path: string, body: unknown) =>
     request(path, { method: "POST", body: JSON.stringify(body) }),
   patch: (path: string, body: unknown) =>

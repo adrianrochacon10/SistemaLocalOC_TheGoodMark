@@ -238,7 +238,7 @@ export async function solicitarCodigo(entidad, entidadId, user) {
     lineasEntidad.push(`ID de la venta: ${fmtCampo(detalleVenta?.id ?? entidadId)}`);
     lineasEntidad.push(`Identificador de venta: ${fmtCampo(detalleVenta?.identificador_venta)}`);
     lineasEntidad.push(`Estado: ${fmtCampo(detalleVenta?.estado_venta)}`);
-    lineasEntidad.push(`Vendido a (receptor): ${fmtCampo(detalleVenta?.vendido_a)}`);
+    lineasEntidad.push(`Cliente: ${fmtCampo(detalleVenta?.vendido_a)}`);
     lineasEntidad.push(`Nombre en contrato (client_name): ${fmtCampo(detalleVenta?.client_name)}`);
     lineasEntidad.push(`Fecha inicio: ${fmtCampo(detalleVenta?.fecha_inicio)}`);
     lineasEntidad.push(`Fecha fin: ${fmtCampo(detalleVenta?.fecha_fin)}`);
@@ -260,7 +260,7 @@ export async function solicitarCodigo(entidad, entidadId, user) {
       `<tr><td style=\"padding:4px 12px 4px 0;color:#555;\">ID venta</td><td><code>${escapeHtml(fmtCampo(detalleVenta?.id ?? entidadId))}</code></td></tr>`,
       `<tr><td style=\"padding:4px 12px 4px 0;color:#555;\">Identificador</td><td>${escapeHtml(fmtCampo(detalleVenta?.identificador_venta))}</td></tr>`,
       `<tr><td style=\"padding:4px 12px 4px 0;color:#555;\">Estado</td><td>${escapeHtml(fmtCampo(detalleVenta?.estado_venta))}</td></tr>`,
-      `<tr><td style=\"padding:4px 12px 4px 0;color:#555;\">Vendido a</td><td>${escapeHtml(fmtCampo(detalleVenta?.vendido_a))}</td></tr>`,
+      `<tr><td style=\"padding:4px 12px 4px 0;color:#555;\">Cliente</td><td>${escapeHtml(fmtCampo(detalleVenta?.vendido_a))}</td></tr>`,
       `<tr><td style=\"padding:4px 12px 4px 0;color:#555;\">Nombre en contrato</td><td>${escapeHtml(fmtCampo(detalleVenta?.client_name))}</td></tr>`,
       `<tr><td style=\"padding:4px 12px 4px 0;color:#555;\">Fechas</td><td>${escapeHtml(fmtCampo(detalleVenta?.fecha_inicio))} → ${escapeHtml(fmtCampo(detalleVenta?.fecha_fin))}</td></tr>`,
       `<tr><td style=\"padding:4px 12px 4px 0;color:#555;\">Duración (meses)</td><td>${escapeHtml(fmtCampo(detalleVenta?.duracion_meses))}</td></tr>`,

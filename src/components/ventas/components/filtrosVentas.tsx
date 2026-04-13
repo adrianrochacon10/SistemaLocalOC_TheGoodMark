@@ -1,20 +1,27 @@
 import React from "react";
 import { Colaborador, AsignacionPantalla, Usuario } from "../../../types";
 
+export type FilaClienteCompradorFiltro = { id: string; nombre: string };
+
 interface FiltrosVentasProps {
   busquedaVenta: string;
   filtroEstado: string;
+  /** Colaborador (socio). */
   filtroCliente: string;
+  /** Cliente comprador del catálogo `clients`. */
+  filtroCompradorCliente: string;
   filtroVendedor: string;
   filtroMes: number;
   filtroAnio: number;
   aniosDisponibles: number[];
   colaboradores: Colaborador[];
+  catalogoClientesComprador: FilaClienteCompradorFiltro[];
   usuarios: Usuario[];
   asignaciones: AsignacionPantalla[];
   onBusqueda: (valor: string) => void;
   onFiltroEstado: (estado: string) => void;
   onFiltroCliente: (clienteId: string) => void;
+  onFiltroCompradorCliente: (clienteCompradorId: string) => void;
   onFiltroVendedor: (vendedorId: string) => void;
   onFiltroMes: (mes: number) => void;
   onFiltroAnio: (anio: number) => void;
@@ -49,16 +56,19 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
   busquedaVenta,
   filtroEstado,
   filtroCliente,
+  filtroCompradorCliente,
   filtroVendedor,
   filtroMes,
   filtroAnio,
   aniosDisponibles,
   colaboradores,
+  catalogoClientesComprador,
   usuarios,
   asignaciones,
   onBusqueda,
   onFiltroEstado,
   onFiltroCliente,
+  onFiltroCompradorCliente,
   onFiltroVendedor,
   onFiltroMes,
   onFiltroAnio,
@@ -73,7 +83,7 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
         </button>
         <input
           type="text"
-          placeholder="Buscar Colaborador..."
+          placeholder="Colaborador, alias o nombre de cliente…"
           value={busquedaVenta}
           onChange={(e) => onBusqueda(e.target.value)}
           className="buscador-ventas"
@@ -116,9 +126,8 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
           </div>
         </div>
 
-        {/* Filtro por Colaborador */}
         <div className="filtro-grupo">
-          <label>Colaborador:</label>
+          <label>Colaborador (socio):</label>
           <select
             value={filtroCliente}
             onChange={(e) => onFiltroCliente(e.target.value)}
@@ -130,7 +139,7 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
                   : undefined,
             }}
           >
-            <option value="Todos">— Todos los colaboradores —</option>
+            <option value="Todos">— Todos —</option>
             {colaboradores
               .filter((c) =>
                 asignaciones.some((a) => a.clienteId === c.id && a.activa),
@@ -140,6 +149,23 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
                   {c.nombre}
                 </option>
               ))}
+          </select>
+        </div>
+
+        <div className="filtro-grupo">
+          <label>Cliente (comprador):</label>
+          <select
+            value={filtroCompradorCliente}
+            onChange={(e) => onFiltroCompradorCliente(e.target.value)}
+            className="select-filtro"
+          >
+            <option value="Todos">— Todos —</option>
+            <option value="__legacy__">Sin catálogo (solo texto histórico)</option>
+            {catalogoClientesComprador.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -159,9 +185,9 @@ export const FiltrosVentas: React.FC<FiltrosVentasProps> = ({
           </select>
         </div>
 
-        {/* Filtro por Periodo */}
+        {/* Mes/año calendario: la venta cuenta si el contrato solapa ese mes (duración). */}
         <div className="filtro-grupo">
-          <label>Periodo:</label>
+          <label>Periodo del contrato:</label>
           <div className="filtro-periodo">
             <select
               value={filtroMes}

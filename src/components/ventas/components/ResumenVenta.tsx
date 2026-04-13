@@ -15,7 +15,8 @@ interface ResumenVentaProps {
   duracionUnidad?: "meses" | "dias";
   precioGeneral: number;
   porcentajeSocio: number;
-  montoSocio: number;
+  /** Legado: el resumen calcula el monto desde precio/mes × %; se ignora en pantalla. */
+  montoSocio?: number;
   aplicarDescuento: boolean;
   costos?: number;
   comisionPorcentaje?: number;
@@ -24,8 +25,9 @@ interface ResumenVentaProps {
   productoNombre?: string;
   /** Lista de nombres de productos (prioridad sobre `productoNombre` unido por comas). */
   nombresProductos?: string[];
-  precioProductos?: number;
-  precioPantallas?: number;
+  /** Suma precios de catálogo; solo informativo (no suma al total de venta). */
+  precioPantallasReferencia?: number;
+  precioProductosReferencia?: number;
   gastosAdicionales?: number;
 }
 
@@ -40,7 +42,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   duracionUnidad = "meses",
   precioGeneral,
   porcentajeSocio,
-  montoSocio,
+  montoSocio: _montoSocioLegacy,
   aplicarDescuento,
   costos = 0,
   comisionPorcentaje = 0,
@@ -48,8 +50,8 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   tipoComision = "",
   productoNombre = "",
   nombresProductos,
-  precioProductos = 0,
-  precioPantallas = 0,
+  precioPantallasReferencia = 0,
+  precioProductosReferencia = 0,
   gastosAdicionales = 0,
 }) => {
   const esPorDias = duracionUnidad === "dias";
@@ -90,29 +92,42 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
   const totalCostos = Number(costos || 0);
   const totalComision = totalBruto * (Number(comisionPorcentaje || 0) / 100);
   const totalGastosAdicionales = gastosAdicionales;
-  const totalBaseSinGastos = totalBruto;
   const totalPagoConsiderar =
     tipoComision === "consideracion" ? pagoConsiderar * mesesRenta : 0;
+
+  const esTipoPorcentaje = tipoComision === "porcentaje";
+  const pctSocio = Math.max(0, Math.min(100, Number(porcentajeSocio || 0)));
   /**
-   * `montoSocio` ya viene del padre como % del **precio total de la venta** (no del costo).
-   * No multiplicar por meses: eso duplicaba el cálculo (p. ej. 20% × 9 meses sobre el mismo total).
+   * Colaborador por %: el socio se calcula **solo** desde precio/mes × % y luego × meses
+   * (nunca como variable intermedia “precio total × %” en este resumen).
+   * Por días: % sobre la tarifa total del período (`totalBruto`).
    */
-  const montoSocioSobrePrecioVenta = aplicarDescuento ? montoSocio : 0;
-  const precioTotalNetoTrasSocio =
-    aplicarDescuento && montoSocioSobrePrecioVenta > 0
-      ? Math.max(0, Math.round((totalBruto - montoSocio) * 100) / 100)
-      : totalBruto;
-  /** Por mes = (precio total de venta − % del socio) ÷ meses, no el % del socio ÷ meses. */
-  const precioMensualNetoTrasSocio =
-    aplicarDescuento &&
-    montoSocioSobrePrecioVenta > 0 &&
-    !esPorDias &&
-    mesesRenta > 0
-      ? Math.round((precioTotalNetoTrasSocio / Math.max(1, mesesRenta)) * 100) / 100
+  const montoSocioPorMes =
+    aplicarDescuento && esTipoPorcentaje && !esPorDias && pctSocio > 0
+      ? Math.round(((Number(precioGeneral) || 0) * pctSocio) / 100 * 100) / 100
+      : 0;
+  const montoSocioEfectivo =
+    aplicarDescuento && esTipoPorcentaje && pctSocio > 0
+      ? esPorDias
+        ? Math.round((totalBruto * pctSocio) / 100 * 100) / 100
+        : Math.round(
+            montoSocioPorMes * Math.max(1, mesesRenta) * 100,
+          ) / 100
       : 0;
 
+  const montoSocioSobrePrecioVenta = montoSocioEfectivo;
+  /** Alineado con ①②③: neto/mes = mensualidad − cuota socio/mes (no total÷meses). */
+  const ingresoNetoMensualTrasSocio =
+    esTipoPorcentaje && aplicarDescuento && !esPorDias && pctSocio > 0
+      ? Math.max(
+          0,
+          Math.round(
+            ((Number(precioGeneral) || 0) - montoSocioPorMes) * 100,
+          ) / 100,
+        )
+      : null;
+
   const precioVentaFinal = totalBruto;
-  const esTipoPorcentaje = tipoComision === "porcentaje";
   const esTipoFijoOConsideracion =
     tipoComision === "consideracion" || tipoComision === "precio_fijo";
   /**
@@ -122,7 +137,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
    */
   const utilidad = esTipoPorcentaje
     ? aplicarDescuento
-      ? Math.max(0, Math.round((totalBruto - montoSocio) * 100) / 100)
+      ? Math.max(0, Math.round((totalBruto - montoSocioEfectivo) * 100) / 100)
       : Math.max(0, Math.round(totalBruto * 100) / 100)
     : esTipoFijoOConsideracion
       ? Math.max(0, Math.round(totalCostos * 100) / 100)
@@ -164,7 +179,7 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
           <span className="valor">{textoProductosResumen}</span>
         </div>
         <div className="resumen-item">
-          <span className="label">Vendido a:</span>
+          <span className="label">Cliente:</span>
           <span className="valor">{vendidoA || "-"}</span>
         </div>
 
@@ -193,28 +208,22 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
               <span>Precio de la venta (total)</span>
               <span>{formatearMoneda(precioVentaFinal)}</span>
             </div>
-            {!esPorDias && (
-              <div className="resumen-fin-row resumen-fin-sub">
-                <span>↳ Base (pantallas + productos)</span>
-                <span>{formatearMoneda(totalBaseSinGastos)}</span>
-              </div>
-            )}
-            {!esPorDias && precioPantallas > 0 && (
-              <div className="resumen-fin-row resumen-fin-sub">
-                <span>↳ Pantallas</span>
-                <span>{formatearMoneda(precioPantallas)}</span>
-              </div>
-            )}
-            {!esPorDias && precioProductos > 0 && (
-              <div className="resumen-fin-row resumen-fin-sub">
-                <span>↳ Productos</span>
-                <span>{formatearMoneda(precioProductos)}</span>
-              </div>
-            )}
             <div className="resumen-fin-row resumen-fin-sub">
               <span>{esPorDias ? "Tarifa por duración (días)" : "Precio por mes"}</span>
               <span>{formatearMoneda(precioGeneral)}</span>
             </div>
+            {!esPorDias && precioPantallasReferencia > 0 && (
+              <div className="resumen-fin-row resumen-fin-sub">
+                <span>↳ Catálogo pantallas</span>
+                <span>{formatearMoneda(precioPantallasReferencia)}</span>
+              </div>
+            )}
+            {!esPorDias && precioProductosReferencia > 0 && (
+              <div className="resumen-fin-row resumen-fin-sub">
+                <span>↳ Catálogo productos</span>
+                <span>{formatearMoneda(precioProductosReferencia)}</span>
+              </div>
+            )}
             {totalCostos > 0 && (
               <>
                 <div className="resumen-fin-row resumen-fin-sub">
@@ -270,34 +279,46 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
             </div>
           )}
 
-          {/* ── MONTO SOCIO (descuento porcentaje) ── */}
+          {/* ── SOCIO POR %: solo cadena mensual → %/mes → × meses (sin mezclar con total bruto) ── */}
           {aplicarDescuento && montoSocioSobrePrecioVenta > 0 && (
             <div className="resumen-fin-bloque resumen-fin-bloque-morado">
-              <div className="resumen-fin-row resumen-fin-principal resumen-fin-morado">
-                <span>
-                  Monto socio ({porcentajeSocio}% sobre precio de la venta)
-                </span>
-                <span>{formatearMoneda(montoSocioSobrePrecioVenta)}</span>
-              </div>
-              <div className="resumen-fin-row resumen-fin-sub">
-                <span>↳ Precio total de la venta</span>
-                <span>{formatearMoneda(totalBruto)}</span>
-              </div>
-              <div className="resumen-fin-row resumen-fin-sub">
-                <span>↳ Precio de venta</span>
-                <span>{formatearMoneda(precioTotalNetoTrasSocio)}</span>
-              </div>
-              {!esPorDias && mesesRenta > 1 && precioMensualNetoTrasSocio > 0 && (
-                <div className="resumen-fin-row resumen-fin-sub">
-                  <span>↳ Precio por mes con porcentaje</span>
-                  <span>{formatearMoneda(precioMensualNetoTrasSocio)}</span>
-                </div>
-              )}
-              {esPorDias && (
-                <div className="resumen-fin-row resumen-fin-sub">
-                  <span>↳ Sobre tarifa por duración en días</span>
-                  <span>{formatearMoneda(totalBruto)}</span>
-                </div>
+              {!esPorDias ? (
+                <>
+                  <div className="resumen-fin-row resumen-fin-sub">
+                    <span>① Precio de venta por mes</span>
+                    <span>{formatearMoneda(precioGeneral)}</span>
+                  </div>
+                  <div className="resumen-fin-row resumen-fin-sub">
+                    <span>
+                      ② {porcentajeSocio}% × precio/mes (cuota socio / mes)
+                    </span>
+                    <span>{formatearMoneda(montoSocioPorMes)}</span>
+                  </div>
+                  <div className="resumen-fin-row resumen-fin-sub">
+                    <span>
+                      ③ × {mesesRenta} {mesesRenta === 1 ? "mes" : "meses"} (total
+                      socio en el contrato)
+                    </span>
+                    <span>{formatearMoneda(montoSocioEfectivo)}</span>
+                  </div>
+                  <div className="resumen-fin-row resumen-fin-principal resumen-fin-morado">
+                    <span>Total participación del socio</span>
+                    <span>{formatearMoneda(montoSocioSobrePrecioVenta)}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="resumen-fin-row resumen-fin-sub">
+                    <span>Tarifa del período (días)</span>
+                    <span>{formatearMoneda(totalBruto)}</span>
+                  </div>
+                  <div className="resumen-fin-row resumen-fin-principal resumen-fin-morado">
+                    <span>
+                      Participación del socio ({porcentajeSocio}% del período)
+                    </span>
+                    <span>{formatearMoneda(montoSocioSobrePrecioVenta)}</span>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -311,12 +332,22 @@ export const ResumenVenta: React.FC<ResumenVentaProps> = ({
             <span>Utilidad neta</span>
             <span>{formatearMoneda(utilidad)}</span>
           </div>
-          {!esPorDias && mesesRenta > 1 && (
+          {ingresoNetoMensualTrasSocio != null && (
             <div className="resumen-fin-row resumen-fin-sub">
-              <span>↳ Utilidad neta por mes</span>
-              <span>{formatearMoneda(utilidadPorMes)}</span>
+              <span>
+                ↳ Ingreso neto por mes (precio/mes − cuota socio/mes)
+              </span>
+              <span>{formatearMoneda(ingresoNetoMensualTrasSocio)}</span>
             </div>
           )}
+          {ingresoNetoMensualTrasSocio == null &&
+            !esPorDias &&
+            mesesRenta > 1 && (
+              <div className="resumen-fin-row resumen-fin-sub">
+                <span>↳ Utilidad neta por mes</span>
+                <span>{formatearMoneda(utilidadPorMes)}</span>
+              </div>
+            )}
         </div>
       </div>
     </div>

@@ -125,38 +125,19 @@ export const OrdenCard: React.FC<Props> = ({
   const totalesOrdenVista = useMemo(() => {
     const regs = orden.registrosVenta ?? [];
     const n = regs.length;
-    const lineaConSnap = regs.some((v) => ventaTienePorcentajeSocioSnapshot(v));
-    const esColabPct =
-      !!colabEfectivo &&
-      colaboradorEsTipoPorcentajeOrden(
-        colabEfectivo.tipoComision,
-        colabEfectivo.tipoPagoNombre,
-      );
-    const subGuardado = Number(orden.subtotal ?? 0);
-    const ivaGuardado = Number(orden.ivaTotal ?? 0);
-    const totalGuardado = Number(orden.total ?? 0);
-    const hayVentaPorDias = regs.some((v) => esVentaPorDiasOrdenCard(v));
-    // Colaborador por % o línea con % guardado: subtotal = Σ(precio contrato × %); no confiar en
-    // totales persistidos si quedaron con IVA sobre el bruto.
-    if (
-      (!esColabPct || n === 0) &&
-      !lineaConSnap &&
-      !hayVentaPorDias &&
-      Number.isFinite(subGuardado) &&
-      Number.isFinite(ivaGuardado) &&
-      Number.isFinite(totalGuardado) &&
-      (subGuardado > 0 || ivaGuardado > 0 || totalGuardado > 0)
-    ) {
-      return { sub: subGuardado, iva: ivaGuardado, total: totalGuardado };
-    }
-
-    if ((!colabEfectivo && !lineaConSnap) || n === 0) {
+    /**
+     * Con `n > 0`, el detalle de cada venta se arma con `costoLineaOrdenConsideracionPrecioFijo` /
+     * importes por mes; usar `orden.subtotal` guardado desincroniza el pie (p. ej. muestra $50,000/mes
+     * pero subtotal $51,333). Siempre recalcular desde las líneas cuando hay registros.
+     */
+    if (n === 0) {
       return {
         sub: Number(orden.subtotal ?? 0),
         iva: Number(orden.ivaTotal ?? 0),
         total: Number(orden.total ?? 0),
       };
     }
+
     const usarCosto = colaboradorUsaCostoComoBaseOrden(
       colabEfectivo?.tipoComision,
       colabEfectivo?.tipoPagoNombre,
@@ -376,8 +357,8 @@ export const OrdenCard: React.FC<Props> = ({
                 orden,
                 numReg,
               );
-              /** Importe de la OC: % sobre precio de venta del mes. */
-              const precioVentaMesNetoTrasPct =
+              /** Cuota del socio en la OC: precio venta del mes × %. */
+              const cuotaSocioMensualEnOrden =
                 importeLineaOrdenTrasPorcentajeSocio(
                   precioVentaMesBruto,
                   venta,
@@ -418,8 +399,8 @@ export const OrdenCard: React.FC<Props> = ({
                   ? precioVentaContrato
                   : Math.max(0, Number(venta.precioGeneral ?? 0) || 0) *
                     mesesContratoUi;
-              const montoMesNetoDetalle = esColabPorcentaje
-                ? precioVentaMesNetoTrasPct
+              const montoCuotaSocioDetalle = esColabPorcentaje
+                ? cuotaSocioMensualEnOrden
                 : precioVentaMesBruto;
               const fmtMonto = (n: number) =>
                 n > 0 ? `$${n.toFixed(2)}` : "—";
@@ -456,7 +437,7 @@ export const OrdenCard: React.FC<Props> = ({
                   ) : venta.gastosIncluidosEnOrden === false ? (
                     <p>Gastos adicionales: no incluidos en esta orden</p>
                   ) : null}
-                  <p>Vendido a: {venta.vendidoA}</p>
+                  <p>Cliente: {venta.vendidoA}</p>
                   <p>
                     Período:{" "}
                     {new Date(venta.fechaInicio).toLocaleDateString("es-MX")} →{" "}
@@ -491,12 +472,8 @@ export const OrdenCard: React.FC<Props> = ({
                   ) : null}
                   {esColabPorcentaje ? (
                     <p>
-                      <strong>
-                        {detalleBasadoEnCosto
-                          ? "Costo de la venta %"
-                          : "Precio de la venta %"}
-                      </strong>{" "}
-                      ({fmtMonto(montoMesNetoDetalle)})
+                      <strong>Cuota del socio (precio venta × %)</strong>{" "}
+                      ({fmtMonto(montoCuotaSocioDetalle)})
                     </p>
                   ) : null}
                 </div>

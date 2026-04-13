@@ -14,6 +14,7 @@ export interface RegistroVentaPayload {
   fecha_fin: string;
   duracion_meses: number;
   vendido_a?: string;
+  client_id?: string | null;
   vendedor_id?: string | null;
   importe_total?: number;
   pago_considerar?: number;

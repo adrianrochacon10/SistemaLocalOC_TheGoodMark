@@ -63,6 +63,11 @@ export function useVentas(profile: any, session: Session | null) {
         sinDescuento: false,
       })),
       colaboradorId: row.colaborador_id ?? row.cliente_id,
+      colaboradorAlias: (() => {
+        const emb = row.colaborador;
+        const s = String(emb?.contacto ?? emb?.alias ?? "").trim();
+        return s || undefined;
+      })(),
       productoId: row.producto_id ?? undefined,
       productoIds: Array.isArray(row.producto_ids)
         ? row.producto_ids.map((x: any) => String(x))
@@ -79,8 +84,14 @@ export function useVentas(profile: any, session: Session | null) {
           : productoDesdeVenta,
       precioPantallasMensual,
       pantallasDetalle,
+      clientId: row.client_id ?? row.clientId ?? row.client?.id ?? row.clients?.id ?? undefined,
       vendidoA:
-        row.vendido_a ?? row.client_name ?? row.colaborador?.nombre ?? "-",
+        row.client?.nombre ??
+        row.clients?.nombre ??
+        row.vendido_a ??
+        row.client_name ??
+        row.colaborador?.nombre ??
+        "-",
       precioGeneral: precioMensualVenta,
       cantidad: row.cantidad ?? 1,
       precioTotal: row.precio_total ?? row.importe_total ?? 0,
@@ -194,7 +205,9 @@ export function useVentas(profile: any, session: Session | null) {
       fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
       fecha_fin: venta.fechaFin.toISOString().slice(0, 10),
       duracion_meses: venta.mesesRenta,
+      duracion_unidad: venta.duracionUnidad === "dias" ? "dias" : "meses",
       vendido_a: venta.vendidoA,
+      client_id: venta.clientId ?? null,
       vendedor_id: venta.vendedorId ?? venta.usuarioRegistroId ?? null,
       importe_total: venta.importeTotal ?? venta.precioTotal,
       pago_considerar: 0,
@@ -267,7 +280,9 @@ export function useVentas(profile: any, session: Session | null) {
       fecha_inicio: venta.fechaInicio.toISOString().slice(0, 10),
       fecha_fin: venta.fechaFin.toISOString().slice(0, 10),
       duracion_meses: venta.mesesRenta,
+      duracion_unidad: venta.duracionUnidad === "dias" ? "dias" : "meses",
       vendido_a: venta.vendidoA,
+      client_id: venta.clientId ?? null,
       importe_total: venta.importeTotal ?? venta.precioTotal,
       pago_considerar: 0,
       consideracion_monto: 0,

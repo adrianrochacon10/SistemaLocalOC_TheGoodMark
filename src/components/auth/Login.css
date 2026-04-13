@@ -1,10 +1,17 @@
 .login-container {
   display: flex;
-  justify-content: center;
-  align-items: center;
+  flex-direction: column;
   min-height: 100vh;
   background: linear-gradient(135deg, #1461a1 0%, #0e0e47 100%);
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.login-inner {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
 }
 
 .login-card {
@@ -26,10 +33,6 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.login-logo {
-  margin-bottom: 1.25rem;
 }
 
 .login-card h1 {

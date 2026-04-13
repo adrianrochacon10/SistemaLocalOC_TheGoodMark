@@ -79,6 +79,8 @@ export interface RegistroVenta {
   pantallasIds: string[];
   itemsVenta: ItemVenta[];
   colaboradorId: string;
+  /** Alias/contacto del colaborador al cargar la venta (p. ej. desde API); sirve para filtros aunque el socio no esté en la lista local. */
+  colaboradorAlias?: string;
   productoId?: string | null;
   productoIds?: string[];
   productoNombre?: string;
@@ -95,6 +97,8 @@ export interface RegistroVenta {
   }>;
   codigoEdicion?: string;
   fuenteOrigen?: string;
+  /** FK a tabla `clients` en backend (cliente comprador / receptor). */
+  clientId?: string | null;
   vendidoA: string;
   precioGeneral: number;
   cantidad: number;

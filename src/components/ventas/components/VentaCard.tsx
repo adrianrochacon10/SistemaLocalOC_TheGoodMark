@@ -260,11 +260,13 @@ export const VentaCard: React.FC<VentaCardProps> = ({
           gap: 6,
         }}
       >
-        <span>
-          👤{" "}
-          {venta.vendidoA && venta.vendidoA !== "-"
-            ? venta.vendidoA
-            : "Sin receptor"}
+        <span
+          style={{ fontWeight: 500, color: "#334155" }}
+          title={
+            venta.vendidoA && venta.vendidoA !== "-" ? String(venta.vendidoA) : undefined
+          }
+        >
+          {venta.vendidoA && venta.vendidoA !== "-" ? venta.vendidoA : "—"}
         </span>
         <span style={{ color: "#aaa" }}>•</span>
         <span>📅 {formatearFecha(venta.fechaInicio)}</span>

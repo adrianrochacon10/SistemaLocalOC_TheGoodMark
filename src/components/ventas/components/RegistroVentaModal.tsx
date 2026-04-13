@@ -1,4 +1,4 @@
-// src/components/ventas/RegistroVentaModal.tsx
+// src/components/ventas/components/RegistroVentaModal.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import { backendApi } from "../../../lib/backendApi";
 import {
@@ -11,14 +11,13 @@ import {
   Producto,
   AsignacionProductoExtra,
 } from "../../../types";
-import { calcularFechaFinDuracion, stringAFecha } from "../../../utils/formateoFecha";
-import { parseIndiceGastoAdicionalDesdeNotas } from "../../../utils/utilidadVenta";
 import {
-  PREFIJO_LINEA_PRODUCTO,
-  detallePantallaId,
-  detallePrecioMensual,
-  esLineaPrecioProductoEnDetalle,
-} from "../../../utils/ordenApiMapper";
+  calcularFechaFinDuracion,
+  fechaParaInputDateLocal,
+  stringAFecha,
+} from "../../../utils/formateoFecha";
+import { parseIndiceGastoAdicionalDesdeNotas } from "../../../utils/utilidadVenta";
+import { PREFIJO_LINEA_PRODUCTO } from "../../../utils/ordenApiMapper";
 import { SelectField } from "../../ui/SelectField";
 import { SelectorPantallas } from "./SelectorPantallas";
 import { InputField } from "../../ui/InputField";
@@ -103,65 +102,88 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const [itemsVenta, setItemsVenta] = useState<ItemVenta[]>(
     ventaInicial?.itemsVenta ?? [],
   );
-  const [fechaInicio, setFechaInicio] = useState<string>(() => {
-    if (!ventaInicial?.fechaInicio) return "";
-    const fecha = new Date(ventaInicial.fechaInicio); // acepta Date o string
-    return isNaN(fecha.getTime()) ? "" : fecha.toISOString().slice(0, 10);
-  });
+  const [fechaInicio, setFechaInicio] = useState<string>(() =>
+    ventaInicial?.fechaInicio
+      ? fechaParaInputDateLocal(ventaInicial.fechaInicio)
+      : "",
+  );
   const [mesesRenta, setMesesRenta] = useState<number>(
     ventaInicial?.mesesRenta ?? 1,
   );
   const [duracionUnidad, setDuracionUnidad] = useState<"meses" | "dias">(() =>
     permitePrecioPorDia ? inferirDuracionUnidad(ventaInicial) : "meses",
   );
-  const [vendidoA, setVendidoA] = useState<string>(
-    ventaInicial?.vendidoA ?? "",
+  type FilaClient = {
+    id: string;
+    nombre: string;
+    telefono?: string | null;
+    correo?: string | null;
+  };
+  const [catalogoClientesComprador, setCatalogoClientesComprador] = useState<FilaClient[]>(
+    [],
+  );
+  const [clienteCompradorId, setClienteCompradorId] = useState<string>(() =>
+    ventaInicial?.clientId ? String(ventaInicial.clientId) : "",
+  );
+
+  useEffect(() => {
+    let cancel = false;
+    void (async () => {
+      try {
+        const rows = (await backendApi.get("/api/clients")) as FilaClient[];
+        if (!cancel && Array.isArray(rows)) setCatalogoClientesComprador(rows);
+      } catch {
+        if (!cancel) setCatalogoClientesComprador([]);
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ventaInicial) return;
+    if (ventaInicial.clientId) {
+      setClienteCompradorId(String(ventaInicial.clientId));
+      return;
+    }
+    const nombreV = String(ventaInicial.vendidoA ?? "").trim();
+    if (nombreV && catalogoClientesComprador.length > 0) {
+      const m = catalogoClientesComprador.find(
+        (c) => String(c.nombre).trim().toLowerCase() === nombreV.toLowerCase(),
+      );
+      setClienteCompradorId(m?.id ?? "");
+    } else {
+      setClienteCompradorId("");
+    }
+  }, [
+    ventaInicial?.id,
+    ventaInicial?.clientId,
+    ventaInicial?.vendidoA,
+    catalogoClientesComprador,
+  ]);
+
+  const nombreClienteComprador = useMemo(() => {
+    const c = catalogoClientesComprador.find(
+      (x) => String(x.id) === String(clienteCompradorId),
+    );
+    return c ? String(c.nombre).trim() : "";
+  }, [catalogoClientesComprador, clienteCompradorId]);
+
+  const opcionesClientesComprador = useMemo(
+    () =>
+      catalogoClientesComprador.map((c) => ({
+        value: c.id,
+        label: [c.nombre, c.telefono?.trim() || null, c.correo?.trim() || null]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+    [catalogoClientesComprador],
   );
   const [productosSeleccionados, setProductosSeleccionados] = useState<string[]>(
     ventaInicial?.productoIds ??
       (ventaInicial?.productoId ? [String(ventaInicial.productoId)] : []),
   );
-  const [precioVentaProductoMap, setPrecioVentaProductoMap] = useState<
-    Record<string, number>
-  >(() => {
-    if (!ventaInicial) return {};
-    const ids = Array.isArray(ventaInicial.productoIds)
-      ? ventaInicial.productoIds.map((x) => String(x))
-      : ventaInicial.productoId
-        ? [String(ventaInicial.productoId)]
-        : [];
-    if (ids.length === 0) return {};
-    const detalle = ventaInicial.pantallasDetalle ?? [];
-    const map: Record<string, number> = {};
-    let desdeLineas = false;
-    for (const id of ids) {
-      const lineKey = `${PREFIJO_LINEA_PRODUCTO}${id}`;
-      const row = detalle.find((p) => detallePantallaId(p) === lineKey);
-      if (row) {
-        map[String(id)] = detallePrecioMensual(row);
-        desdeLineas = true;
-      }
-    }
-    if (desdeLineas) return map;
-    const totalProductoInicial = Number(ventaInicial.productoPrecioMensual ?? 0) || 0;
-    const unit = totalProductoInicial / ids.length;
-    for (const id of ids) map[String(id)] = unit;
-    return map;
-  });
-  const [precioVentaPantallaMap, setPrecioVentaPantallaMap] = useState<
-    Record<string, number>
-  >(() => {
-    if (!ventaInicial || !Array.isArray(ventaInicial.pantallasDetalle)) return {};
-    const map: Record<string, number> = {};
-    for (const p of ventaInicial.pantallasDetalle) {
-      const id = String(p?.pantallaId ?? "");
-      if (!id || id === "__producto_total__" || esLineaPrecioProductoEnDetalle(id)) {
-        continue;
-      }
-      map[id] = Number(p?.precioMensual ?? 0) || 0;
-    }
-    return map;
-  });
   const [porcentajeSocio, setPorcentajeSocio] = useState<number>(() => {
     if (
       ventaInicial?.porcentajeSocio != null &&
@@ -186,8 +208,11 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const [costos, setCostos] = useState<number>(() =>
     costoPorMesParaFormulario(ventaInicial),
   );
-  const [precioMensualManual, setPrecioMensualManual] = useState<number | null>(null);
-  const [precioTotalManual, setPrecioTotalManual] = useState<number | null>(null);
+  const [precioMensualManual, setPrecioMensualManual] = useState<number | null>(() => {
+    if (!ventaInicial) return null;
+    if (inferirDuracionUnidad(ventaInicial) === "dias") return null;
+    return Number(ventaInicial.precioGeneral) || 0;
+  });
   const [comision, setComision] = useState<number>(
     ventaInicial?.comisionPorcentaje ??
       (ventaInicial && ventaInicial.precioGeneral > 0
@@ -301,8 +326,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
 
   // ── Derivados ─────────────────────────────────────────────────────────
   const pantallasSeleccionadas = itemsVenta.map((i) => i.pantallaId);
-  /** Clave estable para detectar cambios de líneas (pantallas / productos) sin re-render espurio. */
-  const lineasPrecioKey = `${[...pantallasSeleccionadas].sort().join("\0")}\0${[...productosSeleccionados].sort().join("\0")}`;
 
   const opcionesClientes = clientes
     .map((c) => ({
@@ -375,21 +398,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     for (const p of [...directos, ...porIds]) map.set(p.id, p);
     return Array.from(map.values());
   }, [clienteSeleccionado, clientes, productos]);
-
-  const precioProductoFallbackMap = useMemo(() => {
-    const m = new Map<string, number>();
-    if (!ventaInicial) return m;
-    const ids = Array.isArray(ventaInicial.productoIds)
-      ? ventaInicial.productoIds.map((x) => String(x))
-      : ventaInicial.productoId
-        ? [String(ventaInicial.productoId)]
-        : [];
-    if (ids.length === 0) return m;
-    const total = Number(ventaInicial.productoPrecioMensual ?? 0) || 0;
-    const unit = ids.length > 0 ? total / ids.length : 0;
-    for (const id of ids) m.set(id, unit);
-    return m;
-  }, [ventaInicial]);
 
   const pantallasCatalogo = useMemo(() => {
     const c = clientes.find((x) => x.id === clienteSeleccionado) as
@@ -486,26 +494,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     return {
       id: String(id),
       nombre: "Producto",
-      precio: Number(precioProductoFallbackMap.get(String(id)) ?? 0) || 0,
+      precio: 0,
     };
   });
-  const precioProductosSeleccionados = productosSeleccionados.reduce((sum, id) => {
-    const sid = String(id);
-    const desdeMapa = precioVentaProductoMap[sid];
-    if (Number.isFinite(Number(desdeMapa))) return sum + (Number(desdeMapa) || 0);
-    const prod = productosDelCliente.find((p) => String(p.id) === sid);
-    if (prod) return sum + (Number(prod.precio ?? 0) || 0);
-    return sum + (Number(precioProductoFallbackMap.get(sid) ?? 0) || 0);
-  }, 0);
   const pantallasActuales = pantallasSeleccionadas
     .map((id) => pantallasCatalogo.find((p) => String(p.id) === String(id)))
     .filter(Boolean) as Pantalla[];
-  const precioPantallasSeleccionadas = pantallasActuales.reduce(
-    (sum, p) =>
-      sum +
-      (Number(precioVentaPantallaMap[String(p.id)] ?? p.precio ?? 0) || 0),
-    0,
-  );
   const tarifasDias = useMemo(() => {
     const src =
       Array.isArray(tarifasDiasConfig) && tarifasDiasConfig.length > 0
@@ -528,16 +522,10 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     duracionUnidad === "dias"
       ? (tarifasDias.find((t) => t.dias === Number(mesesRenta))?.precio ?? 0)
       : 0;
-  /** Precio mensual automático = Σ precios pantallas seleccionadas + Σ precios productos seleccionados. */
-  const precioMensualSumaItems = Math.round(
-    (Number(precioPantallasSeleccionadas || 0) +
-      Number(precioProductosSeleccionados || 0)) *
-      100,
-  ) / 100;
   const precioMensualFinal =
     precioMensualManual != null
       ? Math.max(0, Number(precioMensualManual || 0))
-      : precioMensualSumaItems;
+      : 0;
   const precioPorDiaFinal =
     duracionUnidad === "dias"
       ? Math.round(
@@ -546,16 +534,25 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
             100),
         ) / 100
       : 0;
-  /** `??` no sustituye el 0: si el manual queda en 0 (p. ej. campo vacío), el auto dejaba de aplicarse. */
+  /** Meses: total = precio de venta por mes × duración (se actualiza al cambiar meses o el importe mensual). */
   const precioBasePorDuracion =
     duracionUnidad === "dias"
       ? Math.round(Number(precioTarifaDiasTotal || 0) * 100) / 100
-      : precioTotalManual != null
-        ? Number(precioTotalManual)
-        : // Contrato por meses: total = precio mensual (ítems o manual) × meses
-          Math.round(
-            Number(precioMensualFinal) * Math.max(1, mesesRenta) * 100,
-          ) / 100;
+      : Math.round(
+          Number(precioMensualFinal) * Math.max(1, mesesRenta) * 100,
+        ) / 100;
+  /** Suma de precios de catálogo (informativo; no entra al precio de la venta). */
+  const precioCatalogoPantallasSeleccionadas = pantallasActuales.reduce(
+    (s, p) => s + (Number(p.precio) || 0),
+    0,
+  );
+  const precioCatalogoProductosSeleccionados = productosSeleccionados.reduce(
+    (s, pid) => {
+      const prod = productosDelCliente.find((x) => String(x.id) === String(pid));
+      return s + (Number(prod?.precio) || 0);
+    },
+    0,
+  );
   // Gastos adicionales son informativos/aparte: NO se integran al total de venta.
   const precioTotalCalculado = Math.round(precioBasePorDuracion * 100) / 100;
   const tieneComisionPorcentaje = clienteActual?.tipoComision === "porcentaje";
@@ -578,14 +575,18 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     duracionUnidad === "dias"
       ? Math.round(Math.max(0, Number(precioTarifaDiasTotal || 0)) * 100) / 100
       : Math.round(costoPorMesCapturado * factorDuracion * 100) / 100;
-  /** Regla solicitada: porcentaje se calcula sobre precio de venta. */
-  const basePorcentajeSocio = Math.max(0, totalVenta);
-  const montoSocio = Math.round(
-    ((Math.max(0, Number(basePorcentajeSocio || 0)) *
-      Math.max(0, Number(porcentajeSocio || 0))) /
-      100) *
-      100,
-  ) / 100;
+  /** % del socio: por meses = (precio venta/mes × %) × meses; por días = % sobre total del período. */
+  const pctSoc = Math.max(0, Math.min(100, Number(porcentajeSocio || 0)));
+  const montoSocio =
+    duracionUnidad === "dias"
+      ? Math.round(
+          ((Math.max(0, Number(precioTotalCalculado || 0)) * pctSoc) / 100) * 100,
+        ) / 100
+      : Math.round(
+          ((Math.max(0, precioMensualFinal) * pctSoc) / 100) *
+            Math.max(1, mesesRenta) *
+            100,
+        ) / 100;
   const consideracionTotal = Math.max(0, Number(pagoConsiderar || 0)) * factorDuracion;
   /** El % del socio es sobre precio de venta; consideración/precio fijo sí pueden ajustar costo. */
   const costoVentaFinal = Math.round(
@@ -594,12 +595,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       costosBrutoTotales - (tieneConsideracion ? consideracionTotal : 0),
     ) * 100,
   ) / 100;
-
-  /** Al cambiar pantallas o productos, volver al precio calculado desde ítems (no dejar bloqueado un manual viejo). */
-  useEffect(() => {
-    setPrecioTotalManual(null);
-    setPrecioMensualManual(null);
-  }, [lineasPrecioKey]);
 
   useEffect(() => {
     if (duracionUnidad !== "dias") return;
@@ -637,52 +632,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     );
   }, [clienteSeleccionado, productosDelCliente]);
 
-  useEffect(() => {
-    setPrecioVentaPantallaMap((prev) => {
-      const next: Record<string, number> = { ...prev };
-      for (const p of pantallasCatalogo) {
-        const id = String(p.id);
-        if (next[id] == null || Number.isNaN(Number(next[id]))) {
-          next[id] = Number(p.precio ?? 0) || 0;
-        }
-      }
-      return next;
-    });
-  }, [pantallasCatalogo]);
-
-  useEffect(() => {
-    setPrecioVentaProductoMap((prev) => {
-      const next: Record<string, number> = { ...prev };
-      for (const p of productosDelCliente) {
-        const id = String(p.id);
-        if (next[id] == null || Number.isNaN(Number(next[id]))) {
-          next[id] = Number(p.precio ?? 0) || 0;
-        }
-      }
-      return next;
-    });
-  }, [productosDelCliente]);
-
   const toggleProducto = (productoId: string) => {
     setProductosSeleccionados((prev) =>
       prev.includes(productoId)
         ? prev.filter((id) => id !== productoId)
         : [...prev, productoId],
     );
-  };
-
-  const setPrecioProductoVenta = (productoId: string, value: number) => {
-    setPrecioVentaProductoMap((prev) => ({
-      ...prev,
-      [productoId]: value >= 0 ? value : 0,
-    }));
-  };
-
-  const setPrecioPantallaVenta = (pantallaId: string, value: number) => {
-    setPrecioVentaPantallaMap((prev) => ({
-      ...prev,
-      [pantallaId]: value >= 0 ? value : 0,
-    }));
   };
 
   const togglePantalla = (pantallaId: string) => {
@@ -697,15 +652,12 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
   const resetFormularioVenta = () => {
     setClienteSeleccionado("");
     setItemsVenta([]);
-    setVendidoA("");
+    setClienteCompradorId("");
     setFechaInicio("");
     setMesesRenta(1);
     setDuracionUnidad("meses");
     setProductosSeleccionados([]);
-    setPrecioVentaProductoMap({});
-    setPrecioVentaPantallaMap({});
     setPrecioMensualManual(null);
-    setPrecioTotalManual(null);
     setEstadoVenta("Prospecto");
     setAplicarDescuento(false);
     setPorcentajeSocio(30);
@@ -732,15 +684,15 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
     setError("");
     setExito("");
     if (!clienteSeleccionado) {
-      setError("Selecciona un cliente");
+      setError("Selecciona un colaborador");
       return;
     }
     if (itemsVenta.length === 0 && productosSeleccionados.length === 0) {
       setError("Selecciona al menos una pantalla o un producto");
       return;
     }
-    if (!vendidoA.trim()) {
-      setError("Especifica a quién se vendió/rentó");
+    if (!clienteCompradorId.trim() || !nombreClienteComprador) {
+      setError("Selecciona el cliente (comprador) del catálogo");
       return;
     }
     if (
@@ -785,7 +737,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       return;
     }
     if (precioMensualFinal < 0) {
-      setError("El costo de la venta no puede ser negativo");
+      setError("El precio de la venta no puede ser negativo");
       return;
     }
     if (
@@ -813,41 +765,34 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
       productoIds: productosSeleccionados,
       productoNombre:
         productosActuales.map((p) => p.nombre).join(", ").trim() || undefined,
-      productoPrecioMensual: precioProductosSeleccionados || 0,
-      precioPantallasMensual: Number(precioPantallasSeleccionadas || 0),
+      productoPrecioMensual: 0,
+      precioPantallasMensual: 0,
       pantallasDetalle: [
         ...pantallasActuales.map((p) => ({
           pantallaId: String(p.id),
           nombre: p.nombre,
-          precioMensual:
-            Number(precioVentaPantallaMap[String(p.id)] ?? p.precio ?? 0) || 0,
+          precioMensual: 0,
         })),
         ...productosSeleccionados.map((id) => {
           const sid = String(id);
           const prod = productosActuales.find((x) => String(x.id) === sid);
           const nombre = String(prod?.nombre ?? "").trim() || "Producto";
-          let precio = Number(precioVentaProductoMap[sid]);
-          if (!Number.isFinite(precio)) {
-            const pcat = productosDelCliente.find((p) => String(p.id) === sid);
-            precio =
-              Number(pcat?.precio ?? precioProductoFallbackMap.get(sid) ?? 0) || 0;
-          }
           return {
             pantallaId: `${PREFIJO_LINEA_PRODUCTO}${sid}`,
             nombre,
-            precioMensual: precio,
+            precioMensual: 0,
           };
         }),
-        // Meta interna para conservar precio de producto de la venta (no catálogo).
         {
           pantallaId: "__producto_total__",
           nombre: "META_PRODUCTO",
-          precioMensual: Number(precioProductosSeleccionados || 0),
+          precioMensual: 0,
         },
       ],
       fuenteOrigen: fuenteOrigen.trim() || undefined,
       identificadorVenta: identificadorVenta.trim() || undefined,
-      vendidoA: vendidoA.trim(),
+      clientId: clienteCompradorId.trim(),
+      vendidoA: nombreClienteComprador,
       precioGeneral:
         duracionUnidad === "dias"
           ? Number(precioTotalCalculado || 0)
@@ -867,7 +812,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
         usuarioActual.rol === "admin"
           ? vendedorSeleccionadoId || usuarioActual.id
           : usuarioActual.id,
-      // Bruto capturado: el backend aplica el % del socio sobre precio_total (si porcentaje_socio > 0).
+      // Backend: % del socio sobre precio/mes × meses (o sobre total si es venta por días).
       costos: esColaboradorPorcentaje ? 0 : costosBrutoTotales,
       costoVenta: esColaboradorPorcentaje ? 0 : costosBrutoTotales,
       comision: totalComision,
@@ -1007,8 +952,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                   pantallasSeleccionadas={pantallasSeleccionadas}
                   pantallas={pantallasCatalogo}
                   onToggle={togglePantalla}
-                  precioPantallaMap={precioVentaPantallaMap}
-                  onCambiarPrecioPantalla={setPrecioPantallaVenta}
                 />
               ) : null}
               <div className="form-group">
@@ -1033,49 +976,33 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                         <span className="checkbox-visual"></span>
                         <span className="checkbox-label">
                           <span className="pantalla-nombre">{p.nombre}</span>
-                          {!ventaInicial ? (
-                            <span className="pantalla-mini-ubicacion">
-                              Catálogo: ${Number(p.precio ?? 0).toLocaleString("es-MX", {
-                                minimumFractionDigits: 2,
-                              })}
-                            </span>
-                          ) : null}
-                          {selected ? (
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              disabled={duracionUnidad === "dias"}
-                              value={(() => {
-                                const v = Number(
-                                  precioVentaProductoMap[String(p.id)] ?? p.precio ?? 0,
-                                );
-                                return v === 0 ? "" : v;
-                              })()}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) =>
-                                setPrecioProductoVenta(
-                                  String(p.id),
-                                  toNumberSafe(e.target.value, Number(p.precio ?? 0) || 0),
-                                )
-                              }
-                              className="form-input"
-                              style={{ marginTop: 6 }}
-                              placeholder="Precio de venta"
-                            />
-                          ) : null}
+                          <span className="pantalla-mini-ubicacion">
+                            Catálogo:{" "}
+                            {Number(p.precio ?? 0).toLocaleString("es-MX", {
+                              style: "currency",
+                              currency: "MXN",
+                            })}
+                          </span>
                         </span>
                       </label>
                     );
                   })}
                 </div>
               </div>
-              <InputField
-                label="Vendido a (Nombre del receptor) *"
-                value={vendidoA}
-                onChange={setVendidoA}
-                placeholder="Ej: ABC Company, Juan Pérez, Empresa XYZ"
+              <SelectField
+                label="Cliente *"
+                value={clienteCompradorId}
+                onChange={(v: string) => setClienteCompradorId(String(v ?? ""))}
+                className="select-lg"
+                placeholder="-- Elige un cliente --"
+                options={opcionesClientesComprador}
               />
+              {catalogoClientesComprador.length === 0 ? (
+                <p className="hint-text" style={{ marginTop: 4 }}>
+                  No hay <strong>clientes</strong> (compradores) registrados. Agrégalos en la pestaña{" "}
+                  <strong>Clientes</strong>.
+                </p>
+              ) : null}
               {null}
               {usuarioActual.rol === "admin" ? (
                 <SelectField
@@ -1205,23 +1132,6 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 </select>
               </div>
               <InputField
-                label="Precio de la venta (total)"
-                value={Number(precioTotalCalculado) === 0 ? "" : precioTotalCalculado}
-                onChange={(v: any) => {
-                  if (duracionUnidad === "dias") return;
-                  if (String(v).trim() === "") {
-                    setPrecioTotalManual(0);
-                    return;
-                  }
-                  const n = Math.max(0, toNumberSafe(v, Number(precioTotalCalculado || 0)));
-                  setPrecioTotalManual(n);
-                }}
-                type="number"
-                min={0}
-                step={0.01}
-                placeholder="0.00"
-              />
-              <InputField
                 label={
                   duracionUnidad === "dias"
                     ? "Precio fijo del paquete (sin IVA adicional)"
@@ -1250,6 +1160,21 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                 step={0.01}
                 readOnly={duracionUnidad === "dias"}
               />
+              <InputField
+                label="Precio de la venta (total)"
+                value={Number(precioTotalCalculado) === 0 ? "" : precioTotalCalculado}
+                type="number"
+                min={0}
+                step={0.01}
+                placeholder="0.00"
+                readOnly
+              />
+              {duracionUnidad === "meses" ? (
+                <div className="hint-text">
+                  Total = precio por mes × {mesesRenta} mes{mesesRenta === 1 ? "" : "es"} (se recalcula al
+                  cambiar la duración).
+                </div>
+              ) : null}
               {duracionUnidad === "dias" ? (
                 <div className="hint-text">
                   Tarifa fija configurada para {mesesRenta} día{mesesRenta === 1 ? "" : "s"}.
@@ -1368,7 +1293,8 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
               )}
               {tieneComisionPorcentaje && (
                 <div className="hint-text">
-                  Monto del socio ({Number(porcentajeSocio || 0)}% sobre precio total de la venta):{" "}
+                  Monto del socio ({Number(porcentajeSocio || 0)}% sobre precio de venta por mes
+                  {duracionUnidad === "dias" ? " / total del período" : " × meses"}):{" "}
                   {montoSocio.toLocaleString("es-MX", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
@@ -1421,7 +1347,7 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                     pantallasActuales={pantallasActuales}
                     estadoVenta={estadoVenta}
                     pantallasSeleccionadas={pantallasSeleccionadas}
-                    vendidoA={vendidoA}
+                    vendidoA={nombreClienteComprador}
                     fechaInicio={fechaInicio}
                     fechaFin={fechaFin}
                     mesesRenta={mesesRenta}
@@ -1439,10 +1365,10 @@ export const RegistroVentaModal: React.FC<RegistroVentaModalProps> = ({
                     costos={costoVentaFinal}
                     comisionPorcentaje={comision}
                     gastosAdicionales={gastosAdicionales}
-                    precioPantallas={precioPantallasSeleccionadas}
                     productoNombre={productosActuales.map((p) => p.nombre).join(", ")}
                     nombresProductos={productosActuales.map((p) => p.nombre)}
-                    precioProductos={precioProductosSeleccionados}
+                    precioPantallasReferencia={precioCatalogoPantallasSeleccionadas}
+                    precioProductosReferencia={precioCatalogoProductosSeleccionados}
                     pagoConsiderar={pagoConsiderar}
                     tipoComision={clienteActual?.tipoComision ?? ""}
                   />

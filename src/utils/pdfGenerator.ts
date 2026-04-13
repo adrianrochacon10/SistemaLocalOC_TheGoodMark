@@ -160,6 +160,21 @@ function paqueteDesdeVenta(v: RegistroVenta): string {
   return valor === 1 ? "1 Mes" : `${valor} Meses`;
 }
 
+/**
+ * Texto de periodo en el detalle del PDF: mes de la orden y el siguiente (0–11),
+ * p. ej. orden de abril → "abril - mayo". Diciembre → "diciembre - enero" (año siguiente).
+ */
+function periodoPdfMesOrdenYSiguiente(anio: number, mes0: number): string {
+  const a = Number(anio) || new Date().getFullYear();
+  const m = Math.min(11, Math.max(0, Math.floor(Number(mes0) || 0)));
+  const opt: Intl.DateTimeFormatOptions = { month: "long" };
+  const actual = new Date(a, m, 1).toLocaleDateString("es-MX", opt);
+  const mSig = m === 11 ? 0 : m + 1;
+  const aSig = m === 11 ? a + 1 : a;
+  const siguiente = new Date(aSig, mSig, 1).toLocaleDateString("es-MX", opt);
+  return `${actual} - ${siguiente}`;
+}
+
 /** Monto de línea para PDF: prioriza importe total ya guardado en la orden (detalle). */
 function precioLineaOrden(v: RegistroVenta): number {
   const imp = round2(Number(v.importeTotal) || 0);
@@ -521,8 +536,6 @@ export async function exportarPDFOrden(
     const paqueteOriginal = paqueteDesdeVenta(venta);
     const paqueteEsPorDias = paqueteOriginal.toLowerCase().includes("dia");
     const paqueteTxt = paqueteEsPorDias ? paqueteOriginal : "1 Mes";
-    const fi = new Date(venta.fechaInicio).toLocaleDateString("es-MX");
-    const ff = new Date(venta.fechaFin).toLocaleDateString("es-MX");
     const pantallasSoloEtiquetas = pantallasConPrecioBase.length
       ? pantallasConPrecioBase.map((p) =>
           `- ${p.nombre}`,
@@ -644,25 +657,26 @@ export async function exportarPDFOrden(
       );
     }
     descByRow.set(idx - 1, {
-      title: titulo,
+      title: String(venta.vendidoA ?? "").trim() || "—",
       details: [
-        `Vendido a: ${String(venta.vendidoA ?? "").trim() || "—"}`,
+        titulo,
         `Pantallas (${ids.length}):`,
         ...pantallasSoloEtiquetas,
         ...productosSoloNombres,
         ...lineasTrasPantallasProd,
-        `Periodo: ${fi} - ${ff}`,
+        paqueteEsPorDias
+          ? `Periodo: ${paqueteOriginal}`
+          : `Periodo: ${periodoPdfMesOrdenYSiguiente(
+              orden.año ?? new Date().getFullYear(),
+              orden.mes ?? 0,
+            )}`,
       ],
     });
     sumLineasPdf = round2(sumLineasPdf + precioColumna);
-    const lblPrecioBrutoPdf = paqueteEsPorDias
-      ? "Precio del periodo"
-      : "Precio del mes";
     let celdaPrecioTabla: string;
     if (esColabPorcentajePdf) {
       filasPrecioDesglosePct.add(idx - 1);
       celdaPrecioTabla = [
-        `${lblPrecioBrutoPdf}: ${fmtMoney(precioVentaLinea)}`,
         `Porcentaje: ${porcentajeColaboradorFila.toFixed(2)}%`,
         `Importe: ${fmtMoney(precioColumna)}`,
       ].join("\n");
@@ -722,7 +736,7 @@ export async function exportarPDFOrden(
 
   autoTable(doc, {
     startY: y,
-    head: [["#", "DESCRIPCION", "PAQUETE", "PRECIO"]],
+    head: [["#", "DESCRIPCION", "DURACION", "PRECIO"]],
     body: tableBody,
     styles: {
       fontSize: 8,
@@ -776,7 +790,7 @@ export async function exportarPDFOrden(
         filasPrecioDesglosePct.has(data.row.index)
       ) {
         const prev = Number(data.cell.styles.minCellHeight) || 0;
-        data.cell.styles.minCellHeight = Math.max(prev, 30);
+        data.cell.styles.minCellHeight = Math.max(prev, 22);
         data.cell.styles.fontStyle = "normal";
         data.cell.styles.fontSize = 7;
       }
@@ -808,7 +822,7 @@ export async function exportarPDFOrden(
         data.doc.setTextColor(0, 0, 0);
         return;
       }
-      // Solo columna PRECIO: autoTable recorta por celda; si dibujamos en PAQUETE, el texto
+      // Solo columna PRECIO: autoTable recorta por celda; si dibujamos en DURACION, el texto
       // que invade PRECIO queda cortado. Aquí cabe el texto completo alineado a la derecha.
       if (data.section !== "body" || data.column.index !== 3) return;
       const subPrecio = precioSublineaByRow.get(data.row.index);
@@ -899,12 +913,7 @@ export async function exportarPDFOrden(
   const brand = config.nombreEmpresa || "The Good Mark";
   doc.setFontSize(7);
   doc.setTextColor(...COL_GREY);
-  doc.text(
-    `${brand} © ${year} · Orden de venta sujeta a firma de contrato`,
-    pageW / 2,
-    y,
-    { align: "center" },
-  );
+  doc.text(`${brand} © ${year}`, pageW / 2, y, { align: "center" });
 
   const defaultName = safeFileName(`OrdenCompra-${orden.numeroOrden}.pdf`);
   const blob = doc.output("blob");

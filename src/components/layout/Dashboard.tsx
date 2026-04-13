@@ -8,14 +8,26 @@ import { EmpresaForm } from "../empresa/EmpresaForm";
 import { GastosAdmin } from "../gastos/GastosAdmin";
 import { CostosAdministrativos } from "../costos/CostosAdministrativos";
 import { MetricasPage } from "../metricas/MetricasPage";
-import { AppLogo } from "../common/AppLogo";
+import { ClientesPage } from "../clientes/ClientesPage";
+import { BrandFooter } from "../common/BrandFooter";
 import "./Dashboard.css";
 import { useDashboardData } from "../../hooks/useDashboardData";
+
+function isTauriApp(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    "__TAURI_INTERNALS__" in window ||
+    // compat con algunas builds / withGlobalTauri
+    "__TAURI__" in window
+  );
+}
 
 export const Dashboard: React.FC = () => {
   const {
     auth: { profile, loading, authError, signIn, signOut },
     estadoBD,
+    apiBaseUrl,
+    mensajeBD,
     errorVenta,
     datos,
     acciones,
@@ -25,6 +37,7 @@ export const Dashboard: React.FC = () => {
     | "gestor"
     | "catalogo"
     | "ventas"
+    | "clientes"
     | "ordenes"
     | "config"
     | "admin"
@@ -33,12 +46,7 @@ export const Dashboard: React.FC = () => {
     | "metricas"
   >("ordenes");
   if (loading) {
-    return (
-      <div className="cargando-perfil">
-        <AppLogo size="lg" className="cargando-perfil-logo" />
-        <span>Cargando perfil...</span>
-      </div>
-    );
+    return <div className="cargando-perfil">Cargando perfil...</div>;
   }
 
   if (!profile) {
@@ -59,14 +67,29 @@ export const Dashboard: React.FC = () => {
     <div className="dashboard-nuevo">
       <header className="dashboard-header-nuevo">
         <div className="header-left">
-          <AppLogo size="md" className="dashboard-header-logo" />
           <h1>The Good Mark</h1>
         </div>
         <div className="header-right">
           <div className="bd-status">
-            {estadoBD === "checking" && <span>BD: verificando…</span>}
-            {estadoBD === "ok" && <span>BD: conectada</span>}
-            {estadoBD === "error" && <span>BD: error de conexión</span>}
+            {estadoBD === "checking" && (
+              <span title="Comprobando API Express (backend)">API: verificando…</span>
+            )}
+            {estadoBD === "ok" && (
+              <span title={`Backend respondiendo en ${apiBaseUrl}`}>API: conectada</span>
+            )}
+            {estadoBD === "error" && (
+              <span
+                className="bd-status-api-error"
+                title={
+                  (mensajeBD ? `${mensajeBD}. ` : "") +
+                  (isTauriApp()
+                    ? `Sin respuesta en ${apiBaseUrl}. El backend va embebido: suele tardar unos segundos al abrir (reinicia la app). Si sigue igual: antivirus bloqueando el ejecutable del API, otro programa usando el puerto 4000, o instalador sin el sidecar (volvé a generar con "npm run tauri build").`
+                    : `Sin respuesta en ${apiBaseUrl}. En el proyecto: abrí una terminal, cd backend && npm run dev`)
+                }
+              >
+                API: sin servidor
+              </span>
+            )}
           </div>
           <div className="usuario-info">
             <span className="usuario-nombre">{usuarioActual.nombre}</span>
@@ -90,6 +113,13 @@ export const Dashboard: React.FC = () => {
           onClick={() => setVistaActual("ventas")}
         >
           💰 Ventas
+        </button>
+        <button
+          type="button"
+          className={`nav-btn-nuevo ${vistaActual === "clientes" ? "active" : ""}`}
+          onClick={() => setVistaActual("clientes")}
+        >
+          🧾 Clientes
         </button>
         <button
           type="button"
@@ -183,6 +213,14 @@ export const Dashboard: React.FC = () => {
           />
         )}
 
+        {vistaActual === "clientes" && (
+          <ClientesPage
+            ventasRegistradas={datos.ventasRegistradas}
+            colaboradores={datos.clientes}
+            onCatalogoClientesChange={() => void acciones.refetchVentas()}
+          />
+        )}
+
         {vistaActual === "ordenes" && (
           <OrdenesMensualesNuevo
             ordenes={datos.ordenes}
@@ -224,6 +262,7 @@ export const Dashboard: React.FC = () => {
           />
         )}
       </main>
+      <BrandFooter variant="dashboard" />
     </div>
   );
 };
