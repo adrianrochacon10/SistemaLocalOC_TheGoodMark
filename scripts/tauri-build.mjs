@@ -2,13 +2,14 @@
  * Ejecuta `tauri build` desde la raíz del repo.
  * Si no defines CARGO_TARGET_DIR, usa %USERPROFILE%\.cargo-target-tgm para evitar
  * errores "Acceso denegado" al compilar en carpetas sincronizadas (OneDrive, etc.).
- * Tras un build OK, copia .exe (NSIS) y .msi a la carpeta `installer/` del repo.
+ * Tras un build OK, copia el instalador NSIS (.exe) a la carpeta `installer/` del repo.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { ensureRustcTgmWrapExeSync } from "./ensure-rustc-tgm-wrap.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -22,11 +23,13 @@ if (os.platform() === "win32" && !process.env.RUST_MIN_STACK?.trim()) {
   process.env.RUST_MIN_STACK = String(32 * 1024 * 1024);
 }
 
-// rustc puede hacer stack overflow parseando el --check-cfg enorme del crate `windows`; el wrapper lo acorta.
+// Crate `windows`: --check-cfg enorme. Un .cmd + node + %* rompe el tope ~8191 de cmd.exe; hace falta .exe nativo.
 if (os.platform() === "win32" && !process.env.RUSTC_WRAPPER?.trim()) {
-  const wrap = path.resolve(__dirname, "rustc-wrapper-tauri.cmd");
-  if (fs.existsSync(wrap)) {
-    process.env.RUSTC_WRAPPER = wrap;
+  try {
+    process.env.RUSTC_WRAPPER = ensureRustcTgmWrapExeSync();
+  } catch (e) {
+    console.error("tauri-build: rustc-tgm-wrap:", e?.message || e);
+    process.exit(1);
   }
 }
 
@@ -57,7 +60,7 @@ const destRoot = path.join(root, "installer");
 try {
   fs.mkdirSync(destRoot, { recursive: true });
   let copied = 0;
-  for (const sub of ["nsis", "msi"]) {
+  for (const sub of ["nsis"]) {
     const srcDir = path.join(bundleRoot, sub);
     if (!fs.existsSync(srcDir)) continue;
     for (const name of fs.readdirSync(srcDir)) {

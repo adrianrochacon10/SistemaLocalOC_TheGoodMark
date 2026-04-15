@@ -1,0 +1,9 @@
+[package]
+name = "rustc-tgm-wrap"
+version = "0.1.0"
+edition = "2021"
+description = "RUSTC_WRAPPER: acorta --check-cfg del crate windows y evita línea de comandos larga en Windows."
+
+[[bin]]
+name = "rustc-tgm-wrap"
+path = "src/main.rs"

@@ -1,4 +1,0 @@
-# Mitiga STATUS_STACK_BUFFER_OVERRUN (0xc0000409) al compilar crates grandes (p. ej. `windows`) en MSVC.
-# Valor en bytes (32 MiB). Ver también scripts/tauri-build.mjs.
-[env]
-RUST_MIN_STACK = "33554432"

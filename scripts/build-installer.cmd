@@ -12,9 +12,10 @@ if not exist "%ROOT%\backend\.env" (
   exit /b 1
 )
 
-set "RUSTC_WRAPPER=%~dp0rustc-wrapper-tauri.cmd"
-if not exist "%RUSTC_WRAPPER%" (
-  echo ADVERTENCIA: No existe "%RUSTC_WRAPPER%"
+for /f "usebackq delims=" %%A in (`node "%~dp0ensure-rustc-tgm-wrap.mjs" --print`) do set "RUSTC_WRAPPER=%%A"
+if not defined RUSTC_WRAPPER (
+  echo ERROR: No se pudo generar rustc-tgm-wrap.exe. Ejecuta: node scripts\ensure-rustc-tgm-wrap.mjs --print
+  exit /b 1
 )
 
 if not defined CARGO_TARGET_DIR set "CARGO_TARGET_DIR=%USERPROFILE%\.cargo-target-tgm"
@@ -29,6 +30,10 @@ echo CARGO_TARGET_DIR=%CARGO_TARGET_DIR%
 echo RUSTC_WRAPPER=%RUSTC_WRAPPER%
 echo CARGO_BUILD_JOBS=%CARGO_BUILD_JOBS%
 echo.
+
+echo Comprobando .env ^(Supabase en raiz + backend^)...
+node "%~dp0check-installer-prereqs.mjs"
+if errorlevel 1 exit /b 1
 
 if not exist "%ROOT%\node_modules\" (
   echo Ejecutando npm install...

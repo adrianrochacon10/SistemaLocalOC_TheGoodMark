@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SL_TheGoodMark",
+  "productName": "The Good Mark SL",
   "version": "0.1.2",
   "identifier": "com.sistemalocalOC.TheGoodMark",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "The Good Mark",
+        "title": "The Good Mark SL",
         "width": 1024,
         "height": 768,
         "useHttpsScheme": false
@@ -24,7 +24,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "externalBin": ["binaries/tgm-backend"],
     "resources": ["resources/server.env"],
     "icon": [
